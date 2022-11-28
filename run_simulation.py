@@ -10,9 +10,12 @@
 import argparse
 import collections
 import inspect
+import logging
 import multiprocessing
 import os
+from packaging.version import Version
 import time
+
 # External libraries
 import pandas as pd
 import pickle
@@ -20,6 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import median_abs_deviation
 import xarray as xr
+
 # Local libraries
 import class_climate
 import pygem.pygem_input as pygem_prms
@@ -32,16 +36,18 @@ from pygem.shop import debris
 import pygemfxns_gcmbiasadj as gcmbiasadj
 import spc_split_glaciers as split_glaciers
 
+from oggm import __version__ as oggm_version
 from oggm import cfg
 from oggm import graphics
 from oggm import tasks
 from oggm import utils
 from oggm.core import climate
-#print('Switch back to OGGM import of FluxBasedModel')
-#from pygem.glacierdynamics import FluxBasedModel
 from oggm.core.flowline import FluxBasedModel
-from oggm.core.inversion import calving_flux_from_depth
 from oggm.core.inversion import find_inversion_calving_from_any_mb
+
+# Module logger
+log = logging.getLogger(__name__)
+cfg.set_logging_config(pygem_prms.logging_level)
 
 cfg.PARAMS['hydro_month_nh']=1
 cfg.PARAMS['hydro_month_sh']=1
@@ -93,9 +99,9 @@ def getparser():
                         help='start year for the model run')
     parser.add_argument('-gcm_endyear', action='store', type=int, default=pygem_prms.gcm_endyear,
                         help='start year for the model run')
-    parser.add_argument('-num_simultaneous_processes', action='store', type=int, default=4,
+    parser.add_argument('-num_simultaneous_processes', action='store', type=int, default=1,
                         help='number of simultaneous processes (cores) to use')
-    parser.add_argument('-option_parallels', action='store', type=int, default=1,
+    parser.add_argument('-option_parallels', action='store', type=int, default=0,
                         help='Switch to use or not use parallels (1 - use parallels, 0 - do not)')
     parser.add_argument('-rgi_glac_number_fn', action='store', type=str, default=None,
                         help='Filename containing list of rgi_glac_number, helpful for running batches on spc')
@@ -943,9 +949,16 @@ def main(list_packed_vars):
         scenario = os.path.basename(args.gcm_list_fn).split('_')[1]
     elif not args.scenario is None:
         scenario = args.scenario
-    if debug:
-        if 'scenario' in locals():
-            print(scenario)
+    if args.debug == 1:
+        debug = True
+    else:
+        debug = False
+        
+#    log.debug('Scenario:' + scenario)
+#    if debug:
+#        if 'scenario' in locals():
+#            print(scenario)
+            
     if args.debug_spc == 1:
         debug_spc = True
     else:
@@ -963,8 +976,8 @@ def main(list_packed_vars):
     # Climate class
     if gcm_name in ['ERA5', 'ERA-Interim', 'COAWST']:
         gcm = class_climate.GCM(name=gcm_name)
-        if pygem_prms.option_synthetic_sim == 0:
-            assert args.gcm_endyear <= int(time.strftime("%Y")), 'Climate data not available to gcm_endyear'
+        assert args.gcm_endyear <= int(time.strftime("%Y")), ('Climate data not available to ' + 
+                                      str(args.gcm_endyear) + '. Change gcm_endyear or climate data set.')
     else:
         # GCM object
         gcm = class_climate.GCM(name=gcm_name, scenario=scenario)
@@ -983,31 +996,32 @@ def main(list_packed_vars):
                                                    spinupyears=pygem_prms.ref_spinupyears,
                                                    option_wateryear=pygem_prms.ref_wateryear)
     
-    # Select climate data
-    if pygem_prms.option_synthetic_sim == 0:
-        # Air temperature [degC]
-        gcm_temp, gcm_dates = gcm.importGCMvarnearestneighbor_xarray(gcm.temp_fn, gcm.temp_vn, main_glac_rgi,
-                                                                      dates_table)
-        if pygem_prms.option_ablation != 2:
-            gcm_tempstd = np.zeros(gcm_temp.shape)
-        elif pygem_prms.option_ablation == 2 and gcm_name in ['ERA5']:
-            gcm_tempstd, gcm_dates = gcm.importGCMvarnearestneighbor_xarray(gcm.tempstd_fn, gcm.tempstd_vn,
-                                                                            main_glac_rgi, dates_table)
-        elif pygem_prms.option_ablation == 2 and pygem_prms.ref_gcm_name in ['ERA5']:
-            # Compute temp std based on reference climate data
-            ref_tempstd, ref_dates = ref_gcm.importGCMvarnearestneighbor_xarray(ref_gcm.tempstd_fn, ref_gcm.tempstd_vn,
-                                                                                main_glac_rgi, dates_table_ref)
-            # Monthly average from reference climate data
-            gcm_tempstd = gcmbiasadj.monthly_avg_array_rolled(ref_tempstd, dates_table_ref, dates_table)
-        else:
-            gcm_tempstd = np.zeros(gcm_temp.shape)
+    # Air temperature [degC]
+    gcm_temp, gcm_dates = gcm.importGCMvarnearestneighbor_xarray(gcm.temp_fn, gcm.temp_vn, main_glac_rgi,
+                                                                  dates_table)
+    if pygem_prms.option_ablation != 2:
+        gcm_tempstd = np.zeros(gcm_temp.shape)
+    elif pygem_prms.option_ablation == 2 and gcm_name in ['ERA5']:
+        gcm_tempstd, gcm_dates = gcm.importGCMvarnearestneighbor_xarray(gcm.tempstd_fn, gcm.tempstd_vn,
+                                                                        main_glac_rgi, dates_table)
+    elif pygem_prms.option_ablation == 2 and pygem_prms.ref_gcm_name in ['ERA5']:
+        # Compute temp std based on reference climate data
+        ref_tempstd, ref_dates = ref_gcm.importGCMvarnearestneighbor_xarray(ref_gcm.tempstd_fn, ref_gcm.tempstd_vn,
+                                                                            main_glac_rgi, dates_table_ref)
+        # Monthly average from reference climate data
+        gcm_tempstd = gcmbiasadj.monthly_avg_array_rolled(ref_tempstd, dates_table_ref, dates_table)
+    else:
+        gcm_tempstd = np.zeros(gcm_temp.shape)
 
-        # Precipitation [m]
-        gcm_prec, gcm_dates = gcm.importGCMvarnearestneighbor_xarray(gcm.prec_fn, gcm.prec_vn, main_glac_rgi,
-                                                                      dates_table)
-        # Elevation [m asl]
-        gcm_elev = gcm.importGCMfxnearestneighbor_xarray(gcm.elev_fn, gcm.elev_vn, main_glac_rgi)
-        # Lapse rate
+    # Precipitation [m]
+    gcm_prec, gcm_dates = gcm.importGCMvarnearestneighbor_xarray(gcm.prec_fn, gcm.prec_vn, main_glac_rgi,
+                                                                  dates_table)
+    # Elevation [m asl]
+    gcm_elev = gcm.importGCMfxnearestneighbor_xarray(gcm.elev_fn, gcm.elev_vn, main_glac_rgi)
+    # Lapse rate [degC m-1]
+    if pygem_prms.use_constant_lapserate:
+        gcm_lr = np.zeros(gcm_temp.shape) + pygem_prms.lapserate
+    else:
         if gcm_name in ['ERA-Interim', 'ERA5']:
             gcm_lr, gcm_dates = gcm.importGCMvarnearestneighbor_xarray(gcm.lr_fn, gcm.lr_vn, main_glac_rgi, dates_table)
         else:
@@ -1088,82 +1102,22 @@ def main(list_packed_vars):
             fls = gdir.read_pickle('inversion_flowlines')
     
             # Add climate data to glacier directory
+            if pygem_prms.hindcast == True:
+                gcm_temp_adj = gcm_temp_adj[::-1]
+                gcm_tempstd = gcm_tempstd[::-1]
+                gcm_prec_adj= gcm_prec_adj[::-1]
+                gcm_lr = gcm_lr[::-1]
             gdir.historical_climate = {'elev': gcm_elev_adj[glac],
                                        'temp': gcm_temp_adj[glac,:],
                                        'tempstd': gcm_tempstd[glac,:],
                                        'prec': gcm_prec_adj[glac,:],
-                                       'lr': gcm_lr[glac,:]}
+                                       'lr': gcm_lr[glac,:]}            
+            
             gdir.dates_table = dates_table
-    
+            
             glacier_area_km2 = fls[0].widths_m * fls[0].dx_meter / 1e6
             if (fls is not None) and (glacier_area_km2.sum() > 0):
-    #            if pygem_prms.hindcast == 1:
-    #                glacier_gcm_prec = glacier_gcm_prec[::-1]
-    #                glacier_gcm_temp = glacier_gcm_temp[::-1]
-    #                glacier_gcm_lrgcm = glacier_gcm_lrgcm[::-1]
-    #                glacier_gcm_lrglac = glacier_gcm_lrglac[::-1]
                 
-    #                #%%
-    #                import torch
-    #                import gpytorch
-    #                
-    #                class ExactGPModel(gpytorch.models.ExactGP):
-    #                    """ Use the simplest form of GP model, exact inference """
-    #                    def __init__(self, train_x, train_y, likelihood):
-    #                        super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
-    #                        self.mean_module = gpytorch.means.ConstantMean()
-    #                        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=3))
-    #                
-    #                    def forward(self, x):
-    #                        mean_x = self.mean_module(x)
-    #                        covar_x = self.covar_module(x)
-    #                        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
-    #    
-    #                
-    #                # Emulator filepath
-    #                em_mod_fp = pygem_prms.emulator_fp + 'models/' + glacier_str.split('.')[0].zfill(2) + '/'
-    #                
-    #                # ----- EMULATOR: Mass balance -----
-    #                em_mb_fn = glacier_str + '-emulator-mb_mwea.pth'
-    #                
-    #                # ----- LOAD EMULATOR -----
-    #                # This is required for the supercomputer such that resources aren't stolen from other cpus
-    #                torch.set_num_threads(1)
-    #            
-    #                state_dict = torch.load(em_mod_fp + em_mb_fn)
-    #                
-    #                emulator_extra_fn = em_mb_fn.replace('.pth','_extra.pkl')
-    #                with open(em_mod_fp + emulator_extra_fn, 'rb') as f:
-    #                    emulator_extra_dict = pickle.load(f)
-    #                    
-    #                X_train = emulator_extra_dict['X_train']
-    #                X_mean = emulator_extra_dict['X_mean']
-    #                X_std = emulator_extra_dict['X_std']
-    #                y_train = emulator_extra_dict['y_train']
-    #                y_mean = emulator_extra_dict['y_mean']
-    #                y_std = emulator_extra_dict['y_std']
-    #                
-    #                # initialize likelihood and model
-    #                likelihood = gpytorch.likelihoods.GaussianLikelihood()
-    #                
-    #                # Create a new GP model
-    #                em_model_mb = ExactGPModel(X_train, y_train, likelihood)  
-    #                em_model_mb.load_state_dict(state_dict)
-    #                em_model_mb.eval()
-    #                    
-    #                # Mass balance emulator function
-    #                def run_emulator_mb(modelprms):
-    #                    """ Run the emulator
-    #                    """
-    #                    modelprms_1d_norm = ((np.array([modelprms['tbias'], modelprms['kp'], modelprms['ddfsnow']]) - 
-    #                                          X_mean) / X_std)                    
-    #                    modelprms_2d_norm = modelprms_1d_norm.reshape(1,3)
-    #                    mb_mwea_norm = em_model_mb(
-    #                            torch.tensor(modelprms_2d_norm).to(torch.float)).mean.detach().numpy()[0]
-    #                    mb_mwea = mb_mwea_norm * y_std + y_mean
-    #                    return mb_mwea
-    #                
-    #                #%%
     
                 # Load model parameters
                 if pygem_prms.use_calibrated_modelparams:
@@ -1243,7 +1197,7 @@ def main(list_packed_vars):
                                 calving_k_values[calving_k_values < 0.001] = 0.001
                                 calving_k_values[calving_k_values > 5] = 5
                                 
-                                print(calving_k, np.median(calving_k_values))
+#                                print(calving_k, np.median(calving_k_values))
                             
                             assert abs(np.median(calving_k_values) - calving_k) < 0.001, 'calving_k distribution too far off'
 
@@ -1406,7 +1360,7 @@ def main(list_packed_vars):
                     # No ice dynamics options
                     else:
                         nfls = fls
-                        
+
                     # Record initial surface h for overdeepening calculations
                     surface_h_initial = nfls[0].surface_h
                     
@@ -1439,9 +1393,12 @@ def main(list_packed_vars):
                         if debug:
                             graphics.plot_modeloutput_section(ev_model)
                             plt.show()
-                            
+
                         try:
-                            _, diag = ev_model.run_until_and_store(nyears)
+                            if Version(oggm_version) < Version('1.5.3'):
+                                _, diag = ev_model.run_until_and_store(nyears)
+                            else:
+                                diag = ev_model.run_until_and_store(nyears)
                             ev_model.mb_model.glac_wide_volume_annual[-1] = diag.volume_m3[-1]
                             ev_model.mb_model.glac_wide_area_annual[-1] = diag.area_m2[-1]
                             
@@ -1494,7 +1451,10 @@ def main(list_packed_vars):
                                                 is_tidewater=gdir.is_tidewater,
                                                 water_level=water_level
                                                 )
-                                _, diag = ev_model.run_until_and_store(nyears)
+                                if Version(oggm_version) < Version('1.5.3'):
+                                    _, diag = ev_model.run_until_and_store(nyears)
+                                else:
+                                    diag = ev_model.run_until_and_store(nyears)
                                 ev_model.mb_model.glac_wide_volume_annual = diag.volume_m3.values
                                 ev_model.mb_model.glac_wide_area_annual = diag.area_m2.values
                 
@@ -1522,7 +1482,10 @@ def main(list_packed_vars):
                                                 is_tidewater=gdir.is_tidewater,
                                                 water_level=water_level
                                                 )
-                                _, diag = ev_model.run_until_and_store(nyears)
+                                if Version(oggm_version) < Version('1.5.3'):
+                                    _, diag = ev_model.run_until_and_store(nyears)
+                                else:
+                                    diag = ev_model.run_until_and_store(nyears)
                                 ev_model.mb_model.glac_wide_volume_annual = diag.volume_m3.values
                                 ev_model.mb_model.glac_wide_area_annual = diag.area_m2.values
                 
@@ -1559,7 +1522,10 @@ def main(list_packed_vars):
                             graphics.plot_modeloutput_section(ev_model)
                            
                         try:
-                            _, diag = ev_model.run_until_and_store(nyears)
+                            if Version(oggm_version) < Version('1.5.3'):
+                                _, diag = ev_model.run_until_and_store(nyears)
+                            else:
+                                diag = ev_model.run_until_and_store(nyears)
 #                            print('shape of volume:', ev_model.mb_model.glac_wide_volume_annual.shape, diag.volume_m3.shape)
                             ev_model.mb_model.glac_wide_volume_annual = diag.volume_m3.values
                             ev_model.mb_model.glac_wide_area_annual = diag.area_m2.values
@@ -1753,7 +1719,7 @@ def main(list_packed_vars):
                 if count_exceed_boundary_errors < pygem_prms.sim_iters:
                     
                     # ----- STATS OF ALL VARIABLES -----
-                    if pygem_prms.export_nonessential_data:
+                    if pygem_prms.export_essential_data:
                         # Create empty dataset
                         output_ds_all_stats, encoding = create_xrdataset(glacier_rgi_table, dates_table)
                         # Output statistics
@@ -1942,7 +1908,7 @@ def main(list_packed_vars):
         main_vars = inspect.currentframe().f_locals
 
 #%% PARALLEL PROCESSING
-if __name__ == '__main__':
+if __name__ == '__main__':    
     time_start = time.time()
     parser = getparser()
     args = parser.parse_args()
@@ -2029,11 +1995,6 @@ if __name__ == '__main__':
             main_glac_icethickness = main_vars['main_glac_icethickness']
             main_glac_width = main_vars['main_glac_width']
         dates_table = main_vars['dates_table']
-        if pygem_prms.option_synthetic_sim == 1:
-            dates_table_synthetic = main_vars['dates_table_synthetic']
-            gcm_temp_tile = main_vars['gcm_temp_tile']
-            gcm_prec_tile = main_vars['gcm_prec_tile']
-            gcm_lr_tile = main_vars['gcm_lr_tile']
         gcm_temp = main_vars['gcm_temp']
         gcm_tempstd = main_vars['gcm_tempstd']
         gcm_prec = main_vars['gcm_prec']
@@ -2044,9 +2005,7 @@ if __name__ == '__main__':
         gcm_elev_adj = main_vars['gcm_elev_adj']
         gcm_temp_lrglac = main_vars['gcm_lr']
         ds_stats = main_vars['output_ds_all_stats']
-#        output_ds_essential_sims = main_vars['output_ds_essential_sims']
         ds_binned = main_vars['output_ds_binned_stats']
-#        modelprms = main_vars['modelprms']
         glacier_rgi_table = main_vars['glacier_rgi_table']
         glacier_str = main_vars['glacier_str']
         if pygem_prms.hyps_data in ['OGGM']:
@@ -2059,20 +2018,3 @@ if __name__ == '__main__':
             diag = main_vars['diag']
             if pygem_prms.use_calibrated_modelparams:
                 modelprms_dict = main_vars['modelprms_dict']
-            
-  
-    if args.option_parallels == 0 and debug:
-        print('\nTO-DO LIST:')
-        print(' - add frontal ablation to be removed in mass redistribution curves glacierdynamics')
-        print(' - climate data likely mismatch with OGGM, e.g., prec in m for the month')
-
-
-    #%%
-    # Check volume is consistent
-#    vol_binned = output_ds_binned_stats['bin_volume_annual'].values[0,:,:].sum(0)
-#    vol_annual = output_ds_essential_sims['glac_volume_annual'].values[0,:,:]
-#    glac_area_init = output_ds_all_stats['glac_area_annual'].values[0,0]
-#    mb_monthly_m3we = output_ds_all_stats['glac_massbaltotal_monthly'].values[0,:]
-#    mb_mwea_mean = mb_monthly_m3we.sum() / glac_area_init / (mb_monthly_m3we.shape[0]/12)
-#    print('\n\nmb_mwea_mean:', np.round(mb_mwea_mean,3),'\n\n')
-    

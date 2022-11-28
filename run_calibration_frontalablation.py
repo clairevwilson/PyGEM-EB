@@ -4,27 +4,26 @@ Calibrate frontal ablation parameters for tidewater glaciers
 @author: davidrounce
 """
 # Built-in libraries
-import argparse
 import os
 import pickle
+
 # External libraries
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import linregress
-from scipy.stats import median_abs_deviation
 import xarray as xr
+
 # Local libraries
 import class_climate
 import pygem.pygem_input as pygem_prms
 import pygem.pygem_modelsetup as modelsetup
 from pygem.massbalance import PyGEMMassBalance
 from pygem.glacierdynamics import MassRedistributionCurveModel
-from pygem.oggm_compat import single_flowline_glacier_directory, single_flowline_glacier_directory_with_calving
+from pygem.oggm_compat import single_flowline_glacier_directory_with_calving
 from pygem.shop import debris 
 
 from oggm import utils, cfg
-from oggm import graphics
 from oggm import tasks
 from oggm.core import climate
 from oggm.core.flowline import FluxBasedModel
@@ -123,7 +122,10 @@ def reg_calving_flux(main_glac_rgi, calving_k, fa_glac_data_reg=None,
     # Elevation [m asl]
     gcm_elev = gcm.importGCMfxnearestneighbor_xarray(gcm.elev_fn, gcm.elev_vn, main_glac_rgi)
     # Lapse rate [degC m-1]
-    gcm_lr, gcm_dates = gcm.importGCMvarnearestneighbor_xarray(gcm.lr_fn, gcm.lr_vn, main_glac_rgi, dates_table)
+    if pygem_prms.use_constant_lapserate:
+        gcm_lr = np.zeros(gcm_temp.shape) + pygem_prms.lapserate
+    else:
+        gcm_lr, gcm_dates = gcm.importGCMvarnearestneighbor_xarray(gcm.lr_fn, gcm.lr_vn, main_glac_rgi, dates_table)
 
     # ===== CALIBRATE ALL THE GLACIERS AT ONCE =====
     output_cns = ['RGIId', 'calving_k', 'calving_thick', 'calving_flux_Gta_inv', 'calving_flux_Gta', 'no_errors', 'oggm_dynamics']

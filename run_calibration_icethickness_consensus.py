@@ -24,10 +24,10 @@ from oggm import cfg
 from oggm import tasks
 from oggm.core import climate
 
-#cfg.initialize()
-#cfg.PARAMS['trapezoid_lambdas'] = 1
+   
+#%% ----- MANUAL INPUT DATA -----
+regions = [12]
 
-#%%    
 print('setting glacier dynamic model parameters here')
 fs = 0                 # keep this set at 0
 a_multiplier = 1       # calibrate this based on ice thickness data or the consensus estimates
@@ -216,11 +216,20 @@ if args.debug == 1:
 else:
     debug = False
 
+# Check that input file set up properly to record results of successful calibration
+try:
+    os.path.exists(pygem_prms.glena_reg_fullfn)
+except:
+    assert True==False, "pygem_prms.glena_reg_fullfn is not specified in input file. You may need to set option_dynamics='OGGM'"
+
+# Calibrate each region
 for reg in regions:
+    print(reg)
+    
     # ===== LOAD GLACIERS =====
     # RGI glacier number
-    # if pygem_prms.glac_no is not None:
-    #     main_glac_rgi_all = modelsetup.selectglaciersrgitable(glac_no=pygem_prms.glac_no)
+#    if pygem_prms.glac_no is not None:
+#        main_glac_rgi_all = modelsetup.selectglaciersrgitable(glac_no=pygem_prms.glac_no)
 #    else:
 #        main_glac_rgi_all = modelsetup.selectglaciersrgitable(
 #                rgi_regionsO1=pygem_prms.rgi_regionsO1, rgi_regionsO2=pygem_prms.rgi_regionsO2,
@@ -236,7 +245,7 @@ for reg in regions:
     main_glac_rgi_all['Area_cum'] = np.cumsum(main_glac_rgi_all['Area'])
     main_glac_rgi_all['Area_cum_frac'] = main_glac_rgi_all['Area_cum'] / main_glac_rgi_all.Area.sum()
     
-    glac_idx = np.where(main_glac_rgi_all.Area_cum_frac > 0.9)[0][0]
+    glac_idx = np.where(main_glac_rgi_all.Area_cum_frac > pygem_prms.icethickness_cal_frac_byarea)[0][0]
     main_glac_rgi_subset = main_glac_rgi_all.loc[0:glac_idx, :]
     main_glac_rgi_subset = main_glac_rgi_subset.sort_values('O1Index', ascending=True)
     main_glac_rgi_subset.reset_index(inplace=True, drop=True)
@@ -266,7 +275,10 @@ for reg in regions:
     # Elevation [m asl]
     gcm_elev = gcm.importGCMfxnearestneighbor_xarray(gcm.elev_fn, gcm.elev_vn, main_glac_rgi_subset)
     # Lapse rate [degC m-1]
-    gcm_lr, gcm_dates = gcm.importGCMvarnearestneighbor_xarray(gcm.lr_fn, gcm.lr_vn, main_glac_rgi_subset, dates_table)
+    if pygem_prms.use_constant_lapserate:
+        gcm_lr = np.zeros(gcm_temp.shape) + pygem_prms.lapserate
+    else:
+        gcm_lr, gcm_dates = gcm.importGCMvarnearestneighbor_xarray(gcm.lr_fn, gcm.lr_vn, main_glac_rgi_subset, dates_table)
     
     # ===== RUN MASS BALANCE =====
     # Number of years (for OGGM's run_until_and_store)
@@ -320,11 +332,6 @@ for reg in regions:
                               'ddfice': modelprms_all['ddfice'][0],
                               'tsnow_threshold': modelprms_all['tsnow_threshold'][0],
                               'precgrad': modelprms_all['precgrad'][0]}
-        
-        #        if debug:
-        #            print(glacier_str + '  kp: ' + str(np.round(modelprms['kp'],2)) +
-        #                  ' ddfsnow: ' + str(np.round(modelprms['ddfsnow'],4)) +
-        #                  ' tbias: ' + str(np.round(modelprms['tbias'],2)))
                 
                 # ----- ICE THICKNESS INVERSION using OGGM -----
                 # Apply inversion_filter on mass balance with debris to avoid negative flux
@@ -418,6 +425,7 @@ for reg in regions:
     glena_cns = ['O1Region', 'count', 'glens_a_multiplier', 'fs', 'reg_vol_km3_consensus', 'reg_vol_km3_modeled']
     glena_df_single = pd.DataFrame(np.zeros((1,len(glena_cns))), columns=glena_cns)
     glena_df_single.loc[0,:] = [reg, main_glac_rgi_subset.shape[0], a_multiplier_opt, fs, reg_vol_km3_con, reg_vol_km3_mod]
+    
     if os.path.exists(pygem_prms.glena_reg_fullfn):
         glena_df = pd.read_csv(pygem_prms.glena_reg_fullfn)
         
