@@ -34,7 +34,7 @@ a_multiplier = 1       # calibrate this based on ice thickness data or the conse
 a_multiplier_bndlow = 0.1
 a_multiplier_bndhigh = 10
 
-regions = [12]
+regions = [1]
 
 #%% FUNCTIONS
 def getparser():
@@ -174,6 +174,7 @@ def reg_vol_comparison(gdirs, mbmods, a_multiplier=1, fs=0, debug=False):
     
     reg_vol_km3_consensus = 0
     reg_vol_km3_modeled = 0
+    
     for nglac, gdir in enumerate(gdirs):
         if nglac%2000 == 0:
             print(gdir.rgi_id)
@@ -181,12 +182,13 @@ def reg_vol_comparison(gdirs, mbmods, a_multiplier=1, fs=0, debug=False):
         
         # Arbitrariliy shift the MB profile up (or down) until mass balance is zero (equilibrium for inversion)
         climate.apparent_mb_from_any_mb(gdir, mb_model=mbmod_inv, mb_years=np.arange(nyears))
-    
+        
         tasks.prepare_for_inversion(gdir)
         tasks.mass_conservation_inversion(gdir, glen_a=cfg.PARAMS['glen_a']*a_multiplier, fs=fs)
         tasks.init_present_time_glacier(gdir) # adds bins below
+
         nfls = gdir.read_pickle('model_flowlines')
-            
+        
         # Load consensus volume
         if os.path.exists(gdir.get_filepath('consensus_mass')):
             consensus_fn = gdir.get_filepath('consensus_mass')
@@ -215,12 +217,10 @@ else:
     debug = False
 
 for reg in regions:
-    print(reg)
-    
     # ===== LOAD GLACIERS =====
     # RGI glacier number
-#    if pygem_prms.glac_no is not None:
-#        main_glac_rgi_all = modelsetup.selectglaciersrgitable(glac_no=pygem_prms.glac_no)
+    # if pygem_prms.glac_no is not None:
+    #     main_glac_rgi_all = modelsetup.selectglaciersrgitable(glac_no=pygem_prms.glac_no)
 #    else:
 #        main_glac_rgi_all = modelsetup.selectglaciersrgitable(
 #                rgi_regionsO1=pygem_prms.rgi_regionsO1, rgi_regionsO2=pygem_prms.rgi_regionsO2,
@@ -243,7 +243,7 @@ for reg in regions:
     
     
     print('But only the largest 90% of the glaciers by area, which includes', main_glac_rgi_subset.shape[0], 'glaciers.')
-    
+
     # ===== TIME PERIOD =====
     dates_table = modelsetup.datesmodelrun(
             startyear=pygem_prms.ref_startyear, endyear=pygem_prms.ref_endyear, spinupyears=pygem_prms.ref_spinupyears,
@@ -283,14 +283,12 @@ for reg in regions:
         # Select subsets of data
         glacier_rgi_table = main_glac_rgi_subset.loc[main_glac_rgi_subset.index.values[glac], :]
         glacier_str = '{0:0.5f}'.format(glacier_rgi_table['RGIId_float'])
-        
         if glac%1000 == 0:
             print(glacier_str)
     
         # ===== Load glacier data: area (km2), ice thickness (m), width (km) =====
         try:
             gdir = single_flowline_glacier_directory(glacier_str, logging_level='CRITICAL')
-            
             # Flowlines
             fls = gdir.read_pickle('inversion_flowlines')
             
@@ -351,7 +349,22 @@ for reg in regions:
         #            plt.ylabel('Elevation')
         #            plt.xlabel('Mass balance (mwea)')
         #            plt.show()
-                
+                # glena_df = pd.read_csv(pygem_prms.glena_reg_fullfn)                    
+                # glena_O1regions = [int(x) for x in glena_df.O1Region.values]
+                # assert glacier_rgi_table.O1Region in glena_O1regions, glacier_str + ' O1 region not in glena_df'
+                # glena_idx = np.where(glena_O1regions == glacier_rgi_table.O1Region)[0][0]
+                # glen_a_multiplier = glena_df.loc[glena_idx,'glens_a_multiplier']
+                # fs = glena_df.loc[glena_idx,'fs']
+
+                # climate.apparent_mb_from_any_mb(gdir, mb_model=mbmod_inv, mb_years=np.arange(nyears))
+                # tasks.prepare_for_inversion(gdir)
+                # tasks.mass_conservation_inversion(gdir, glen_a=cfg.PARAMS['glen_a']*glen_a_multiplier, fs=fs)
+
+                tasks.compute_downstream_line(gdir)
+                tasks.compute_downstream_bedshape(gdir)
+                tasks.init_present_time_glacier(gdir) 
+
+                # adds bins below
                 mbmods.append(mbmod_inv)
                 gdirs.append(gdir)
         except:

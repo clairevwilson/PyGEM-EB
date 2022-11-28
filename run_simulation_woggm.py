@@ -754,7 +754,7 @@ def create_xrdataset_binned_stats(glacier_rgi_table, dates_table, surface_h_init
     # append additional year to year_values to account for volume and area at end of period
     year_values = annual_columns[pygem_prms.gcm_spinupyears:annual_columns.shape[0]]
     year_values = np.concatenate((year_values, np.array([annual_columns[-1] + 1])))
-    
+    time_values = dates_table.loc[pygem_prms.gcm_spinupyears*12:dates_table.shape[0]+1,'date'].tolist()
     bin_values = np.arange(surface_h_initial.shape[0])
     
     # Variable coordinates dictionary
@@ -772,6 +772,7 @@ def create_xrdataset_binned_stats(glacier_rgi_table, dates_table, surface_h_init
             collections.OrderedDict([('glac', glac_values), ('bin',bin_values), ('year', year_values)]))
     output_coords_dict['bin_massbalclim_annual'] = (
             collections.OrderedDict([('glac', glac_values), ('bin',bin_values), ('year', year_values)]))
+
     if pygem_prms.sim_iters > 1:
         output_coords_dict['bin_volume_annual_mad'] = (
             collections.OrderedDict([('glac', glac_values), ('bin',bin_values), ('year', year_values)]))
@@ -1072,7 +1073,7 @@ def main(list_packed_vars):
         rgiid = main_glac_rgi.loc[main_glac_rgi.index.values[glac],'RGIId']
 
         try:
-#        for batman in [0]:
+        #for batman in [0]:
 
             # ===== Load glacier data: area (km2), ice thickness (m), width (km) =====
             if not glacier_rgi_table['TermType'] in [1,5] or pygem_prms.ignore_calving:
@@ -1923,7 +1924,7 @@ def main(list_packed_vars):
     #                    output_ds_essential_sims.close()
                     
                     
-#        print('\n\nADD BACK IN EXCEPTION\n\n')
+        #print('\n\nADD BACK IN EXCEPTION\n\n')
         except:
             # LOG FAILURE
             fail_fp = pygem_prms.output_sim_fp + 'failed/' + reg_str + '/' + gcm_name + '/'
@@ -1939,7 +1940,6 @@ def main(list_packed_vars):
     if args.option_parallels == 0:
         global main_vars
         main_vars = inspect.currentframe().f_locals
-
 
 #%% PARALLEL PROCESSING
 if __name__ == '__main__':

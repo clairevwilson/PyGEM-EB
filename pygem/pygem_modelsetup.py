@@ -301,17 +301,14 @@ def selectglaciersrgitable(glac_no=None, rgi_regionsO1=None, rgi_regionsO2=None,
 
         if glac_no is not None:
             rgi_glac_number = glac_no_byregion[region]
-
 #        if len(rgi_glac_number) < 50:
-
         for i in os.listdir(rgi_fp):
             if i.startswith(str(region).zfill(2)) and i.endswith('.csv'):
                 rgi_fn = i
         try:
-            csv_regionO1 = pd.read_csv(rgi_fp + rgi_fn)
+            csv_regionO1 = pd.read_csv(rgi_fp + rgi_fn,skipinitialspace=True)
         except:
             csv_regionO1 = pd.read_csv(rgi_fp + rgi_fn, encoding='latin1')
-        
         # Populate glacer_table with the glaciers of interest
         if rgi_regionsO2 == 'all' and rgi_glac_number == 'all':
             print("All glaciers within region(s) %s are included in this model run." % (region))
@@ -335,7 +332,6 @@ def selectglaciersrgitable(glac_no=None, rgi_regionsO1=None, rgi_regionsO2=None,
             else:
                 print("%s glaciers in region %s are included in this model run: %s and more" %
                       (len(rgi_glac_number), region, rgi_glac_number[0:50]))
-                
             rgiid_subset = ['RGI60-' + str(region).zfill(2) + '.' + x for x in rgi_glac_number] 
             rgiid_all = list(csv_regionO1.RGIId.values)
             rgi_idx = [rgiid_all.index(x) for x in rgiid_subset if x in rgiid_all]

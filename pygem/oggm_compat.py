@@ -83,6 +83,7 @@ def single_flowline_glacier_directory(rgi_id, reset=pygem_prms.overwrite_gdirs, 
     else:
         process_gdir = True
     
+
     if process_gdir:
         # Download preprocessed data
 #        gdirs = workflow.init_glacier_directories([rgi_id], from_prepro_level=2, prepro_border=40)
@@ -94,8 +95,9 @@ def single_flowline_glacier_directory(rgi_id, reset=pygem_prms.overwrite_gdirs, 
         
 #        try:
         gdirs = workflow.init_glacier_directories([rgi_id], from_prepro_level=2, prepro_border=40, 
-                                                  prepro_base_url=base_url, prepro_rgi_version='62',
-                                                  use_demo_glaciers=False)
+                                                  prepro_base_url=base_url, prepro_rgi_version='62')
+
+        
         # Compute all the stuff
         list_tasks = [
 #                tasks.glacier_masks,
@@ -113,21 +115,19 @@ def single_flowline_glacier_directory(rgi_id, reset=pygem_prms.overwrite_gdirs, 
             # Mass balance data
             mbdata.mb_df_to_gdir
         ]
-        
+
         # Debris tasks
         if pygem_prms.include_debris:
             list_tasks.append(debris.debris_to_gdir)
             list_tasks.append(debris.debris_binned)
-            
-    
+
         for task in list_tasks:
             workflow.execute_entity_task(task, gdirs)
-            
+
         gdir = gdirs[0]
         
 #        except:
 #            gdir = None
-    
         return gdir
 
 

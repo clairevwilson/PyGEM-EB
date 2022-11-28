@@ -64,7 +64,7 @@ def mb_df_to_gdir(gdir, mb_dataset='Hugonnet2020'):
         mberr_clim_cn = pygem_prms.hugonnet_mb_clim_err_cn
         t1_cn = pygem_prms.hugonnet_time1_cn
         t2_cn = pygem_prms.hugonnet_time2_cn
-    
+
     assert os.path.exists(mbdata_fp + mbdata_fn), "Error: mb dataset does not exist."
     
     mb_df = pd.read_csv(mbdata_fp + mbdata_fn)
@@ -77,11 +77,11 @@ def mb_df_to_gdir(gdir, mb_dataset='Hugonnet2020'):
         # Glacier-wide mass balance
         mb_mwea = mb_df.loc[rgiid_idx, mb_cn]
         mb_mwea_err = mb_df.loc[rgiid_idx, mberr_cn]
-        
+
         assert mb_clim_cn in mb_df.columns, mb_clim_cn + ' not a column in mb_df'
         mb_clim_mwea = mb_df.loc[rgiid_idx, mb_clim_cn]
         mb_clim_mwea_err = mb_df.loc[rgiid_idx, mberr_clim_cn]
-        
+
         t1_str = mb_df.loc[rgiid_idx, t1_cn]
         t2_str = mb_df.loc[rgiid_idx, t2_cn]  
         
@@ -93,9 +93,9 @@ def mb_df_to_gdir(gdir, mb_dataset='Hugonnet2020'):
 #        t2_datetime = pd.to_datetime(pd.DataFrame({'year':[t2_str.split('-')[0]], 
 #                                                   'month':[t2_str.split('-')[1]], 
 #                                                   'day':[t2_str.split('-')[2]]}))[0]
-
         # remove one day from t2 datetime for proper indexing (ex. 2001-01-01 want to run through 2000-12-31)
         t2_datetime = t2_datetime - timedelta(days=1)
+
         # Number of years
         nyears = (t2_datetime + timedelta(days=1) - t1_datetime).days / 365.25
 

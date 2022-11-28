@@ -147,7 +147,6 @@ def mb_mwea_calc(gdir, modelprms, glacier_rgi_table, fls=None, t1=None, t2=None,
         mb_mwea = mbmod.glac_wide_massbaltotal[t1_idx:t2_idx+1].sum() / mbmod.glac_wide_area_annual[0] / nyears
         return mb_mwea
     
-
 #def mb_mwea_calc(gdir, modelprms, glacier_rgi_table, fls=None, t1=None, t2=None,
 #                 option_areaconstant=pygem_prms.option_areaconstant, return_tbias_mustmelt=False, return_tbias_mustmelt_wmb=False,
 #                 cfl_number=0.02, fs=0, glen_a_multiplier=1, account_tidewater=False):
@@ -496,7 +495,7 @@ def create_emulator(glacier_str, sims_df, y_cn,
     return X_train, X_mean, X_std, y_train, y_mean, y_std, likelihood, model
         
 
-    
+
 #%%
 def main(list_packed_vars):
     """
@@ -561,8 +560,7 @@ def main(list_packed_vars):
         glacier_str = '{0:0.5f}'.format(glacier_rgi_table['RGIId_float'])
 
         # ===== Load glacier data: area (km2), ice thickness (m), width (km) =====        
-        try: 
-
+        try:
             if not glacier_rgi_table['TermType'] in [1,5] or pygem_prms.ignore_calving:
                 gdir = single_flowline_glacier_directory(glacier_str, logging_level='CRITICAL')
                 gdir.is_tidewater = False
@@ -585,7 +583,6 @@ def main(list_packed_vars):
 
             # ----- Calibration data -----
             try:
-
                 mbdata_fn = gdir.get_filepath('mb_obs')
                 with open(mbdata_fn, 'rb') as f:
                     gdir.mbdata = pickle.load(f)
@@ -624,7 +621,6 @@ def main(list_packed_vars):
 
         # ----- Mass balance model ------
         if (fls is not None) and (gdir.mbdata is not None) and (glacier_area.sum() > 0):
-            
             modelprms = {'kp': pygem_prms.kp,
                          'tbias': pygem_prms.tbias,
                          'ddfsnow': pygem_prms.ddfsnow,
@@ -1042,7 +1038,7 @@ def main(list_packed_vars):
                 
                 try:
                     # ===== RUNNING MCMC =====
-                    # Prior distributions (specified or informed by regions)
+                    #Prior distributions (specified or informed by regions)
                     if pygem_prms.priors_reg_fullfn is not None:
                         # Load priors
                         priors_df = pd.read_csv(pygem_prms.priors_reg_fullfn)
@@ -1153,6 +1149,8 @@ def main(list_packed_vars):
                         modelprms_export['ddfice'] = {chain_str : list(model.trace('ddfsnow')[:] /
                                                                    pygem_prms.ddfsnow_iceratio)}
                         modelprms_export['mb_mwea'] = {chain_str : list(model.trace('massbal')[:])}
+                        modelprms_df = pd.DataFrame()
+                        modelprms_df.to_csv('./../example_markovchain.csv')
     
                     # Export model parameters
                     modelprms_export['precgrad'] = [pygem_prms.precgrad]
@@ -1702,8 +1700,7 @@ def main(list_packed_vars):
                     modelprms_dict = {pygem_prms.option_calibration: modelprms}
                 with open(modelprms_fullfn, 'wb') as f:
                     pickle.dump(modelprms_dict, f)
-                    
-                    
+                          
             #%% ===== EMULATOR TO SETUP MCMC ANALYSIS =====
             # - precipitation factor, temperature bias, degree-day factor of snow
             elif pygem_prms.option_calibration == 'emulator':
@@ -1867,9 +1864,9 @@ def main(list_packed_vars):
                     # This is required for the supercomputer such that resources aren't stolen from other cpus
 #                    torch.set_num_threads = 1
                     torch.set_num_threads(1)
-    
+
                     state_dict = torch.load(em_mod_fp + em_mod_fn)
-                    
+
                     emulator_extra_fn = em_mod_fn.replace('.pth','_extra.pkl')
                     with open(em_mod_fp + emulator_extra_fn, 'rb') as f:
                         emulator_extra_dict = pickle.load(f)
@@ -2233,6 +2230,7 @@ def main(list_packed_vars):
                     if not os.path.exists(modelprms_fp):
                         os.makedirs(modelprms_fp, exist_ok=True)
                     modelprms_fullfn = modelprms_fp + modelprms_fn
+
                     if os.path.exists(modelprms_fullfn):
                         with open(modelprms_fullfn, 'rb') as f:
                             modelprms_dict = pickle.load(f)
@@ -2286,7 +2284,7 @@ if __name__ == '__main__':
 
     # Glacier number lists to pass for parallel processing
     glac_no_lsts = split_glaciers.split_list(glac_no, n=num_cores, option_ordered=args.option_ordered)
-
+    
     # Read GCM names from argument parser
     gcm_name = args.ref_gcm_name
     print('Processing:', gcm_name)

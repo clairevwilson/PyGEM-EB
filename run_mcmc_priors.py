@@ -68,8 +68,8 @@ reg_dict = {1:'Alaska',
 for reg in rgi_regionsO1:
     
     # Calibration filepath
-#    modelprms_fp = pygem_prms.output_filepath + 'calibration/' + str(reg).zfill(2) + '/'
-    modelprms_fp = '/Users/drounce/Documents/HiMAT/spc_backup/calibration/' + str(reg).zfill(2) + '/'
+    modelprms_fp = pygem_prms.output_filepath + 'calibration/' + str(reg).zfill(2) + '/'
+#    modelprms_fp = '/Users/drounce/Documents/HiMAT/spc_backup/calibration/' + str(reg).zfill(2) + '/'
     
     # Load glaciers
     glac_list = [x.split('-')[0] for x in os.listdir(modelprms_fp) if x.endswith('-modelprms_dict.pkl')]

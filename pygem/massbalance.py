@@ -157,6 +157,7 @@ class PyGEMMassBalance(MassBalanceModel):
         self.offglac_wide_melt = np.zeros(self.nmonths)
         self.offglac_wide_snowpack = np.zeros(self.nmonths)
         self.offglac_wide_runoff = np.zeros(self.nmonths)
+        self.glac_bin_runoff = np.zeros(self.nmonths)
 
         self.dayspermonth = self.dates_table['daysinmonth'].values
         self.surfacetype_ddf = np.zeros((nbins))
@@ -609,8 +610,20 @@ class PyGEMMassBalance(MassBalanceModel):
                         self.offglac_meltrefreeze[self.offglac_meltrefreeze > self.bin_refreeze[:,step]] = (
                                 self.bin_refreeze[:,step][self.offglac_meltrefreeze > self.bin_refreeze[:,step]])
                         # off-glacier melt = snow melt + refreezing melt
-                        self.offglac_bin_melt[offglac_idx,step] = (self.bin_meltsnow[offglac_idx,step] +
-                                                                   self.offglac_meltrefreeze[offglac_idx])
+                        # all offglacier snowpack melts every august (nh) or february (sh)
+                        meltmonth_nh,meltmonth_sh=(8,2)
+                        if (pygem_prms.ref_wateryear == 'hydro'):
+                            meltmonth_nh,meltmonth_sh=(11,5)
+                        if (month==meltmonth_nh) or (self.hemisphere == 'sh' and month == meltmonth_sh):
+                            self.offglac_bin_melt[offglac_idx,step] = (self.bin_meltsnow[offglac_idx,step] +
+                                                self.offglac_meltrefreeze[offglac_idx] + self.offglac_bin_snowpack[offglac_idx,step])
+                            self.offglac_bin_snowpack[offglac_idx,step] = 0
+                        else:
+                            self.offglac_bin_melt[offglac_idx,step] = (self.bin_meltsnow[offglac_idx,step] +
+                                                                       self.offglac_meltrefreeze[offglac_idx])
+
+                        self.glac_bin_runoff = self.glac_bin_melt - self.glac_bin_refreeze + self.bin_prec
+                        self.offglac_bin_runoff = self.offglac_bin_melt - self.offglac_bin_refreeze + self.offglac_bin_prec
 
                 # ===== RETURN TO ANNUAL LOOP =====
                 # SURFACE TYPE (-)
