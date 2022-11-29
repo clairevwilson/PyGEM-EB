@@ -146,6 +146,33 @@ class GCM():
             self.rgi_lat_colname=pygem_prms.rgi_lat_colname
             self.rgi_lon_colname=pygem_prms.rgi_lon_colname
             self.scenario = scenario
+
+        if self.name == 'ERA5-daily':
+            # Variable names
+            self.temp_vn = 't2m'
+            self.tempstd_vn = 't2m_std'
+            self.prec_vn = 'tp'
+            self.elev_vn = 'z'
+            self.lat_vn = 'latitude'
+            self.lon_vn = 'longitude'
+            self.time_vn = 'time'
+            self.lr_vn = 'lapserate'
+            # Variable filenames
+            self.temp_fn = pygem_prms.era5_fp+'ERA5_temp_hourly.nc'
+            self.tempstd_fn = pygem_prms.era5_fp+'ERA5_tempstd_hourly.nc'
+            self.prec_fn = pygem_prms.era5_fp+'ERA5_prec_hourly.nc'
+            self.elev_fn = pygem_prms.era5_fp+'ERA5_geopotential.nc'
+            self.lr_fn = pygem_prms.era5_fp+'ERA5_lapserates_hourly.nc'
+            # Variable filepaths
+            self.var_fp = pygem_prms.era5_fp
+            self.fx_fp = pygem_prms.era5_fp
+            # Extra information
+            self.timestep = pygem_prms.timestep
+            self.rgi_lat_colname=pygem_prms.rgi_lat_colname
+            self.rgi_lon_colname=pygem_prms.rgi_lon_colname
+        
+        #if self.name == 'MERRA2':
+        #add MERRA2 vns and fns later
             
             
     def importGCMfxnearestneighbor_xarray(self, filename, vn, main_glac_rgi):
