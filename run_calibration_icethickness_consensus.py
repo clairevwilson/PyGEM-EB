@@ -295,6 +295,7 @@ for reg in regions:
         # Select subsets of data
         glacier_rgi_table = main_glac_rgi_subset.loc[main_glac_rgi_subset.index.values[glac], :]
         glacier_str = '{0:0.5f}'.format(glacier_rgi_table['RGIId_float'])
+        print(glacier_str)
         if glac%1000 == 0:
             print(glacier_str)
     

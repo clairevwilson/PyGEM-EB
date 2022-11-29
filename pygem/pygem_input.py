@@ -4,6 +4,7 @@
 import os
 # External libraries
 import numpy as np
+import pandas as pd
 # Local libaries
 #from pygem.utils._funcs_selectglaciers import get_same_glaciers, glac_num_fromrange, glac_fromcsv, glac_wo_cal
 
@@ -28,11 +29,11 @@ rgi_glac_number = 'all'
 glac_no_skip = None
 
 #glac_no = ['15.03733']
-matched_glaciers = pd.read_csv('./../matched_glaciers.csv')[['RGIId']]
-ID_list = matched_glaciers['RGIId'][43:76]
-glac_no = [x[7:14] for x in ID_list]
-print(glac_no)
-#glac_no = ['1.02558']
+#matched_glaciers = pd.read_csv('./../matched_glaciers.csv')[['RGIId']]
+#ID_list = matched_glaciers['RGIId'][43:76]
+#glac_no = [x[7:14] for x in ID_list]
+#print(glac_no)
+glac_no = ['1.00570']
 #glac_no = ['18.02342']
 
 # Half the frontal ablation
