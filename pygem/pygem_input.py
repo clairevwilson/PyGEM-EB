@@ -17,7 +17,8 @@ model_run_date = 'January 30 2021'
 
 #%% ===== GLACIER SELECTION =====
 rgi_regionsO1 = [1]                 # 1st order region number (RGI V6.0)
-rgi_regionsO2 = 'all'               # 2nd order region number (RGI V6.0)
+rgi_regionsO2 = [2]
+#rgi_regionsO2 = 'all'               # 2nd order region number (RGI V6.0)
 # RGI glacier number (RGI V6.0)
 #  Three options: (1) use glacier numbers for a given region (or 'all'), must have glac_no set to None
 #                 (2) glac_no is not None, e.g., ['1.00001', 13.0001'], overrides rgi_glac_number
@@ -27,25 +28,9 @@ rgi_glac_number = 'all'
 #rgi_glac_number = glac_num_fromrange(1,48)
 
 glac_no_skip = None
-
-#glac_no = ['15.03733']
-#matched_glaciers = pd.read_csv('./../matched_glaciers.csv')[['RGIId']]
-#ID_list = matched_glaciers['RGIId'][43:76]
-#glac_no = [x[7:14] for x in ID_list]
-#print(glac_no)
-glac_no = ['1.00570']
-#glac_no = ['18.02342']
-
-# Half the frontal ablation
-#glac_no = ['19.01721', '19.00418', '19.00169', '19.00156', '19.00029', '19.00746', '19.00707', '19.00748', '19.00113', '19.00562', '19.00160', '19.00432', '19.00417', '19.00103']
-
-
-##%%
-#import pickle
-#with open('/Users/drounce/Documents/HiMAT/oggm_gdirs/per_glacier/RGI60-19/RGI60-19.01/RGI60-19.01721/mb_data.pkl', 'rb') as f:
-#    mb = pickle.load(f)
-#    print(mb)
-##%%
+glac_no = None
+#glac_no = ['01.00704']
+#glac_no = ['01.00570']
 
 if glac_no is not None:
     rgi_regionsO1 = sorted(list(set([int(x.split('.')[0]) for x in glac_no])))

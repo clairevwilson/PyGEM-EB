@@ -26,7 +26,7 @@ from oggm.core import climate
 
    
 #%% ----- MANUAL INPUT DATA -----
-regions = [12]
+regions = [1]
 
 print('setting glacier dynamic model parameters here')
 fs = 0                 # keep this set at 0
@@ -300,7 +300,8 @@ for reg in regions:
             print(glacier_str)
     
         # ===== Load glacier data: area (km2), ice thickness (m), width (km) =====
-        try:
+        #try:
+        for batman in [0]:
             gdir = single_flowline_glacier_directory(glacier_str, logging_level='CRITICAL')
             # Flowlines
             fls = gdir.read_pickle('inversion_flowlines')
@@ -375,8 +376,8 @@ for reg in regions:
                 # adds bins below
                 mbmods.append(mbmod_inv)
                 gdirs.append(gdir)
-        except:
-            print(glacier_str + ' failed - likely no gdir')
+       # except:
+       #     print(glacier_str + ' failed - likely no gdir')
             
     print('\n\n------\nModel setup time:', time.time()-time_start, 's')
                      
