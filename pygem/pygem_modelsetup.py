@@ -295,6 +295,7 @@ def selectglaciersrgitable(glac_no=None, rgi_regionsO1=None, rgi_regionsO2=None,
             glac_no_byregion[region] = sorted(glac_no_byregion[region])
 
     # Create an empty dataframe
+    print(rgi_regionsO1)
     rgi_regionsO1 = sorted(rgi_regionsO1)
     glacier_table = pd.DataFrame()
     for region in rgi_regionsO1:
