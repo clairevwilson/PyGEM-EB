@@ -46,14 +46,18 @@ def datesmodelrun(startyear=pygem_prms.ref_startyear, endyear=pygem_prms.ref_end
     # Convert input format into proper datetime format
     startdate = datetime(*[int(item) for item in startdate.split('-')])
     enddate = datetime(*[int(item) for item in enddate.split('-')])
-    if pygem_prms.timestep == 'monthly':
+    if pygem_prms.timestep == 'monthly' and not pygem_prms.run_eb:
         startdate = startdate.strftime('%Y-%m')
         enddate = enddate.strftime('%Y-%m')
-    elif pygem_prms.timestep == 'daily':
+    elif pygem_prms.timestep == 'daily' and not pygem_prms.run_eb:
         startdate = startdate.strftime('%Y-%m-%d')
         enddate = enddate.strftime('%Y-%m-%d')
+    elif pygem_prms.run_eb:
+        startdate = startdate.strftime('%Y-%m-%d-%H')
+        enddate = enddate.strftime('%Y-%m-%d-%H')
+
     # Generate dates_table using date_range function
-    if pygem_prms.timestep == 'monthly':
+    if pygem_prms.timestep == 'monthly' and not pygem_prms.run_eb:
         # Automatically generate dates from start date to end data using a monthly frequency (MS), which generates
         # monthly data using the 1st of each month
         dates_table = pd.DataFrame({'date' : pd.date_range(startdate, enddate, freq='MS')})
@@ -68,13 +72,32 @@ def datesmodelrun(startyear=pygem_prms.ref_startyear, endyear=pygem_prms.ref_end
         if pygem_prms.option_leapyear == 0:
             mask1 = (dates_table['daysinmonth'] == 29)
             dates_table.loc[mask1,'daysinmonth'] = 28
-    elif pygem_prms.timestep == 'daily':
+    elif pygem_prms.timestep == 'daily' and not pygem_prms.run_eb:
         # Automatically generate daily (freq = 'D') dates
         dates_table = pd.DataFrame({'date' : pd.date_range(startdate, enddate, freq='D')})
         # Extract attributes for dates_table
         dates_table['year'] = dates_table['date'].dt.year
         dates_table['month'] = dates_table['date'].dt.month
         dates_table['day'] = dates_table['date'].dt.day
+        dates_table['daysinmonth'] = dates_table['date'].dt.daysinmonth
+        # Set date as index
+        dates_table.set_index('date', inplace=True)
+        # Remove leap year days if user selected this with option_leapyear
+        if pygem_prms.option_leapyear == 0:
+            # First, change 'daysinmonth' number
+            mask1 = dates_table['daysinmonth'] == 29
+            dates_table.loc[mask1,'daysinmonth'] = 28
+            # Next, remove the 29th days from the dates
+            mask2 = ((dates_table['month'] == 2) & (dates_table['day'] == 29))
+            dates_table.drop(dates_table[mask2].index, inplace=True)
+    elif pygem_prms.run_eb:
+        # Automatically generate hourly (freq = 'h') dates
+        dates_table = pd.DataFrame({'date' : pd.date_range(startdate, enddate, freq='h')})
+        # Extract attributes for dates_table
+        dates_table['year'] = dates_table['date'].dt.year
+        dates_table['month'] = dates_table['date'].dt.month
+        dates_table['day'] = dates_table['date'].dt.day
+        dates_table['hour'] = dates_table['date'].dt.hour
         dates_table['daysinmonth'] = dates_table['date'].dt.daysinmonth
         # Set date as index
         dates_table.set_index('date', inplace=True)
@@ -93,9 +116,12 @@ def datesmodelrun(startyear=pygem_prms.ref_startyear, endyear=pygem_prms.ref_end
     # Water year for northern hemisphere using USGS definition (October 1 - September 30th),
     # e.g., water year for 2000 is from October 1, 1999 - September 30, 2000
     dates_table['wateryear'] = dates_table['year']
-    for step in range(dates_table.shape[0]):
-        if dates_table.loc[step, 'month'] >= 10:
-            dates_table.loc[step, 'wateryear'] = dates_table.loc[step, 'year'] + 1
+    try:
+        for step in range(dates_table.shape[0]):
+            if dates_table.loc[step,'month'] >= 10:
+                dates_table.loc[step,'wateryear'] = dates_table.loc[step,'year'] + 1
+    except:
+        print('NOT HANDLING WATER YEARS')
     # Add column for seasons
     # create a season dictionary to assist groupby functions
     seasondict = {}
@@ -295,7 +321,6 @@ def selectglaciersrgitable(glac_no=None, rgi_regionsO1=None, rgi_regionsO2=None,
             glac_no_byregion[region] = sorted(glac_no_byregion[region])
 
     # Create an empty dataframe
-    print(rgi_regionsO1)
     rgi_regionsO1 = sorted(rgi_regionsO1)
     glacier_table = pd.DataFrame()
     for region in rgi_regionsO1:
@@ -412,8 +437,7 @@ def selectglaciersrgitable(glac_no=None, rgi_regionsO1=None, rgi_regionsO2=None,
     #   using these alternative boundaries that may (or may not) be more
     #   representative of regional processes/climate
     #   Note: this is really only important for calibration purposes and
-    #         post-processing when you want to show results over specific
-    #         regions.
+    #         post-processing when you want to show results over specific regions
     # Development Note: if create another method for selecting glaciers,
     #                   make sure that update way to select glacier
     #                   hypsometry as well.

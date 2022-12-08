@@ -28,9 +28,9 @@ rgi_glac_number = 'all'
 #rgi_glac_number = glac_num_fromrange(1,48)
 
 glac_no_skip = None
-glac_no = None
+#glac_no = None
 #glac_no = ['01.00704']
-#glac_no = ['01.00570']
+glac_no = ['01.00570']
 
 if glac_no is not None:
     rgi_regionsO1 = sorted(list(set([int(x.split('.')[0]) for x in glac_no])))
@@ -306,6 +306,9 @@ elif option_refreezing == 'HH2015':
     rf_dens_top = 300               # snow density at surface (kg m-3)
     rf_dens_bot = 650               # snow density at bottom refreezing layer (kg m-3)
     option_rf_limit_meltsnow = 1
+
+# Option to run energy balance model
+run_eb = True
     
     
 #%% CLIMATE DATA

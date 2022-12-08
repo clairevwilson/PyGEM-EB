@@ -159,12 +159,12 @@ class GCM():
             self.time_vn = 'time'
             self.lr_vn = 'lapserate'
             # Variable filenames
-            self.temp_fn = pygem_prms.era5_fp+'hourly/ERA5_temp_hourly.nc'
-            self.dtemp_fn = pygem_prms.era5_fp+'hourly/ERA5_dtemp_hourly.nc'
-            self.tempstd_fn = pygem_prms.era5_fp+'hourly/ERA5_tempstd_hourly.nc'
-            self.prec_fn = pygem_prms.era5_fp+'hourly/ERA5_prec_hourly.nc'
-            self.elev_fn = pygem_prms.era5_fp+'hourly/ERA5_geopotential.nc'
-            self.lr_fn = pygem_prms.era5_fp+'hourly/ERA5_lapserates_hourly.nc'
+            self.temp_fn = 'ERA5_hourly/ERA5_temp_hourly.nc'
+            self.dtemp_fn = 'ERA5_hourly/ERA5_dtemp_hourly.nc'
+            self.tempstd_fn = 'ERA5_hourly/ERA5_tempstd_hourly.nc'
+            self.prec_fn = 'ERA5_hourly/ERA5_prec_hourly.nc'
+            self.elev_fn = 'ERA5_hourly/ERA5_geopotential.nc'
+            self.lr_fn = 'ERA5_hourly/ERA5_lapserates_hourly.nc'
             # Variable filepaths
             self.var_fp = pygem_prms.era5_fp
             self.fx_fp = pygem_prms.era5_fp
@@ -285,15 +285,14 @@ class GCM():
                     filename = filename_realization
             
         data = xr.open_dataset(self.var_fp + filename)
-        glac_variable_series = np.zeros((main_glac_rgi.shape[0],dates_table.shape[0]))
-        
+
         # Check GCM provides required years of data
         years_check = pd.Series(data['time']).apply(lambda x: int(x.strftime('%Y')))
         assert years_check.max() >= dates_table.year.max(), self.name + ' does not provide data out to ' + str(dates_table.year.max())
         assert years_check.min() <= dates_table.year.min(), self.name + ' does not provide data back to ' + str(dates_table.year.min())
         
         # Determine the correct time indices
-        if self.timestep == 'monthly':
+        if self.timestep == 'monthly' and not pygem_prms.run_eb:
             start_idx = (np.where(pd.Series(data[self.time_vn]).apply(lambda x: x.strftime('%Y-%m')) == 
                                   dates_table['date'].apply(lambda x: x.strftime('%Y-%m'))[0]))[0][0]
             end_idx = (np.where(pd.Series(data[self.time_vn]).apply(lambda x: x.strftime('%Y-%m')) == 
@@ -312,15 +311,25 @@ class GCM():
             #  dates_table.shape[0] - 1 is used to access the last date
             #  The final indexing [0][0] is used to access the value, which is inside of an array containing extraneous 
             #  information
-        elif self.timestep == 'daily':
+        elif self.timestep == 'daily' and not pygem_prms.run_eb:
             start_idx = (np.where(pd.Series(data[self.time_vn])
                                   .apply(lambda x: x.strftime('%Y-%m-%d')) == dates_table['date']
                                   .apply(lambda x: x.strftime('%Y-%m-%d'))[0]))[0][0]
             end_idx = (np.where(pd.Series(data[self.time_vn])
                                 .apply(lambda x: x.strftime('%Y-%m-%d')) == dates_table['date']
                                 .apply(lambda x: x.strftime('%Y-%m-%d'))[dates_table.shape[0] - 1]))[0][0]
+        elif pygem_prms.run_eb:
+            start_idx = (np.where(pd.Series(data[self.time_vn])
+                                  .apply(lambda x: x.strftime('%Y-%m-%d-%H')) == pd.Series(dates_table.index)
+                                  .apply(lambda x: x.strftime('%Y-%m-%d-%H'))[0]))[0][0]
+            end_idx = (np.where(pd.Series(data[self.time_vn])
+                                .apply(lambda x: x.strftime('%Y-%m-%d-%H')) == pd.Series(dates_table.index)
+                                .apply(lambda x: x.strftime('%Y-%m-%d-%H'))[dates_table.shape[0] - 1]))[0][0]
+
+        glac_variable_series = np.zeros((main_glac_rgi.shape[0],end_idx-start_idx+1))
         # Extract the time series
         time_series = pd.Series(data[self.time_vn][start_idx:end_idx+1]) 
+
         # Find Nearest Neighbor
         if self.name == 'COAWST':
             for glac in range(main_glac_rgi.shape[0]):
@@ -331,6 +340,10 @@ class GCM():
                 lon_nearidx = latlon_nearidx[1]
                 glac_variable_series[glac,:] = (
                         data[vn][start_idx:end_idx+1, latlon_nearidx[0], latlon_nearidx[1]].values)
+        elif pygem_prms.run_eb:
+            #this code is for using the data that is already selected to Gulkana; thus nearest neighbor is unnecessary
+            for glac in range(main_glac_rgi.shape[0]):
+                glac_variable_series[glac,:] = data[vn][start_idx:end_idx+1,0,0,0]
         else:
             #  argmin() finds the minimum distance between the glacier lat/lon and the GCM pixel; .values is used to 
             #  extract the position's value as opposed to having an array
@@ -381,7 +394,7 @@ class GCM():
             # Else check the variables units
             else:
                 print('Check units of precipitation from GCM is meters per day.')
-            if self.timestep == 'monthly' and self.name != 'COAWST':
+            if self.timestep == 'monthly' and self.name != 'COAWST' and not pygem_prms.run_eb:
                 # Convert from meters per day to meters per month (COAWST data already 'monthly accumulated precipitation')
                 if 'daysinmonth' in dates_table.columns:
                     glac_variable_series = glac_variable_series * dates_table['daysinmonth'].values[np.newaxis,:]
