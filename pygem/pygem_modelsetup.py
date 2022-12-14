@@ -121,7 +121,7 @@ def datesmodelrun(startyear=pygem_prms.ref_startyear, endyear=pygem_prms.ref_end
             if dates_table.loc[step,'month'] >= 10:
                 dates_table.loc[step,'wateryear'] = dates_table.loc[step,'year'] + 1
     except:
-        print('NOT HANDLING WATER YEARS')
+        print('!! Not handling water years in modelsetup.datesmodelrun')
     # Add column for seasons
     # create a season dictionary to assist groupby functions
     seasondict = {}

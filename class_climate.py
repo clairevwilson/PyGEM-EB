@@ -33,7 +33,7 @@ class GCM():
         # Source of climate data
         self.name = name
         # Set parameters for ERA5, ERA-Interim, and CMIP5 netcdf files
-        if self.name == 'ERA5':
+        if self.name == 'ERA5' and not pygem_prms.run_eb:
             # Variable names
             self.temp_vn = 't2m'
             self.tempstd_vn = 't2m_std'
@@ -57,7 +57,7 @@ class GCM():
             self.rgi_lat_colname=pygem_prms.rgi_lat_colname
             self.rgi_lon_colname=pygem_prms.rgi_lon_colname
             
-        elif self.name == 'ERA-Interim':
+        elif self.name == 'ERA-Interim' and not pygem_prms.run_eb:
             # Variable names
             self.temp_vn = 't2m'
             self.prec_vn = 'tp'
@@ -79,7 +79,7 @@ class GCM():
             self.rgi_lat_colname=pygem_prms.rgi_lat_colname
             self.rgi_lon_colname=pygem_prms.rgi_lon_colname
         
-        elif self.name == 'COAWST':
+        elif self.name == 'COAWST' and not pygem_prms.run_eb:
             # Variable names
             self.temp_vn = 'T2'
             self.prec_vn = 'TOTPRECIP'
@@ -102,6 +102,41 @@ class GCM():
             self.timestep = pygem_prms.timestep
             self.rgi_lat_colname=pygem_prms.rgi_lat_colname
             self.rgi_lon_colname=pygem_prms.rgi_lon_colname
+        
+        if self.name == 'ERA5-hourly' and pygem_prms.run_eb:
+            # Variable names for energy balance
+            self.temp_vn = 't2m'
+            self.dtemp_vn = 'd2m'
+            self.prec_vn = 'tp'
+            self.elev_vn = 'z'
+            self.tcc_vn = 'tcc'
+            self.surfrad_vn = 'ssrd'
+            self.uwind_vn = 'u10'
+            self.vwind_vn = 'v10'
+            self.lat_vn = 'latitude'
+            self.lon_vn = 'longitude'
+            self.time_vn = 'time'
+            self.lr_vn = 'lapserate'
+            # Variable filenames
+            self.temp_fn = 'ERA5_temp_hourly.nc'
+            self.dtemp_fn = 'ERA5_dtemp_hourly.nc'
+            self.tcc_fn = 'ERA5_tcc_hourly.nc'
+            self.surfrad_fn = 'ERA5_surfrad_hourly.nc'
+            self.vwind_fn = 'ERA5_vwind_hourly.nc'
+            self.uwind_fn = 'ERA5_uwind_hourly.nc'
+            self.prec_fn = 'ERA5_precip_hourly.nc'
+            self.elev_fn = pygem_prms.era5_elev_fn
+            self.lr_fn = 'lapserates_hourly.nc' 
+            # Variable filepaths
+            self.var_fp = pygem_prms.era5h_fp
+            self.fx_fp = pygem_prms.era5h_fp
+            # Extra information
+            self.timestep = pygem_prms.timestep
+            self.rgi_lat_colname=pygem_prms.rgi_lat_colname
+            self.rgi_lon_colname=pygem_prms.rgi_lon_colname
+        
+        #if self.name == 'MERRA2':
+        #add MERRA2 vns and fns later
             
         # Standardized CMIP5 format (GCM/RCP)
         elif 'rcp' in scenario:
@@ -146,35 +181,6 @@ class GCM():
             self.rgi_lat_colname=pygem_prms.rgi_lat_colname
             self.rgi_lon_colname=pygem_prms.rgi_lon_colname
             self.scenario = scenario
-
-        if self.name == 'ERA5-daily':
-            # Variable names
-            self.temp_vn = 't2m'
-            self.tempstd_vn = 't2m_std'
-            self.dtemp_vn = 'dtemp'
-            self.prec_vn = 'tp'
-            self.elev_vn = 'z'
-            self.lat_vn = 'latitude'
-            self.lon_vn = 'longitude'
-            self.time_vn = 'time'
-            self.lr_vn = 'lapserate'
-            # Variable filenames
-            self.temp_fn = 'ERA5_hourly/ERA5_temp_hourly.nc'
-            self.dtemp_fn = 'ERA5_hourly/ERA5_dtemp_hourly.nc'
-            self.tempstd_fn = 'ERA5_hourly/ERA5_tempstd_hourly.nc'
-            self.prec_fn = 'ERA5_hourly/ERA5_prec_hourly.nc'
-            self.elev_fn = 'ERA5_hourly/ERA5_geopotential.nc'
-            self.lr_fn = 'ERA5_hourly/ERA5_lapserates_hourly.nc'
-            # Variable filepaths
-            self.var_fp = pygem_prms.era5_fp
-            self.fx_fp = pygem_prms.era5_fp
-            # Extra information
-            self.timestep = pygem_prms.timestep
-            self.rgi_lat_colname=pygem_prms.rgi_lat_colname
-            self.rgi_lon_colname=pygem_prms.rgi_lon_colname
-        
-        #if self.name == 'MERRA2':
-        #add MERRA2 vns and fns later
             
             
     def importGCMfxnearestneighbor_xarray(self, filename, vn, main_glac_rgi):
@@ -187,7 +193,7 @@ class GCM():
         ----------
         filename : str
             filename of variable
-        variablename : str
+        vn : str
             variable name
         main_glac_rgi : pandas dataframe
             dataframe containing relevant rgi glacier information
@@ -198,7 +204,11 @@ class GCM():
             array of nearest neighbor values for all the glaciers in model run (rows=glaciers, column=variable)
         """
         # Import netcdf file
-        data = xr.open_dataset(self.fx_fp + filename)
+        if vn in ['z'] and pygem_prms.run_eb:
+            data = xr.open_dataset(pygem_prms.era5_fp + filename)
+            print('gcm_elev being handled stupidly for EB, revisit later')
+        else:
+            data = xr.open_dataset(self.fx_fp + filename)    
         glac_variable = np.zeros(main_glac_rgi.shape[0])
         # If time dimension included, then set the time index (required for ERA Interim, but not for CMIP5 or COAWST)
         if 'time' in data[vn].coords:
@@ -266,7 +276,7 @@ class GCM():
             variable name
         main_glac_rgi : pandas dataframe
             dataframe containing relevant rgi glacier information
-        dates_table: pandas dataframe
+        dates_table : pandas dataframe
             dataframe containing dates of model run
         
         Returns
@@ -325,7 +335,6 @@ class GCM():
             end_idx = (np.where(pd.Series(data[self.time_vn])
                                 .apply(lambda x: x.strftime('%Y-%m-%d-%H')) == pd.Series(dates_table.index)
                                 .apply(lambda x: x.strftime('%Y-%m-%d-%H'))[dates_table.shape[0] - 1]))[0][0]
-
         glac_variable_series = np.zeros((main_glac_rgi.shape[0],end_idx-start_idx+1))
         # Extract the time series
         time_series = pd.Series(data[self.time_vn][start_idx:end_idx+1]) 
@@ -343,7 +352,7 @@ class GCM():
         elif pygem_prms.run_eb:
             #this code is for using the data that is already selected to Gulkana; thus nearest neighbor is unnecessary
             for glac in range(main_glac_rgi.shape[0]):
-                glac_variable_series[glac,:] = data[vn][start_idx:end_idx+1,0,0,0]
+                glac_variable_series[glac,:] = data[vn][start_idx:end_idx+1,0,0].values
         else:
             #  argmin() finds the minimum distance between the glacier lat/lon and the GCM pixel; .values is used to 
             #  extract the position's value as opposed to having an array
@@ -398,6 +407,8 @@ class GCM():
                 # Convert from meters per day to meters per month (COAWST data already 'monthly accumulated precipitation')
                 if 'daysinmonth' in dates_table.columns:
                     glac_variable_series = glac_variable_series * dates_table['daysinmonth'].values[np.newaxis,:]
+        elif vn in ['d2m','tcc','ssrd','uwind','vwind']:
+            pass
         elif vn != self.lr_vn:
             print('Check units of air temperature or precipitation')
         return glac_variable_series, time_series

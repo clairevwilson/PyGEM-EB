@@ -69,6 +69,12 @@ if hindcast:
     gcm_startyear = 1980        # first year of model run (simulation dataset)
     gcm_endyear = 2000          # last year of model run (simulation dataset)
 
+# Option to run energy balance model (hourly timestep, imports separate dataset from reference ERA5)
+run_eb = True
+if run_eb:
+    gcm_startyear = 1980
+    gcm_endyear = 2020
+
 
 #%% ===== CALIBRATION OPTIONS =====
 # Calibration option ('emulator', 'MCMC', 'HH2015', 'HH2015mod')
@@ -306,9 +312,6 @@ elif option_refreezing == 'HH2015':
     rf_dens_top = 300               # snow density at surface (kg m-3)
     rf_dens_bot = 650               # snow density at bottom refreezing layer (kg m-3)
     option_rf_limit_meltsnow = 1
-
-# Option to run energy balance model
-run_eb = True
     
     
 #%% CLIMATE DATA
@@ -329,6 +332,26 @@ if ref_gcm_name == 'ERA5':
         assert os.path.exists(era5_fp + era5_lr_fn), 'ERA5 lapse rate data does not exist'
     if option_ablation == 2:
         assert os.path.exists(era5_fp + era5_tempstd_fn), 'ERA5 temperature std filepath does not exist'
+
+if run_eb:
+    era5h_fp = main_directory + '/../climate_data/ERA5/ERA5_hourly/'
+    era5h_temp_fn = 'ERA5_temp_hourly.nc'
+    era5h_dtempfn = 'ERA5_dtemp_hourly.nc'
+    era5h_prec_fn = 'ERA5_totalprecip_hourly.nc'
+    era5h_elev_fn = 'ERA5_geopotential.nc'
+    era5h_windspeed_fn = 'ERA5_windspeed_hourly.nc'
+    era5h_tcc_fn = 'ERA5_tcc_hourly.nc'
+    era5h_surfrad_fn = 'ERA5_surfrad_hourly.nc'
+    era5h_lr_fn = 'ERA5_lapserates_monthly.nc'
+    assert os.path.exists(era5h_fp), 'ERA5 hourly filepath does not exist'
+    #assert os.path.exists(era5h_fp + era5h_temp_fn), 'ERA5 temperature filepath does not exist'
+    #assert os.path.exists(era5h_fp + era5h_prec_fn), 'ERA5 precipitation filepath does not exist'
+    #assert os.path.exists(era5h_fp + era5h_elev_fn), 'ERA5 elevation data does not exist'
+    #assert os.path.exists(era5h_fp + era5h_windspeed_fn), 'ERA5 windspeed filepath does not exist'
+    #assert os.path.exists(era5h_fp + era5h_tcc_fn), 'ERA5 cloud cover filepath does not exist'
+    #assert os.path.exists(era5h_fp + era5h_surfrad_fn), 'ERA5 surf radiation data does not exist'
+    #if not use_constant_lapserate:
+    #    assert os.path.exists(era5_fp + era5_lr_fn), 'ERA5 lapse rate data does not exist'
 
 # CMIP5 (GCM data)
 cmip5_fp_var_prefix = main_directory + '/../climate_data/cmip5/'
@@ -513,7 +536,7 @@ rgiv6_fn_prefix = main_directory + '/../RGI/rgi60/00_rgi60_attribs/' + '*'
 rgiv5_fn_prefix = main_directory + '/../RGI/00_rgi50_attribs/' + '*'
 
 # WGMS (d) geodetic mass balance information
-wgms_d_fn = 'WGMS-FoG-2018-06-D-CHANGE.csv'
+wgms_d_fn = 'WGMS-FoG-2018-06-D-CGE.csv'
 wgms_d_fn_preprocessed = 'wgms_d_rgiv6_preprocessed.csv'
 wgms_d_thickness_chg_cn = 'THICKNESS_CHG'
 wgms_d_thickness_chg_err_cn = 'THICKNESS_CHG_UNC'
