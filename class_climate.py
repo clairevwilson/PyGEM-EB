@@ -407,7 +407,7 @@ class GCM():
                 # Convert from meters per day to meters per month (COAWST data already 'monthly accumulated precipitation')
                 if 'daysinmonth' in dates_table.columns:
                     glac_variable_series = glac_variable_series * dates_table['daysinmonth'].values[np.newaxis,:]
-        elif vn in ['d2m','tcc','ssrd','uwind','vwind']:
+        elif vn in ['d2m','tcc','ssrd','u10','v10']:
             pass
         elif vn != self.lr_vn:
             print('Check units of air temperature or precipitation')
