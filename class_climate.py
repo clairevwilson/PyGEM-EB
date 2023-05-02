@@ -107,6 +107,7 @@ class GCM():
             # Variable names for energy balance
             self.temp_vn = 't2m'
             self.dtemp_vn = 'd2m'
+            self.press_vn = 'sp'
             self.prec_vn = 'tp'
             self.elev_vn = 'z'
             self.tcc_vn = 'tcc'
@@ -120,6 +121,7 @@ class GCM():
             # Variable filenames
             self.temp_fn = 'ERA5_temp_hourly.nc'
             self.dtemp_fn = 'ERA5_dtemp_hourly.nc'
+            self.press_fn = 'ERA5_press_hourly.nc'
             self.tcc_fn = 'ERA5_tcc_hourly.nc'
             self.surfrad_fn = 'ERA5_surfrad_hourly.nc'
             self.vwind_fn = 'ERA5_vwind_hourly.nc'
@@ -297,7 +299,8 @@ class GCM():
         data = xr.open_dataset(self.var_fp + filename)
 
         # Check GCM provides required years of data
-        years_check = pd.Series(data['time']).apply(lambda x: int(x.strftime('%Y')))
+        #edited this code to have it only pull out the first and last datapoint in the file, rather than apply strftime to every value
+        years_check = pd.Series(data[self.time_vn][[0,-1]]).apply(lambda x: int(x.strftime('%Y')))
         assert years_check.max() >= dates_table.year.max(), self.name + ' does not provide data out to ' + str(dates_table.year.max())
         assert years_check.min() <= dates_table.year.min(), self.name + ' does not provide data back to ' + str(dates_table.year.min())
         
@@ -322,19 +325,19 @@ class GCM():
             #  The final indexing [0][0] is used to access the value, which is inside of an array containing extraneous 
             #  information
         elif self.timestep == 'daily' and not pygem_prms.run_eb:
-            start_idx = (np.where(pd.Series(data[self.time_vn])
-                                  .apply(lambda x: x.strftime('%Y-%m-%d')) == dates_table['date']
-                                  .apply(lambda x: x.strftime('%Y-%m-%d'))[0]))[0][0]
-            end_idx = (np.where(pd.Series(data[self.time_vn])
-                                .apply(lambda x: x.strftime('%Y-%m-%d')) == dates_table['date']
-                                .apply(lambda x: x.strftime('%Y-%m-%d'))[dates_table.shape[0] - 1]))[0][0]
+            start_idx = (np.where(pd.Series(data[self.time_vn]).apply(lambda x: x.strftime('%Y-%m-%d')) == 
+                                  dates_table['date'].apply(lambda x: x.strftime('%Y-%m-%d'))[0]))[0][0]
+            end_idx = (np.where(pd.Series(data[self.time_vn]).apply(lambda x: x.strftime('%Y-%m-%d')) == 
+                                dates_table['date'].apply(lambda x: x.strftime('%Y-%m-%d'))[dates_table.shape[0] - 1]))[0][0]
         elif pygem_prms.run_eb:
-            start_idx = (np.where(pd.Series(data[self.time_vn])
-                                  .apply(lambda x: x.strftime('%Y-%m-%d-%H')) == pd.Series(dates_table.index)
-                                  .apply(lambda x: x.strftime('%Y-%m-%d-%H'))[0]))[0][0]
-            end_idx = (np.where(pd.Series(data[self.time_vn])
-                                .apply(lambda x: x.strftime('%Y-%m-%d-%H')) == pd.Series(dates_table.index)
-                                .apply(lambda x: x.strftime('%Y-%m-%d-%H'))[dates_table.shape[0] - 1]))[0][0]
+            #format start and end dates to match that of the netcdf time variable
+            #netCDF from ERA5 hourly should be datetime64 (numpy) so this code will just do that rather than check
+            #what the format actually is
+            assert data[self.time_vn].dtype != 'datetime64[sn]', 'check GCM time format'
+            start_formatted = dates_table.index[0].to_datetime64()
+            end_formatted = dates_table.index[dates_table.shape[0]-1].to_datetime64()
+            start_idx = np.where(data[self.time_vn].values == start_formatted)[0][0]
+            end_idx = np.where(data[self.time_vn].values == end_formatted)[0][0]
         glac_variable_series = np.zeros((main_glac_rgi.shape[0],end_idx-start_idx+1))
         # Extract the time series
         time_series = pd.Series(data[self.time_vn][start_idx:end_idx+1]) 

@@ -33,7 +33,9 @@ main_glac_rgi = modelsetup.selectglaciersrgitable(pygem_prms.glac_no,
                 rgi_regionsO1=pygem_prms.rgi_regionsO1, rgi_regionsO2=pygem_prms.rgi_regionsO2,
                 rgi_glac_number=pygem_prms.rgi_glac_number, include_landterm=pygem_prms.include_landterm,
                 include_laketerm=pygem_prms.include_laketerm, include_tidewater=pygem_prms.include_tidewater)
-#def getEBpoints(glac_no): (eventually this will be a function to handle EB points)
+#def getEBpoints(glac_no): 
+# # # (eventually this will be a function to handle EB points)
+
 # get OGGM flowlines to select bins for point balance
 gdir = oggm.single_flowline_glacier_directory(pygem_prms.glac_no[0], logging_level='CRITICAL')
 fls = oggm.get_glacier_zwh(gdir)
