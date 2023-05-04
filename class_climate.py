@@ -206,11 +206,7 @@ class GCM():
             array of nearest neighbor values for all the glaciers in model run (rows=glaciers, column=variable)
         """
         # Import netcdf file
-        if vn in ['z'] and pygem_prms.run_eb:
-            data = xr.open_dataset(pygem_prms.era5_fp + filename)
-            print('gcm_elev being handled stupidly for EB, revisit later')
-        else:
-            data = xr.open_dataset(self.fx_fp + filename)    
+        data = xr.open_dataset(self.fx_fp + filename)    
         glac_variable = np.zeros(main_glac_rgi.shape[0])
         # If time dimension included, then set the time index (required for ERA Interim, but not for CMIP5 or COAWST)
         if 'time' in data[vn].coords:
@@ -410,7 +406,9 @@ class GCM():
                 # Convert from meters per day to meters per month (COAWST data already 'monthly accumulated precipitation')
                 if 'daysinmonth' in dates_table.columns:
                     glac_variable_series = glac_variable_series * dates_table['daysinmonth'].values[np.newaxis,:]
-        elif vn in ['d2m','tcc','ssrd','u10','v10']:
+        elif vn in ['sp','d2m','tcc','ssrd','u10','v10']:
+            # code in units check for surface pressure
+            print('!! Not checking units for any EB variables')
             pass
         elif vn != self.lr_vn:
             print('Check units of air temperature or precipitation')
