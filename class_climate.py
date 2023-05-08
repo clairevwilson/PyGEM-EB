@@ -117,7 +117,7 @@ class GCM():
             self.lat_vn = 'latitude'
             self.lon_vn = 'longitude'
             self.time_vn = 'time'
-            self.lr_vn = 'lapserate'
+            # self.lr_vn = 'lapserate'
             # Variable filenames
             self.temp_fn = 'ERA5_temp_hourly.nc'
             self.dtemp_fn = 'ERA5_dtemp_hourly.nc'
@@ -128,7 +128,7 @@ class GCM():
             self.uwind_fn = 'ERA5_uwind_hourly.nc'
             self.prec_fn = 'ERA5_precip_hourly.nc'
             self.elev_fn = pygem_prms.era5_elev_fn
-            self.lr_fn = 'lapserates_hourly.nc' 
+            # self.lr_fn = 'lapserates_hourly.nc' 
             # Variable filepaths
             self.var_fp = pygem_prms.era5h_fp
             self.fx_fp = pygem_prms.era5h_fp
