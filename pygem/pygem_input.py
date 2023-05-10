@@ -637,6 +637,18 @@ temp_std = 288.15           # Standard temperature [K]
 R_gas = 8.3144598           # Universal gas constant [J mol-1 K-1]
 molarmass_air = 0.0289644   # Molar mass of Earth's air [kg mol-1]
 
+# MORE CONSTANTS NEEDED FOR ENERGY BALANCE
+Cp_water = 4.184                    # Isobaric heat capacity of water [J g-1 K-1]
+Cp_air = 1.005                      # Isobaric heat capacity of air [J g-1 K-1]
+Cp_ice = 2.050                      # Isobaric heat capacity of ice [J g-1 K-1]
+Lv_evap = 2.514e6                   # latent heat of evaporation [J kg-1]
+Lv_sub = 2.849e6                    # latent heat of sublimation [J kg-1]
+k_vK = 0.4                          # von Karman's constant
+density_std = 1.225                 # air density at sea level [kg m^-3]
+albedo_fresh_snow = 0.85            # albedo of fresh snow [-] (Moelg et al. 2012, TC)
+albedo_firn = 0.55                  # albedo of firn [-] (Moelg et al. 2012, TC)
+albedo_ice = 0.3                    # albedo of ice [-] (Moelg et al. 2012, TC)
+
 
 #%% DEBUGGING OPTIONS
 debug_refreeze = False
