@@ -407,7 +407,7 @@ class GCM():
                 if 'daysinmonth' in dates_table.columns:
                     glac_variable_series = glac_variable_series * dates_table['daysinmonth'].values[np.newaxis,:]
         elif vn in ['sp','d2m','tcc','ssrd','u10','v10']:
-            # code in units check for surface pressure
+            # code in units check for these variables
             print('!! Not checking units for any EB variables')
             pass
         elif vn != self.lr_vn:
