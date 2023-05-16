@@ -330,8 +330,8 @@ class GCM():
             #netCDF from ERA5 hourly should be datetime64 (numpy) so this code will just do that rather than check
             #what the format actually is
             assert data[self.time_vn].dtype != 'datetime64[sn]', 'check GCM time format'
-            start_formatted = dates_table.index[0].to_datetime64()
-            end_formatted = dates_table.index[dates_table.shape[0]-1].to_datetime64()
+            start_formatted = dates_table.loc[0,'date'].to_datetime64()
+            end_formatted = dates_table.loc[dates_table.shape[0]-1,'date'].to_datetime64()
             start_idx = np.where(data[self.time_vn].values == start_formatted)[0][0]
             end_idx = np.where(data[self.time_vn].values == end_formatted)[0][0]
         glac_variable_series = np.zeros((main_glac_rgi.shape[0],end_idx-start_idx+1))

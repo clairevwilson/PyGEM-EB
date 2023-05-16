@@ -1,15 +1,13 @@
 # External libraries
-import scipy.optimize as opt
 import numpy as np
 import xarray as xr
 import pandas as pd
-#import suncalc as solar
 # Internal libraries
 import pygem.pygem_input as pygem_prms
 import pygem.oggm_compat as oggm
 import pygem.pygem_modelsetup as modelsetup
 import class_climate
-import pygem.energybalance as eb
+import pygem_eb.massbalance as mb
 
 assert pygem_prms.glac_no not in ['01.00570'], 'EB model can currently only run Gulkana glacier'
 
@@ -58,7 +56,7 @@ climateds = xr.Dataset(data_vars = dict(
     bin_elev = (['bin'],z_stats,{'units':'m'}),
     bin_idx = (['bin'],bin_idx),
     dtemp = (['time'],gcm_dtemp[0]-273.15,{'units':'C'}),
-    surfrad = (['time'],gcm_surfrad[0],{'units':'0-1'}),
+    surfrad = (['time'],gcm_surfrad[0],{'units':'J m-2'}),
     tcc = (['time'],gcm_tcc[0],{'units':'0-1'}),
     uwind = (['time'],gcm_uwind[0],{'units':'m s-1'}),
     vwind = (['time'],gcm_vwind[0],{'units':'m s-1'})),
@@ -85,15 +83,15 @@ for idx,z in enumerate(climateds['bin_elev'].values):
     prec_adj[idx,:] = gcm_prec*pygem_prms.kp*(1+pygem_prms.precgrad*(z-gcm_elev))
     sp_adj[idx,:] = gcm_sp*np.power((gcm_temp + pygem_prms.lapserate*(z-gcm_elev)+273.15)/(gcm_temp+273.15),
                            -pygem_prms.gravity*pygem_prms.molarmass_air/(pygem_prms.R_gas*pygem_prms.lapserate))
-    rh_adj[idx,:] = e_func(temp_adj[idx,:])/e_func(gcm_dtemp-273.15)
-    density_adj[idx,:] = sp_adj[idx,:]/pygem_prms.R_gas/temp_adj[idx,:]*pygem_prms.molarmass_air
+    rh_adj[idx,:] = e_func(gcm_dtemp-273.15) / e_func(temp_adj[idx,:]) * 100
+    density_adj[idx,:] = sp_adj[idx,:]/pygem_prms.R_gas/(temp_adj[idx,:]+273.15)*pygem_prms.molarmass_air
 
 climateds = climateds.assign(bin_temp = (['bin','time'],temp_adj,{'units':'C'}))
 climateds = climateds.assign(bin_prec = (['bin','time'],prec_adj,{'units':'m'}))
 climateds = climateds.assign(bin_sp = (['bin','time'],sp_adj,{'units':'Pa'}))
-climateds = climateds.assign(bin_rh = (['bin','time'],rh_adj,{'units':'0-1'}))
+climateds = climateds.assign(bin_rh = (['bin','time'],rh_adj,{'units':'%'}))
 climateds = climateds.assign(bin_density = (['bin','time'],density_adj,{'units':'kg m-3'}))
-climateds = climateds.assign(bin_snow = (['bin','time'],np.where(temp_adj<(pygem_prms.tsnow_threshold+273),1,0),{'units':'0-1'}))
+climateds = climateds.assign(bin_snow = (['bin','time'],np.where(temp_adj<(pygem_prms.tsnow_threshold+273),1,0),{'units':'-'}))
 print('!! Using constant (not calibrated) kp and lapserate')
 
 # ===== RUN ENERGY BALANCE =====
@@ -103,6 +101,6 @@ densprof_arb = np.array([[0,100],[1,150],[5,500],[10,1000]])
 #******
 
 #loop through bins here so EB script is set up for only one bin (1D data)
-for bin in climateds['bin_idx']:
-    meltModel = eb.meltProfile(tempprof_arb,densprof_arb,[10,2,18])
-    meltModel.EnergyMassBalance(climateds,bin)
+for bin in climateds['bin_idx'][0:1]:
+    meltModel = mb.massBalance(tempprof_arb,densprof_arb,[10,2,18])
+    meltModel.massBalance(climateds,bin)
