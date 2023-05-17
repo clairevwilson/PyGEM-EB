@@ -118,7 +118,6 @@ def datesmodelrun(startyear=pygem_prms.ref_startyear, endyear=pygem_prms.ref_end
     # Add column for water year
     # Water year for northern hemisphere using USGS definition (October 1 - September 30th),
     # e.g., water year for 2000 is from October 1, 1999 - September 30, 2000
-    print(dates_table)
     dates_table['wateryear'] = dates_table['year']
     for step in range(dates_table.shape[0]):
         if dates_table.loc[step,'month'] >= 10:

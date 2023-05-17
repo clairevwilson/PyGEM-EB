@@ -3,28 +3,28 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 # Internal libraries
-import pygem.pygem_input as pygem_prms
+import pygem_eb.input as eb_prms
 import pygem.oggm_compat as oggm
 import pygem.pygem_modelsetup as modelsetup
 import class_climate
 import pygem_eb.massbalance as mb
 
-assert pygem_prms.glac_no not in ['01.00570'], 'EB model can currently only run Gulkana glacier'
+assert eb_prms.glac_no not in ['01.00570'], 'EB model can currently only run Gulkana glacier'
 
 # ===== GLACIER AND TIME PERIOD SETUP =====
-glacier_table = modelsetup.selectglaciersrgitable(pygem_prms.glac_no,
-                rgi_regionsO1=pygem_prms.rgi_regionsO1, rgi_regionsO2=pygem_prms.rgi_regionsO2,
-                rgi_glac_number=pygem_prms.rgi_glac_number, include_landterm=pygem_prms.include_landterm,
-                include_laketerm=pygem_prms.include_laketerm, include_tidewater=pygem_prms.include_tidewater)
-dates_table = modelsetup.datesmodelrun(startyear=pygem_prms.gcm_startyear,endyear=pygem_prms.gcm_endyear, 
-                                       spinupyears=pygem_prms.gcm_spinupyears,option_wateryear=pygem_prms.gcm_wateryear)
+glacier_table = modelsetup.selectglaciersrgitable(eb_prms.glac_no,
+                rgi_regionsO1=eb_prms.rgi_regionsO1, rgi_regionsO2=eb_prms.rgi_regionsO2,
+                rgi_glac_number=eb_prms.rgi_glac_number, include_landterm=eb_prms.include_landterm,
+                include_laketerm=eb_prms.include_laketerm, include_tidewater=eb_prms.include_tidewater)
+dates_table = modelsetup.datesmodelrun(startyear=eb_prms.gcm_startyear,endyear=eb_prms.gcm_endyear, 
+                                       spinupyears=eb_prms.gcm_spinupyears,option_wateryear=eb_prms.gcm_wateryear)
 
 
 # ===== BEGIN TRIAL-ERA GULKANA SETUP =====
 # READ GULKANA ELEVATIONS FROM OGGM GDIRS
 #this step is specific to the EB for three points on Gulkana
 #to generalize, need a variable geometry containing zwh for the points for the EB
-gdir = oggm.single_flowline_glacier_directory(pygem_prms.glac_no[0], logging_level='CRITICAL')
+gdir = oggm.single_flowline_glacier_directory(eb_prms.glac_no[0], logging_level='CRITICAL')
 fls = oggm.get_glacier_zwh(gdir)
 fls = fls.iloc[np.nonzero(fls['h'].to_numpy())] #filter out zero bins to get only initial glacier volume
 z_stats = np.array([np.min(fls['z']),np.median(fls['z']),np.max(fls['z'])])
@@ -40,7 +40,7 @@ n_points = len(bin_name)
 # ===== END TRIAL-ERA GULKANA SETUP =====
 
 # ===== LOAD CLIMATE DATA =====
-gcm = class_climate.GCM(name='ERA5-hourly')
+gcm = class_climate.GCM(name=eb_prms.ref_gcm_name)
 gcm_prec, gcm_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.prec_fn, gcm.prec_vn, glacier_table,dates_table)
 gcm_temp, gcm_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.temp_fn, gcm.temp_vn, glacier_table,dates_table)
 gcm_dtemp, gcm_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.dtemp_fn, gcm.dtemp_vn, glacier_table,dates_table)
@@ -62,7 +62,6 @@ climateds = xr.Dataset(data_vars = dict(
     vwind = (['time'],gcm_vwind[0],{'units':'m s-1'})),
     coords=dict(
         bin=(['bin'],bin_name),
-        #glacier=(['glacier'],glac_no),
         time=gcm_hours
         ),
     attrs=dict(description="Climate data adjusted for points in EB."))
@@ -79,19 +78,19 @@ e_func = lambda T_C: 6.1078*np.exp(17.1*T_C/(235+T_C)) #vapor pressure in hPa, T
 
 #loop through each elevation bin and adjust climate variables by lapse rate/barometric law
 for idx,z in enumerate(climateds['bin_elev'].values):
-    temp_adj[idx,:] = gcm_temp + pygem_prms.lapserate*(z-gcm_elev)
-    prec_adj[idx,:] = gcm_prec*pygem_prms.kp*(1+pygem_prms.precgrad*(z-gcm_elev))
-    sp_adj[idx,:] = gcm_sp*np.power((gcm_temp + pygem_prms.lapserate*(z-gcm_elev)+273.15)/(gcm_temp+273.15),
-                           -pygem_prms.gravity*pygem_prms.molarmass_air/(pygem_prms.R_gas*pygem_prms.lapserate))
+    temp_adj[idx,:] = gcm_temp + eb_prms.lapserate*(z-gcm_elev)
+    prec_adj[idx,:] = gcm_prec*eb_prms.kp*(1+eb_prms.precgrad*(z-gcm_elev))
+    sp_adj[idx,:] = gcm_sp*np.power((gcm_temp + eb_prms.lapserate*(z-gcm_elev)+273.15)/(gcm_temp+273.15),
+                           -eb_prms.gravity*eb_prms.molarmass_air/(eb_prms.R_gas*eb_prms.lapserate))
     rh_adj[idx,:] = e_func(gcm_dtemp-273.15) / e_func(temp_adj[idx,:]) * 100
-    density_adj[idx,:] = sp_adj[idx,:]/pygem_prms.R_gas/(temp_adj[idx,:]+273.15)*pygem_prms.molarmass_air
+    density_adj[idx,:] = sp_adj[idx,:]/eb_prms.R_gas/(temp_adj[idx,:]+273.15)*eb_prms.molarmass_air
 
 climateds = climateds.assign(bin_temp = (['bin','time'],temp_adj,{'units':'C'}))
 climateds = climateds.assign(bin_prec = (['bin','time'],prec_adj,{'units':'m'}))
 climateds = climateds.assign(bin_sp = (['bin','time'],sp_adj,{'units':'Pa'}))
 climateds = climateds.assign(bin_rh = (['bin','time'],rh_adj,{'units':'%'}))
 climateds = climateds.assign(bin_density = (['bin','time'],density_adj,{'units':'kg m-3'}))
-climateds = climateds.assign(bin_snow = (['bin','time'],np.where(temp_adj<(pygem_prms.tsnow_threshold+273),1,0),{'units':'-'}))
+climateds = climateds.assign(bin_snow = (['bin','time'],np.where(temp_adj<(eb_prms.tsnow_threshold+273),1,0),{'units':'-'}))
 print('!! Using constant (not calibrated) kp and lapserate')
 
 # ===== RUN ENERGY BALANCE =====
@@ -102,5 +101,6 @@ densprof_arb = np.array([[0,100],[1,150],[5,500],[10,1000]])
 
 #loop through bins here so EB script is set up for only one bin (1D data)
 for bin in climateds['bin_idx'][0:1]:
-    meltModel = mb.massBalance(tempprof_arb,densprof_arb,[10,2,18])
-    meltModel.massBalance(climateds,bin)
+    meltModel = mb.massBalance(tempprof_arb,densprof_arb,[10,2,18],
+                               eb_prms.option_initTemp,eb_prms.option_initDensity,eb_prms.option_initWater)
+    meltModel.main(climateds,bin,eb_prms.dt)

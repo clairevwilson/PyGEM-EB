@@ -1,21 +1,14 @@
 #import xarray as xr
 import numpy as np
-import pandas as pd
-import pygem.pygem_input as pygem_prms
+import pygem_eb.input as eb_prms
 
 class energyBalance():
     """
-    Temperature and density profile function to distribute melt through vertical layers and define
-    the content (snow or firn) of each layer.
-    
-    Attributes
-    ----------
-    climateds : 
-
+    Energy balance scheme that calculates the surface energy balance and penetrating shortwave radiation.
     """ 
     def __init__(self,climateds,time,bin_idx,dt):
         """
-        Loads in the climate data for the timestep for use in the surface energy balance.
+        Loads in the climate data at a given timestep to use in the surface energy balance.
 
         Attributes
         ----------
@@ -26,6 +19,8 @@ class energyBalance():
             Time to index the climate dataset.
         bin_idx : int
             Index number of the bin being run
+        dt : float
+            Resolution for the time loop [s]
         """
         # Unpack climate variables
         if time.minute == 0:
@@ -61,7 +56,7 @@ class energyBalance():
         self.dt = dt
         return
 
-    def surfaceEB(self,surftemp,layerz,layertype,days_since_snowfall,albedo,method_turbulent='MO-similarity'):
+    def surfaceEB(self,surftemp,layerz,layertype,days_since_snowfall,albedo):
         """
         Calculates the surface heat fluxes at each point on the glacier and applies mass-balance
         scheme to calculate melt and refreeze at each time point.
@@ -83,7 +78,7 @@ class energyBalance():
             turbulent fluxes
         """
         # SHORTWAVE RADIATION
-        Snet_surf, trash = self.getSW(self.surfrad,albedo,layerz,layertype)
+        Snet_surf, SW_penetrating = self.getSW(self.surfrad,albedo,layerz,layertype)
                     
         # LONGWAVE RADIATION (Lnet)
         Lnet = self.getLW(surftemp,self.tempC,self.tcc)
@@ -93,7 +88,7 @@ class energyBalance():
 
         # TURBULENT FLUXES (Qs and Ql)
         roughness = self.roughness_length(days_since_snowfall)
-        if method_turbulent in ['MO-similarity']:
+        if eb_prms.method_turbulent in ['MO-similarity']:
             Qs, Ql = self.getTurbulentMO(self.tempK,surftemp,self.density,self.wind,self.sp,self.rH,roughness)
         else:
             print('Only MO similarity method is set up for turbulent fluxes')
@@ -101,7 +96,7 @@ class energyBalance():
                 
         # SUM ENERGY FOR MELT
         Qm = Snet_surf + Lnet + Qp + Qs + Ql
-        return Qm
+        return Qm, SW_penetrating
     
     def getSW(self,surfrad,albedo,layerz,layertype):
         """
@@ -129,7 +124,8 @@ class energyBalance():
 
     def getLW(self,surftemp,airtemp,tcc):
         """
-        COSIPY-like scheme for calculating longwave from the air temperature and cloud cover.
+        Scheme following Klok and Oerlemans (2002) for calculating net longwave radiation
+        from the air temperature and cloud cover.
         """
         airtempK = airtemp+273.15
         surftempK = surftemp+273.15
@@ -137,15 +133,15 @@ class energyBalance():
         Ecs = .23+ .433*(ezt/airtempK)**(1/8)  # clear-sky emissivity
         Ecl = 0.984                         # cloud emissivity, Klok and Oerlemans, 2002
         Esky = Ecs*(1-tcc**2)+Ecl*tcc**2    # sky emissivity
-        Lnet = pygem_prms.sigma_SB*(Esky*airtempK**4 - surftempK**4)
+        Lnet = eb_prms.sigma_SB*(Esky*airtempK**4 - surftempK**4)
         return Lnet
     
     def getRain(self,surftemp,airtemp,prec):
         """
         Calculates amount of energy supplied by precipitation that falls as rain.
         """
-        is_rain = airtemp > pygem_prms.tsnow_threshold
-        Qp = is_rain*pygem_prms.Cp_water*(airtemp-surftemp)*prec/self.dt
+        is_rain = airtemp > eb_prms.tsnow_threshold
+        Qp = is_rain*eb_prms.Cp_water*(airtemp-surftemp)*prec/self.dt
         return Qp
     
     def getAlbedo(self,BC_conc,days_since_snowfall,switch_snow=True,switch_melt=True,switch_LAP=True):
@@ -191,24 +187,25 @@ class energyBalance():
         roughness : float
             Surface roughness [m]
         """
+        chi = lambda zeta: abs(1-16*zeta)**(1/4)
+        PsiM = lambda zeta: np.piecewise(zeta,[zeta<0,(zeta>=0)&(zeta<=1),zeta>1],
+                            [2*np.log((1+chi(zeta))/2)+np.log((1+chi(zeta)**2)/2)-2*np.arctan(chi(zeta))+np.pi/2,
+                            -5*zeta, -4*(1+np.log(zeta))-zeta])
+        PsiT = lambda zeta: np.piecewise(zeta,[zeta<0,(zeta>=0)&(zeta<=1),zeta>1],
+                            [np.log((1+chi(zeta)**2)/2), -5*zeta, -4*(1+np.log(zeta))-zeta])
+        
         Qs = 1000 #initial guess
         Ql = 1000
-        opt = True
+        converged = False
         zeta = 0.1
         count_iters = 0
-        karman = pygem_prms.karman
-        while opt:
+        karman = eb_prms.karman
+        while not converged:
             previous_zeta = zeta
             z = 2 #reference height, 2m
 
-            chi = lambda zeta: abs(1-16*zeta)**(1/4)
-            PsiM = lambda zeta: np.piecewise(zeta,[zeta<0,(zeta>=0)&(zeta<=1),zeta>1],
-                                [2*np.log((1+chi(zeta))/2)+np.log((1+chi(zeta)**2)/2)-2*np.arctan(chi(zeta))+np.pi/2,
-                                -5*zeta, -4*(1+np.log(zeta))-zeta])
-            PsiT = lambda zeta: np.piecewise(zeta,[zeta<0,(zeta>=0)&(zeta<=1),zeta>1],
-                                [np.log((1+chi(zeta)**2)/2), -5*zeta, -4*(1+np.log(zeta))-zeta])
             Lv = np.piecewise(Ql,[(Ql>0)&(surf_temp<=0),(Ql>0)&(surf_temp>0),Ql<0],
-                            [pygem_prms.Lv_evap,pygem_prms.Lv_sub,pygem_prms.Lv_sub])
+                            [eb_prms.Lv_evap,eb_prms.Lv_sub,eb_prms.Lv_sub])
 
             z0 = roughness
             z0t = z0/100    # Roughness length for sensible heat
@@ -216,7 +213,7 @@ class energyBalance():
 
             # calculate friction velocity using previous heat flux to get Obukhov length (L)
             fric_vel = karman*wind_speed/(np.log(z/z0)-PsiM(zeta))
-            L = fric_vel**3*(air_temp+273.15)*air_density*pygem_prms.Cp_air/(karman*pygem_prms.gravity*Qs)
+            L = fric_vel**3*(air_temp+273.15)*air_density*eb_prms.Cp_air/(karman*eb_prms.gravity*Qs)
             if L<0.3: # DEBAM uses this correction to ensure it isn't over stablizied
                 L = 0.3
             zeta = z/L
@@ -224,10 +221,10 @@ class energyBalance():
             cD = karman**2/(np.log(z/z0)-PsiM(zeta)-PsiM(z0/L))**2
             cH = karman*cD**(1/2)/((np.log(z/z0t)-PsiT(zeta)-PsiT(z0t/L)))
             cE = karman*cD**(1/2)/((np.log(z/z0q)-PsiT(zeta)-PsiT(z0q/L)))
-            Qs = air_density*pygem_prms.Cp_air*cH*wind_speed*(air_temp-surf_temp)
+            Qs = air_density*eb_prms.Cp_air*cH*wind_speed*(air_temp-surf_temp)
 
-            Ewz = self.vapor_pressure(air_temp)*100
-            Ew0 = self.vapor_pressure(surf_temp)*100
+            Ewz = self.vapor_pressure(air_temp)*100 # vapor pressure at 2m
+            Ew0 = self.vapor_pressure(surf_temp)*100 # vapor pressure at the surface
             qz = (rH/100)*0.622*(Ewz/(pressure-Ewz))
             q0 = 1.0*0.622*(Ew0/(pressure-Ew0))
             # qz = (rH2 * 0.622 * (Ew / (p - Ew))) / 100.0
@@ -236,7 +233,7 @@ class energyBalance():
 
             count_iters += 1
             if count_iters > 10 or abs(previous_zeta - zeta) < .1:
-                opt = False
+                converged = True
         return Qs, Ql
     
     def roughness_length(self,days_since_snowfall):
@@ -257,17 +254,23 @@ class energyBalance():
 
         sigma = min(roughness_fresh_snow + aging_factor_roughness * days_since_snowfall, roughness_firn)
         return sigma/1000
+    
     def vapor_pressure(self,T):
         return 6.1078*np.exp(17.1*T/(235+T))
     
     def interpClimate(self,climateds,time,varname,bin_idx=-1):
         """
-        Interpolates two climate variables from on the climate dataset to get sub-hourly data.
+        Interpolates climate variables from the hourly dataset to get sub-hourly data.
 
         Attributes
         ----------
-        climate_before : xr.Dataset
-            Dataset indexed at the timesta
+        climateds : xr.Dataset
+            Climate dataset containing temperature, precipitation, pressure, air density, wind speed,
+            shortwave radiation, and total cloud cover.
+        time : datetime
+            Timestamp to interpolate the climate variable.
+        bin_idx : int, default = -1
+            Index number of the bin being run. Unspecified for running a variable that is elevation-independent.
         """
         climate_before = climateds.sel(time=time.floor('H'))
         climate_after = climateds.sel(time=time.ceil('H'))
