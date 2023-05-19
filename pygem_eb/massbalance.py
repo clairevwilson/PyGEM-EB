@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pygem_eb.energybalance as eb
 import pygem_eb.input as eb_prms
+import pygem_eb.albedo as eb_albedo
 
 class massBalance():
     """
@@ -12,7 +13,7 @@ class massBalance():
         """
         Initialize the temperature, density and water content profile of the vertical layers.
 
-        Attributes
+        Parameters
         ----------
         snow_temp : np.ndarray
             Array containing the initial snow temperatures in Celsius at associated depths.
@@ -59,6 +60,17 @@ class massBalance():
             wprofile = np.zeros(self.nlayers)
         elif eb_prms.option_initWater in ['initial_w0']:
             assert 1==0, "Only zero water content method is set up"
+
+        # Initialize BC and dust content
+        if eb_prms.switch_LAPs == 0:
+            BC = [0,0]
+            dust = [0,0]
+        elif eb_prms.switch_LAPs == 2 and eb_prms.initLAPs is not None:
+            BC = eb_prms.initLAPs[0,:]
+            dust = eb_prms.initLAPs[1,:]
+        else:
+            BC = [eb_prms.BC_freshsnow,eb_prms.BC_freshsnow]
+            dust = [eb_prms.dust_freshsnow,eb_prms.dust_freshsnow]
         
         self.Tprofile = Tprofile
         self.pprofile = pprofile
@@ -73,7 +85,7 @@ class massBalance():
         Main function running the time loop and mass balance scheme to solve layer temperature
         and density profiles. 
 
-        Attributes
+        Parameters
         ----------
         climateds : xr.Dataset
             Climate dataset containing temperature, precipitation, pressure, air density, wind speed,
@@ -100,6 +112,12 @@ class massBalance():
         time_idx = 0
         surftemp = 0 # initial guess, will be solved iteratively
 
+        # Place to store melt for each month and for each timestep
+        monthly_melt = []
+        monthly_refreeze = []
+        running_melt = 0
+        running_refreeze = 0
+
         # ===== ENTER TIME LOOP =====
         for time in time_dt[0:2]:
             # Initiate the energy balance to unpack climate data
@@ -109,51 +127,54 @@ class massBalance():
             if enbal.prec > 0.01 and enbal.tempC < eb_prms.tsnow_threshold:
                 # set timestamp
                 snow_timestamp = time
-                # add snowfall to uppermost bin
-                # *******
+                snowfall = enbal.prec
+            else:
+                snowfall = 0
 
             if time.hour < 1:
                 # any daily happenings go here!!!
                 days_since_snowfall = time.day - snow_timestamp.day
                 #update albedo
-                #albedo = self.getAlbedo(BC,days_since_snowfall)
+                #albedo = eb_albedo.getAlbedo(BC,days_since_snowfall)
 
-            # Run Crank-Nicholson scheme to calculate temperature profile
+            # ENTER ITERATIVE LOOP FOR SURFACE TEMPERATURE
             surftemp_loop = True
             iteration_count = 0
             while surftemp_loop:
                 # Run the surface energy balance
                 Qm, SW_penetrating = enbal.surfaceEB(surftemp,self.layerz,self.layertype,days_since_snowfall,albedo)
 
-                # RECALCULATE TEMPERATURE PROFILE
-                # ******
+                # Recalculate temperature profile
                 K = 0.0138e-1 - 1.01e-3*self.pprofile + 3.233e-6*np.square(self.pprofile)
-                #print('K',K)
-                dTdz = [(self.Tprofile[i+1]-self.Tprofile[i])/(self.layerh[i+1]) for i in range(self.nlayers-1)]
-                dTdz = np.insert(dTdz,0,(self.Tprofile[0]-surftemp)/self.layerh[0])
-                #print('T: ',self.Tprofile[0:5])
-                #print('dTdz: ',dTdz[0:5])
-                ddzKdtdz = [(dTdz[i+1]*K[i+1]-dTdz[i]*K[i])/(self.layerh[i+1]) for i in range(self.nlayers-1)]
-                ddzKdtdz = np.insert(ddzKdtdz,0,(dTdz[0]/self.layerh[0])) #assumes dTdz at the surface is 0
-                #print('ddzKdtdz: ',ddzKdtdz[0:5])
-                dQdz = SW_penetrating
-                dQdz[0] = Qm/self.layerh[0]
-                dT = (dQdz+ddzKdtdz)*dt/(self.pprofile*eb_prms.Cp_ice)
-                #print('dT: ',dT[0:5])
-                new_T = self.Tprofile + dT
-                #print('new T', new_T)
-                # ******
+                if eb_prms.method_heateq in ['Crank-Nicholson']:
+                    # ******* This does not work.
+                    C_Crank = K*dt/(2*self.pprofile[0]*eb_prms.Cp_ice*self.layerh[0]**2)
+                    if time_idx < 1:
+                        T_past, Ts_past = [0,0]
+                    new_T = self.CrankNicholson(time_idx,C_Crank,self.Tprofile,surftemp,T_past,Ts_past)
+                elif eb_prms.method_heateq in ['ugly']:
+                    # Neither does this oop *****
+                    new_T = self.solveHeat(K,surftemp,dt,Qm)
+                    print(new_T)
+                else:
+                    assert 0==1, 'Only Crank-Nicholson method is currently supported for T profiles'
 
                 # ENTER LAYER LOOP
                 leftovers = 0
                 for layer in range(self.nlayers):
                     m_layer = self.layerh[layer]*self.pprofile[layer]
                     if new_T[layer] > 0:
+                        # calculate amount of melt
                         dm_melt = new_T[layer]*m_layer*eb_prms.Cp_ice/eb_prms.Lh_rf
+
+                        # add melt to running sum
+                        running_melt += dm_melt
+
+                        # add melt to layer water content
                         self.wprofile[layer] += dm_melt + leftovers
-                        irreducible_water = 0.0143*np.exp(3.3*(1-self.pprofile[layer]/eb_prms.density_ice))
 
                         # check if meltwater exceeds the irreducible water content of the snow
+                        irreducible_water = 0.0143*np.exp(3.3*(1-self.pprofile[layer]/eb_prms.density_ice))
                         if self.wprofile[layer] > irreducible_water:
                             # set water content to irreducible water content and add the difference to leftovers
                             leftovers = irreducible_water - self.wprofile[layer]
@@ -161,14 +182,29 @@ class massBalance():
                         else: #if not overflowing, leftovers should be set back to 0
                             leftovers = 0
                         self.Tprofile[layer] = 0
+                        # update self.pprofile from self.layerh, or vice versa?
+
+                        # update surface BC concentration
+                        # if layer == 0:
+                        #     BC[0] = BC[0] + 
                     if new_T[layer] < 0 and self.wprofile[layer] > 0:
+                        # calculate potential for refreeze 
                         E_temperature = np.abs(new_T[layer])*m_layer*eb_prms.Cp_ice
                         E_water = self.wprofile[layer]*eb_prms.Lh_rf
                         E_pore = (self.pprofile[layer]-eb_prms.density_ice)*self.layerh[layer]*eb_prms.Lh_rf
-                        dm = np.min([E_temperature,E_water,E_pore])/eb_prms.Lh_rf
-                        m_layer += dm
+
+                        # calculate amount of refreeze 
+                        dm_ref = np.min([E_temperature,E_water,E_pore])/eb_prms.Lh_rf
+
+                        # add refreeze to running sum
+                        running_refreeze += dm_ref
+
+                        # add refreeze to layer ice mass
+                        m_layer += dm_ref
+
+                        # update the density and temperature of the layer
                         self.pprofile[layer] = m_layer/self.layerh[layer]
-                        self.Tprofile[layer] = -(E_temperature-dm*eb_prms.Lh_rf/eb_prms.Cp_ice/m_layer)
+                        self.Tprofile[layer] = -(E_temperature-dm_ref*eb_prms.Lh_rf/eb_prms.Cp_ice/m_layer)
                 
                 surftemp_new = np.interp(0,self.layerz[0:2],self.Tprofile[0:2])
                 iteration_count += 1
@@ -180,22 +216,26 @@ class massBalance():
                     print('surftemp loop failing to converge!')
                     break
 
-            time_idx +=1
+            if time.is_month_start and time.hour < 1:
+                # any monthly happenings go here!!
+                monthly_melt.append(running_melt)
+                monthly_refreeze.append(running_refreeze)
+                running_melt = 0
+                running_refreeze = 0
 
-                        # if time.is_month_start and time.hour < 1:
-            #     # any monthly happenings go here!!!
-            #     # convert previous month Q to M, summing hourly Q_melts
-            #     monthly_M = np.sum(hourly_Q)*3600/(eb_prms.density_water*eb_prms.Lh_rf)
-            #     melt_monthly.append(monthly_M)
-            #     #re-initialize storage for hourly heat fluxes
-            #     hourly_Q = []
+            if time.is_month_start and time.month == 10:
+                print('Update glacier geometry!')
+
+            time_idx +=1
+            T_past = self.Tprofile
+            Ts_past = surftemp_new
 
     def getLayers(self,sfi_h0):
         """
         Calculates layer depths based on an exponential growth function with prescribed rate of growth and 
         initial layer depth (from pygem_input). 
 
-        Attributes
+        Parameters
         ----------
         sfi_h0 : np.ndarray
             Initial thicknesses of the snow, firn and ice layers [m]
@@ -245,7 +285,7 @@ class massBalance():
         Based on the DEBAM scheme for temperature and density that assumes linear changes with depth 
         in three piecewise sections.
 
-        Attributes
+        Parameters
         ----------
         layer_z : np.ndarray
             Bottom depth of the layers to be filled.
@@ -278,3 +318,81 @@ class massBalance():
                       [lambda x: slopes[0]*x+intercepts[0],lambda x:slopes[1]*x+intercepts[1],
                        lambda x: slopes[2]*x+intercepts[2]])
         return layer_var
+    
+    def CrankNicholson(self,i,C,T,Ts,T_past,Ts_past):
+        """
+        Solves the heat equation using the Crank-Nicholson scheme to recalculate snowpack temperatures.
+
+        Parameters
+        ----------
+        i : int
+            Index for the timestep
+        C : np.ndarray
+            Crank-Nicholson constant
+        T : np.ndarray
+            Current version of temperature profile
+        Ts : float
+            Current version of surface temperature
+        T_past : np.ndarray
+            Temperature profile of the previous timestep
+        Ts_past : float
+            Surface temperature of the previous timestep
+        """
+        a_Crank = np.zeros((self.nlayers))
+        b_Crank = np.zeros((self.nlayers))
+        c_Crank = np.zeros((self.nlayers))
+        d_Crank = np.zeros((self.nlayers))
+        A_Crank = np.zeros((self.nlayers))
+        S_Crank = np.zeros((self.nlayers))
+        T_new = np.zeros((self.nlayers))
+        if i < 1:
+            # First timestep requires no adjustment, just use the initial conditions
+            T_new = self.Tprofile
+        else:
+            for j in range(0,self.nlayers):
+                a_Crank[j] = C
+                b_Crank[j] = 2*C+1
+                c_Crank[j] = C
+
+                if j == 0:
+                    d_Crank[j] = C*Ts + C*Ts_past + (1-2*C)*T_past[j] + C*T_past[j+1]
+                elif j < self.nlayers-1:
+                    d_Crank[j] = C*T_past[j-1] + (1-2*C)*T_past[j] + C*T_past[j+1]
+                else:
+                    d_Crank[j] = 2*C*eb_prms.temp_temp + C*T_past[j-1] + (1-2*C)*T_past[j]
+
+                if j == 0:
+                    A_Crank[j] = b_Crank[j]
+                    S_Crank[j] = d_Crank[j]
+                else:
+                    A_Crank[j] = b_Crank[j] - a_Crank[j]/A_Crank[j-1] * c_Crank[j-1]
+                    S_Crank[j] = d_Crank[j] + a_Crank[j]/A_Crank[j-1] * S_Crank[j-1]
+            for j in range(self.nlayers - 1,0,-1):
+                if j == self.nlayers-1:
+                    T_new[j] = S_Crank[j]/A_Crank[j]
+                else:
+                    T_new[j] = 1/A_Crank[j] * (S_Crank[j]+c_Crank[j]*T_new[j+1])
+        return T_new
+    
+    def solveHeat(self,K,surftemp,dt,Qm):
+        """
+        Recalculate temperature profile by brute force method like DEBAM
+        """
+        conduction = []
+        Tprofile_new = []
+
+
+        for layer in range(self.nlayers):
+            if layer == 0:
+                conduction.append(K[0]*self.Tprofile[0] - surftemp/self.layerh[0])
+            else:
+                dzl = 0.5*(self.layerh[layer]+self.layerh[layer-1])
+                layerconduct = 0.5/dzl*(K[layer]*self.layerh[layer]+K[layer-1]*self.layerh[layer-1])*(self.Tprofile[layer]-self.Tprofile[layer-1])/dzl
+                conduction.append(layerconduct)
+        for layer in range(self.nlayers-1):
+            if layer == 0:
+                dT = dt*2/eb_prms.Cp_ice/(self.pprofile[0]+self.pprofile[1])*(conduction[1]-Qm)/self.layerh[0]
+            else:
+                dT = dt*2/eb_prms.Cp_ice/(self.pprofile[layer]+self.pprofile[layer+1])*(conduction[layer+1]-conduction[layer])/self.layerh[layer]
+            Tprofile_new.append(self.Tprofile[layer] + dT)
+        return Tprofile_new

@@ -10,7 +10,7 @@ class energyBalance():
         """
         Loads in the climate data at a given timestep to use in the surface energy balance.
 
-        Attributes
+        Parameters
         ----------
         climateds : xr.Dataset
             Climate dataset containing temperature, precipitation, pressure, air density, wind speed,
@@ -61,7 +61,7 @@ class energyBalance():
         Calculates the surface heat fluxes at each point on the glacier and applies mass-balance
         scheme to calculate melt and refreeze at each time point.
 
-        Attributes
+        Parameters
         ----------
         surftemp : float
             Temperature of the surface snow in Celsius
@@ -87,7 +87,7 @@ class energyBalance():
         Qp = self.getRain(surftemp,self.tempC,self.prec)
 
         # TURBULENT FLUXES (Qs and Ql)
-        roughness = self.roughness_length(days_since_snowfall)
+        roughness = self.roughness_length(days_since_snowfall,layertype)
         if eb_prms.method_turbulent in ['MO-similarity']:
             Qs, Ql = self.getTurbulentMO(self.tempK,surftemp,self.density,self.wind,self.sp,self.rH,roughness)
         else:
@@ -150,7 +150,7 @@ class energyBalance():
         for controlled simulations to see the changes associated with snow-albedo feedback, melt-albedo feedback and
         LAP-albedo feedback.
 
-        Attributes
+        Parameters
         ----------
         BC_conc : np.ndarray
             Concentration of BC at the surface and in the bulk snowpack [ppb]
@@ -170,7 +170,7 @@ class energyBalance():
         Calculates turbulent fluxes (sensible and latent heat) based on Monin-Obukhov Similarity 
         Theory, requiring iteration.
 
-        Attributes
+        Parameters
         ----------
         air_temp : float
             Air temperature at reference height [C]
@@ -236,13 +236,12 @@ class energyBalance():
                 converged = True
         return Qs, Ql
     
-    def roughness_length(self,days_since_snowfall):
+    def roughness_length(self,days_since_snowfall,layertype):
         """
-        Function taken pretty much exactly from COSIPY to determine the roughness length based
-        on the time since the last snowfall. 
-        *****THIS DOES NOT WORK WHEN THE SURFACE IS BARE ICE!
+        Function to determine the roughness length of the surface. This assumes the roughness of snow
+        linearly degrades with time in 60 days from that of fresh snow to firn.
 
-        Attributes
+        Parameters
         ----------
         days_since_snowfall : int
             Number of days since fresh snow occurred
@@ -252,7 +251,12 @@ class energyBalance():
         roughness_firn = 4.0                            # surface roughness length for aged snow [mm] (Moelg et al. 2012, TC)
         aging_factor_roughness = 0.06267                # effect of ageing on roughness length: 60 days from 0.24 to 4.0 => 0.06267
 
-        sigma = min(roughness_fresh_snow + aging_factor_roughness * days_since_snowfall, roughness_firn)
+        if layertype[0] in ['snow']:
+            sigma = min(roughness_fresh_snow + aging_factor_roughness * days_since_snowfall, roughness_firn)
+        elif layertype[0] in ['firn']:
+            sigma = roughness_firn
+        elif layertype[0] in ['ice']:
+            sigma = roughness_ice
         return sigma/1000
     
     def vapor_pressure(self,T):
@@ -262,7 +266,7 @@ class energyBalance():
         """
         Interpolates climate variables from the hourly dataset to get sub-hourly data.
 
-        Attributes
+        Parameters
         ----------
         climateds : xr.Dataset
             Climate dataset containing temperature, precipitation, pressure, air density, wind speed,

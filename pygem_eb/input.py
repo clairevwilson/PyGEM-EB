@@ -56,18 +56,25 @@ gcm_spinupyears = 0             # spin up years for simulation (output not set u
 option_initWater = 'zero_w0'            # 'zero_w0' or 'initial_w0'
 option_initTemp = 'piecewise'           # 'piecewise' or 'interp'
 option_initDensity = 'piecewise'        # 'piecewise' or 'interp'
+initTemp_fp = main_directory + '/../data/init_temp.csv'
+initDensity_fp = main_directory + '/../data/init_temp.csv'
 # option_start_season = 'acc_end'         # 'acc_end' (end of accumulation), 'abl_end' (end of ablation) or 'other'
 
 # Simulation options
-dt = 3600/3         # Time resolution in [s], should be integer multiple of 3600s
+dt = 3600/3         # Time resolution in [s], should be integer multiple of 3600s so data can be stored on the hour
 method_turbulent = 'MO-similarity'  # 'MO-similarity' or *****
 # option_SW
 # option_LW
+method_heateq = 'ugly' # 'Crank-Nicholson': neglects penetrating shortwave
+                        #'ugly' like DEBAM, also neglecting SW_pen, or 'smart' which accounts for SW-pen
 
 # Albedo switches
 switch_snow = 0             # 0 to turn off fresh snow feedback; 1 to include it
 switch_melt = 0
 switch_LAPs = 0
+initLAPs = [[0,0],[0,0]]    # initial LAP concentrations. Set to None to use fresh snow values
+BC_freshsnow = 1e6          # concentration of BC in fresh snow. Only used if switch_LAPs is not 2
+dust_freshsnow = 1e6        # concentration of dust in fresh snow. Only used if switch_LAPs is not 2
 
 #%% MODEL PROPERTIES THAT MAY NEED TO BE ADJUSTED
 precgrad = 0.0001           # precipitation gradient on glacier [m-1]

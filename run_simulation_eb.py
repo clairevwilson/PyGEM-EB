@@ -94,13 +94,11 @@ climateds = climateds.assign(bin_snow = (['bin','time'],np.where(temp_adj<(eb_pr
 print('!! Using constant (not calibrated) kp and lapserate')
 
 # ===== RUN ENERGY BALANCE =====
-#******extremely arbitrary values for temperature and density profile
-tempprof_arb = np.array([[0,2],[1,-10],[5,-1],[10,0]])
-densprof_arb = np.array([[0,100],[1,150],[5,500],[10,1000]])
-#******
+# Read in data for initial temperatures and densities
+temp_prof = pd.read_csv(eb_prms.initTemp_fp).to_numpy()[:,1:]
+density_prof = pd.read_csv(eb_prms.initDensity_fp).to_numpy()[:,1:]
 
 #loop through bins here so EB script is set up for only one bin (1D data)
 for bin in climateds['bin_idx'][0:1]:
-    meltModel = mb.massBalance(tempprof_arb,densprof_arb,[10,2,18],
-                               eb_prms.option_initTemp,eb_prms.option_initDensity,eb_prms.option_initWater)
+    meltModel = mb.massBalance(temp_prof,density_prof,[10,2,18])
     meltModel.main(climateds,bin,eb_prms.dt)
