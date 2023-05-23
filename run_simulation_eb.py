@@ -8,6 +8,7 @@ import pygem.oggm_compat as oggm
 import pygem.pygem_modelsetup as modelsetup
 import class_climate
 import pygem_eb.massbalance as mb
+import pygem_eb.layers as eb_layers
 
 assert eb_prms.glac_no not in ['01.00570'], 'EB model can currently only run Gulkana glacier'
 
@@ -55,7 +56,6 @@ gcm_elev = gcm.importGCMfxnearestneighbor_xarray(gcm.elev_fn, gcm.elev_vn, glaci
 climateds = xr.Dataset(data_vars = dict(
     bin_elev = (['bin'],z_stats,{'units':'m'}),
     bin_idx = (['bin'],bin_idx),
-    dtemp = (['time'],gcm_dtemp[0]-273.15,{'units':'C'}),
     surfrad = (['time'],gcm_surfrad[0],{'units':'J m-2'}),
     tcc = (['time'],gcm_tcc[0],{'units':'0-1'}),
     uwind = (['time'],gcm_uwind[0],{'units':'m s-1'}),
@@ -72,25 +72,27 @@ prec_adj = np.zeros((n_points,len(gcm_hours)))
 sp_adj = np.zeros((n_points,len(gcm_hours)))
 rh_adj = np.zeros((n_points,len(gcm_hours)))
 density_adj = np.zeros((n_points,len(gcm_hours)))
+dtemp_adj = np.zeros((n_points,len(gcm_hours)))
 
 # define function to calculate vapor pressure (needed for RH)
-e_func = lambda T_C: 6.1078*np.exp(17.1*T_C/(235+T_C)) #vapor pressure in hPa, T in Celsius
+e_func = lambda T_C: 610.94*np.exp(17.625*T_C/(T_C+243.04))  #vapor pressure in Pa, T in Celsius
 
 #loop through each elevation bin and adjust climate variables by lapse rate/barometric law
 for idx,z in enumerate(climateds['bin_elev'].values):
     temp_adj[idx,:] = gcm_temp + eb_prms.lapserate*(z-gcm_elev)
+    dtemp_adj[idx,:] = gcm_dtemp + eb_prms.lapserate_dew*(z-gcm_elev) - 273.15
     prec_adj[idx,:] = gcm_prec*eb_prms.kp*(1+eb_prms.precgrad*(z-gcm_elev))
     sp_adj[idx,:] = gcm_sp*np.power((gcm_temp + eb_prms.lapserate*(z-gcm_elev)+273.15)/(gcm_temp+273.15),
                            -eb_prms.gravity*eb_prms.molarmass_air/(eb_prms.R_gas*eb_prms.lapserate))
-    rh_adj[idx,:] = e_func(gcm_dtemp-273.15) / e_func(temp_adj[idx,:]) * 100
+    rh_adj[idx,:] = e_func(dtemp_adj[idx,:]) / e_func(temp_adj[idx,:]) * 100
     density_adj[idx,:] = sp_adj[idx,:]/eb_prms.R_gas/(temp_adj[idx,:]+273.15)*eb_prms.molarmass_air
 
 climateds = climateds.assign(bin_temp = (['bin','time'],temp_adj,{'units':'C'}))
+climateds = climateds.assign(bin_dtemp = (['bin','time'],dtemp_adj,{'units':'C'}))
 climateds = climateds.assign(bin_prec = (['bin','time'],prec_adj,{'units':'m'}))
 climateds = climateds.assign(bin_sp = (['bin','time'],sp_adj,{'units':'Pa'}))
 climateds = climateds.assign(bin_rh = (['bin','time'],rh_adj,{'units':'%'}))
 climateds = climateds.assign(bin_density = (['bin','time'],density_adj,{'units':'kg m-3'}))
-climateds = climateds.assign(bin_snow = (['bin','time'],np.where(temp_adj<(eb_prms.tsnow_threshold+273),1,0),{'units':'-'}))
 print('!! Using constant (not calibrated) kp and lapserate')
 
 # ===== RUN ENERGY BALANCE =====
@@ -100,5 +102,5 @@ density_prof = pd.read_csv(eb_prms.initDensity_fp).to_numpy()[:,1:]
 
 #loop through bins here so EB script is set up for only one bin (1D data)
 for bin in climateds['bin_idx'][0:1]:
-    meltModel = mb.massBalance(temp_prof,density_prof,[10,2,18])
-    meltModel.main(climateds,bin,eb_prms.dt)
+    initial_layers = eb_layers.Layers(temp_prof,density_prof,[10,2,18])
+    results = mb.main(initial_layers,climateds,bin,eb_prms.dt)

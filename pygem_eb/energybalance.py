@@ -56,7 +56,7 @@ class energyBalance():
         self.dt = dt
         return
 
-    def surfaceEB(self,surftemp,layerz,layertype,days_since_snowfall,albedo):
+    def surfaceEB(self,surftemp,layerz,layertype,days_since_snowfall,albedo,optim=False):
         """
         Calculates the surface heat fluxes at each point on the glacier and applies mass-balance
         scheme to calculate melt and refreeze at each time point.
@@ -78,7 +78,7 @@ class energyBalance():
             turbulent fluxes
         """
         # SHORTWAVE RADIATION
-        Snet_surf, SW_penetrating = self.getSW(self.surfrad,albedo,layerz,layertype)
+        Snet_surf = self.getSW(self.surfrad,albedo)
                     
         # LONGWAVE RADIATION (Lnet)
         Lnet = self.getLW(surftemp,self.tempC,self.tcc)
@@ -89,16 +89,19 @@ class energyBalance():
         # TURBULENT FLUXES (Qs and Ql)
         roughness = self.roughness_length(days_since_snowfall,layertype)
         if eb_prms.method_turbulent in ['MO-similarity']:
-            Qs, Ql = self.getTurbulentMO(self.tempK,surftemp,self.density,self.wind,self.sp,self.rH,roughness)
+            Qs, Ql = self.getTurbulentMO(self.tempC,surftemp,self.density,self.wind,self.sp,self.rH,roughness)
         else:
             print('Only MO similarity method is set up for turbulent fluxes')
-            Qs, Ql = self.getTurbulentMO(self.tempK,surftemp,self.density,self.wind,self.sp,self.rH,roughness)
-                
+            Qs, Ql = self.getTurbulentMO(self.tempC,surftemp,self.density,self.wind,self.sp,self.rH,roughness)
+
         # SUM ENERGY FOR MELT
         Qm = Snet_surf + Lnet + Qp + Qs + Ql
-        return Qm, SW_penetrating
+        if not optim:
+            return float(Qm)
+        else:
+            return np.abs(Qm)
     
-    def getSW(self,surfrad,albedo,layerz,layertype):
+    def getSW(self,surfrad,albedo):
         """
         Simplest parameterization for shortwave radiation which just adjusts it by modeled albedo.
         Returns the shortwave surface flux and the penetrating shortwave with each layer.
@@ -106,21 +109,7 @@ class energyBalance():
         # sun_pos = solar.get_position(time,glacier_table['CenLon'],glacier_table['CenLat'])
         Snet_surf = surfrad*(1-albedo)/self.dt #* (cos(theta))
 
-        nlayers = len(layertype)
-        frac_absrad = np.zeros(nlayers)
-        extinct_coef = np.zeros(nlayers)
-        for idx,type in enumerate(layertype):
-            if type in ['snow']:
-                frac_absrad[idx] = 0.9
-                extinct_coef[idx] = 17.1
-            elif type in ['firn']:
-                frac_absrad[idx] = 0.85
-                extinct_coef[idx] = 9.8
-            elif type in ['ice']:
-                frac_absrad[idx] = 0.8
-                extinct_coef[idx] = 2.5
-        Snet_penetrating = Snet_surf*frac_absrad*np.exp(-extinct_coef*layerz)/self.dt
-        return Snet_surf,Snet_penetrating
+        return Snet_surf
 
     def getLW(self,surftemp,airtemp,tcc):
         """
@@ -223,8 +212,8 @@ class energyBalance():
             cE = karman*cD**(1/2)/((np.log(z/z0q)-PsiT(zeta)-PsiT(z0q/L)))
             Qs = air_density*eb_prms.Cp_air*cH*wind_speed*(air_temp-surf_temp)
 
-            Ewz = self.vapor_pressure(air_temp)*100 # vapor pressure at 2m
-            Ew0 = self.vapor_pressure(surf_temp)*100 # vapor pressure at the surface
+            Ewz = self.vapor_pressure(air_temp)  # vapor pressure at 2m
+            Ew0 = self.vapor_pressure(surf_temp) # vapor pressure at the surface
             qz = (rH/100)*0.622*(Ewz/(pressure-Ewz))
             q0 = 1.0*0.622*(Ew0/(pressure-Ew0))
             # qz = (rH2 * 0.622 * (Ew / (p - Ew))) / 100.0
@@ -234,6 +223,7 @@ class energyBalance():
             count_iters += 1
             if count_iters > 10 or abs(previous_zeta - zeta) < .1:
                 converged = True
+
         return Qs, Ql
     
     def roughness_length(self,days_since_snowfall,layertype):
@@ -259,9 +249,11 @@ class energyBalance():
             sigma = roughness_ice
         return sigma/1000
     
-    def vapor_pressure(self,T):
-        return 6.1078*np.exp(17.1*T/(235+T))
-    
+    def vapor_pressure(self,T,method = 'ARM'):
+        if method in ['ARM']:
+            P = 0.61094*np.exp(17.625*T/(T+243.04)) # kPa
+        return P*1000
+ 
     def interpClimate(self,climateds,time,varname,bin_idx=-1):
         """
         Interpolates climate variables from the hourly dataset to get sub-hourly data.

@@ -57,7 +57,7 @@ option_initWater = 'zero_w0'            # 'zero_w0' or 'initial_w0'
 option_initTemp = 'piecewise'           # 'piecewise' or 'interp'
 option_initDensity = 'piecewise'        # 'piecewise' or 'interp'
 initTemp_fp = main_directory + '/../data/init_temp.csv'
-initDensity_fp = main_directory + '/../data/init_temp.csv'
+initDensity_fp = main_directory + '/../data/init_density.csv'
 # option_start_season = 'acc_end'         # 'acc_end' (end of accumulation), 'abl_end' (end of ablation) or 'other'
 
 # Simulation options
@@ -79,6 +79,7 @@ dust_freshsnow = 1e6        # concentration of dust in fresh snow. Only used if 
 #%% MODEL PROPERTIES THAT MAY NEED TO BE ADJUSTED
 precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [K m-1]
+lapserate_dew = -0.002      # dew point temperature lapse rate [K m-1]
 tsnow_threshold = 1         # Threshold to consider freezing
 kp = 1                      # precipitation factor [-] 
 temp_temp = 0               # temperature of temperate ice in Celsius
