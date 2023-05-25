@@ -89,6 +89,7 @@ class Layers():
         self.saturated = saturated
         self.BC = BC
         self.dust = dust
+        print(self.heights)
         return 
     
     def getLayers(self,sfi_h0):
@@ -210,7 +211,7 @@ class Layers():
                 break
         Snet_pen = Snet_surf*frac_absrad*np.exp(-extinct_coef*self.depths)/dt
 
-        # recalculate layer temperatures, leaving out the surface since it's also forced by other fluxes
+        # recalculate layer temperatures, leaving out the surface since surface temp is calculated separately
         new_Tprofile = self.Tprofile
         new_Tprofile[1:] += Snet_pen[1:]/(self.dry_masses[1:]*eb_prms.Cp_ice)*dt
 
@@ -336,7 +337,7 @@ class Layers():
         hk = diff[0:nl-2]  # between z-1 and z
         hk1 = diff[1:nl-1] # between z and z+1
         
-        # Get temperature array from grid|
+        # Get temperature array from grid
         T = self.Tprofile
         Tnew = T.copy()
         
@@ -348,7 +349,7 @@ class Layers():
         dt_stab  = c_stab * (min([min(diff[0:nl-2]**2/(2*Ku)),min(diff[1:nl-1]**2/(2*Kl))]))
         
         n_iters = 0
-        dt = 100 # SHOULD BE 3600s
+        dt = 3600 # ******
         while stab_t < dt:
             dt_use = np.minimum(dt_stab, dt-stab_t)
             stab_t = stab_t + dt_use
@@ -357,5 +358,5 @@ class Layers():
             Tnew[k] += ((Kl*dt_use*(T[kl]-T[k])/(hk1)) - (Ku*dt_use*(T[k]-T[ku])/(hk))) / (0.5*(hk+hk1))
             T = Tnew.copy()
             n_iters += 1
-        # print(n_iters)
+        #print(n_iters)
         return T

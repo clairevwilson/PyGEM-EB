@@ -62,9 +62,8 @@ climateds = xr.Dataset(data_vars = dict(
     vwind = (['time'],gcm_vwind[0],{'units':'m s-1'})),
     coords=dict(
         bin=(['bin'],bin_name),
-        time=gcm_hours
-        ),
-    attrs=dict(description="Climate data adjusted for points in EB."))
+        time=(['time'],gcm_hours)
+        ))
 
 #initialize variables to be adjusted
 temp_adj = np.zeros((n_points,len(gcm_hours)))
@@ -97,8 +96,10 @@ print('!! Using constant (not calibrated) kp and lapserate')
 
 # ===== RUN ENERGY BALANCE =====
 # Read in data for initial temperatures and densities
-temp_prof = pd.read_csv(eb_prms.initTemp_fp).to_numpy()[:,1:]
-density_prof = pd.read_csv(eb_prms.initDensity_fp).to_numpy()[:,1:]
+# temp_prof = pd.read_csv(eb_prms.initTemp_fp).to_numpy()[:,1:]
+# density_prof = pd.read_csv(eb_prms.initDensity_fp).to_numpy()[:,1:]
+temp_prof = np.array([[0,-30],[1,-10],[5,-8],[10,0]])
+density_prof = np.array([[0,100],[1,300],[5,350],[10,600]])
 
 #loop through bins here so EB script is set up for only one bin (1D data)
 for bin in climateds['bin_idx'][0:1]:

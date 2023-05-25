@@ -61,7 +61,7 @@ initDensity_fp = main_directory + '/../data/init_density.csv'
 # option_start_season = 'acc_end'         # 'acc_end' (end of accumulation), 'abl_end' (end of ablation) or 'other'
 
 # Simulation options
-dt = 3600/3         # Time resolution in [s], should be integer multiple of 3600s so data can be stored on the hour
+dt = 3600         # Time resolution in [s], should be integer multiple of 3600s so data can be stored on the hour
 method_turbulent = 'MO-similarity'  # 'MO-similarity' or *****
 # option_SW
 # option_LW
