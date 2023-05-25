@@ -48,6 +48,7 @@ def main(layers,climateds,bin_idx,dt):
 
     # ===== ENTER TIME LOOP =====
     # index [12960:12964]] will start on a summer day (June 29)
+    # index 26281 ends the first year (1980)
     for time in time_dt[:26281]:
         # Initiate the energy balance to unpack climate data
         enbal = eb.energyBalance(climateds,time,bin_idx,dt)
@@ -78,7 +79,7 @@ def main(layers,climateds,bin_idx,dt):
 
         # Calculate surface energy balance
         Qm = enbal.surfaceEB(surftemp,layers.depths,layers.types,days_since_snowfall,albedo)
-            
+        
         if Qm < 0:
             # If not melting, need to optimize surface temperature to force Qm to be 0
             result = minimize(enbal.surfaceEB,0, method = 'L-BFGS-B',bounds=((-50, 0),),tol=1e-2,
@@ -88,6 +89,7 @@ def main(layers,climateds,bin_idx,dt):
         elif Qm > 0:
             # If melting, calculate surface melt
             surface_melt = Qm/eb_prms.Lh_rf
+
             if surface_melt > layers.dry_masses[0]:
                 # melt by surface energy balance completely melts surface layer, so check if it melts further layers
                 fully_melted = np.where(np.array([np.sum(layers.dry_masses[:i+1]) for i in range(layers.nlayers)]) <= surface_melt)[0]
@@ -139,6 +141,7 @@ def main(layers,climateds,bin_idx,dt):
             print(f'Current Melt Energy: {Qm:.2f} W/m2')
             print('Temperatures',layers.Tprofile)
             print('Water content',layers.wprofile)
+            print('Density',layers.pprofile)
             if time.month == 10:
                 print('Update glacier geometry!')
 
