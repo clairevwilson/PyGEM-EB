@@ -4,12 +4,18 @@ import os
 import numpy as np
 import pandas as pd
 
+debug = True
 #%% ===== MODEL SETUP DIRECTORY =====
 main_directory = os.getcwd()
 # Output directory
 output_filepath = main_directory + '/../Output/'
 output_sim_fp = output_filepath + 'simulations/'
-model_run_date = pd.Timestamp.today()
+model_run_date = str(pd.Timestamp.today()).replace('-','_')[0:10]
+output_name = output_filepath + 'EB/run_' + model_run_date + '_hourly_00'
+while os.path.exists(output_name+'.nc'):
+    file_number = int(output_name[-1]) + 1
+    output_name = output_name[:-1] + str(file_number)
+
 
 #%% ===== GLACIER SELECTION =====
 rgi_regionsO1 = [1]                 # 1st order region number (RGI V6.0)
@@ -32,14 +38,16 @@ oggm_base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2
 logging_level = 'DEBUG' # DEBUG, INFO, WARNING, ERROR, WORKFLOW, CRITICAL (recommended WORKFLOW)
 
 #%% ===== CLIMATE DATA ===== 
+# Dates
+startdate = pd.to_datetime('1980-01-01 00:00')
+enddate = pd.to_datetime('1982-01-01 00:00')
+option_leapyear = 0 # 0 to exclude leap years
 # Reference period runs (runs up to present)
 ref_gcm_name = 'ERA5-hourly'        # reference climate dataset
 ref_startyear = 1980                # first year of model run (reference dataset)
 ref_endyear = 2019                  # last year of model run (reference dataset)
 ref_wateryear = 'calendar'          # options for years: 'calendar', 'hydro', 'custom'
 ref_spinupyears = 0                 # spin up years
-if ref_spinupyears > 0:
-    assert 0==1, 'Code needs to be tested to ensure spinup years are correctly accounted for in output files'
 
 # This is where the simulation runs climate data will be set up once we're there
 # Simulation runs (refers to period of simulation and needed separately from reference year to account for bias adjustments)
@@ -52,6 +60,11 @@ gcm_spinupyears = 0             # spin up years for simulation (output not set u
 #     assert 0==1, 'Code needs to be tested to enure spinup years are correctly accounted for in output files'
 
 #%% MODEL OPTIONS
+n_bins = 3
+melt_counter = 0
+split_counter = 0
+merge_counter = 0
+
 # Initialization
 option_initWater = 'zero_w0'            # 'zero_w0' or 'initial_w0'
 option_initTemp = 'piecewise'           # 'piecewise' or 'interp'
@@ -61,12 +74,13 @@ initDensity_fp = main_directory + '/../data/init_density.csv'
 # option_start_season = 'acc_end'         # 'acc_end' (end of accumulation), 'abl_end' (end of ablation) or 'other'
 
 # Simulation options
-dt = 3600         # Time resolution in [s], should be integer multiple of 3600s so data can be stored on the hour
+dt = 3600
+dt_heateq = 3600/6         # Time resolution of heat eq [s], should be integer multiple of 3600s so data can be stored on the hour
 method_turbulent = 'MO-similarity'  # 'MO-similarity' or *****
 # option_SW
 # option_LW
-method_heateq = 'ugly' # 'Crank-Nicholson': neglects penetrating shortwave
-                        #'ugly' like DEBAM, also neglecting SW_pen, or 'smart' which accounts for SW-pen
+method_heateq = 'what' # 'Crank-Nicholson': neglects penetrating shortwave
+surftemp_guess =  -30   # guess for surface temperature of first timestep
 
 # Albedo switches
 switch_snow = 0             # 0 to turn off fresh snow feedback; 1 to include it
@@ -75,6 +89,11 @@ switch_LAPs = 0
 initLAPs = [[0,0],[0,0]]    # initial LAP concentrations. Set to None to use fresh snow values
 BC_freshsnow = 1e6          # concentration of BC in fresh snow. Only used if switch_LAPs is not 2
 dust_freshsnow = 1e6        # concentration of dust in fresh snow. Only used if switch_LAPs is not 2
+
+# Output
+store_data = False           # store data, true or false
+storage_freq = 'H'          # frequency to store data using pandas offset aliases
+vars_to_store = 'all'       # list of variables to store
 
 #%% MODEL PROPERTIES THAT MAY NEED TO BE ADJUSTED
 precgrad = 0.0001           # precipitation gradient on glacier [m-1]
@@ -86,7 +105,9 @@ temp_temp = 0               # temperature of temperate ice in Celsius
 
 #%% MODEL PROPERTIES
 density_ice = 900           # Density of ice [kg m-3] (or Gt / 1000 km3)
+density_firn = 700          # Density threshold for firn
 density_water = 1000        # Density of water [kg m-3]
+density_fresh_snow = 100    # ** For assuming constant density of fresh snowfall [kg m-3]
 k_ice = 2.33                # Thermal conductivity of ice [J s-1 K-1 m-1] recall (W = J s-1)
 k_air = 0.023               # Thermal conductivity of air [J s-1 K-1 m-1] (Mellor, 1997)
 Lh_rf = 333550              # Latent heat of fusion [J kg-1]
@@ -105,6 +126,9 @@ density_std = 1.225         # air density at sea level [kg m^-3]
 albedo_fresh_snow = 0.85    # albedo of fresh snow [-] (Moelg et al. 2012, TC)
 albedo_firn = 0.55          # albedo of firn [-] (Moelg et al. 2012, TC)
 albedo_ice = 0.3            # albedo of ice [-] (Moelg et al. 2012, TC)
+viscosity_snow = 0.05  
 dz_toplayer = 0.05          # thickness of the uppermost bin [m]
-layer_growth = 0.5          # rate of exponential growth of bin size
+layer_growth = 0.4          # rate of exponential growth of bin size (smaller layer growth = more layers) recommend 0.2-.6
 sigma_SB = 5.67037e-8       # Stefan-Boltzmann constant [W m-2 K-4]
+max_nlayers = 20            # maximum number of vertical layers allowed
+max_dz = 1  # max layer height

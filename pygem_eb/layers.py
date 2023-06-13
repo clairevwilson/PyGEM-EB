@@ -4,7 +4,6 @@ import pygem_eb.energybalance as eb
 import pygem_eb.input as eb_prms
 import pygem_eb.albedo as eb_albedo
 
-
 class Layers():
     """
     Scheme for the multi-layer snowpack model.
@@ -25,9 +24,14 @@ class Layers():
         # Calculate the layer depths based on initial snow, firn and ice depths
         heights,depths,types = self.getLayers(sfi_h0)
         self.nlayers = len(heights)
+        self.initial_heights = heights.copy()
+        self.types = types
+        self.heights = heights
+        self.depths = depths
 
         # Initialize SNOW layer temperatures based on chosen method and data (snow_temp)
         snow_idx =  np.where(types=='snow')[0]
+        self.snow_idx0 = snow_idx.copy()
         snow_layerz = depths[snow_idx] 
         if eb_prms.option_initTemp in ['piecewise']:
             Tprofile = self.initProfilesPiecewise(snow_layerz,snow_temp,'temp')
@@ -50,22 +54,23 @@ class Layers():
         for idx,type in enumerate(types):
             if type not in ['snow']:
                 Tprofile = np.append(Tprofile,eb_prms.temp_temp)
-            if type in['firn']:
+            if type in ['firn']:
                 pprofile = np.append(pprofile,pprofile[snow_idx[-1]] + pslope*(depths[idx]-depths[snow_idx[-1]]))
             elif type in ['ice']:
                 pprofile = np.append(pprofile,eb_prms.density_ice)
 
-        # Initialize water content
+        # Initialize water content [kg m-2]
         if eb_prms.option_initWater in ['zero_w0']:
             wprofile = np.zeros(self.nlayers)
         elif eb_prms.option_initWater in ['initial_w0']:
             assert 1==0, "Only zero water content method is set up"
 
-        # Define dry (solid) mass of each layer
+        # Define dry (solid) and wet (total) mass of each layer [kg m-2]
         dry_masses = pprofile*heights
+        wet_masses = dry_masses + wprofile
         # Define irreducible water content of each layer and set saturated value
-        irrwatercont = 0.0143*np.exp(3.3*(1-pprofile/eb_prms.density_ice))
-        saturated = np.where(wprofile == irrwatercont,1,0)
+        irrwatercont = self.getIrrWaterCont(pprofile)
+        # saturated = np.where(wprofile == irrwatercont,1,0)
 
         # Initialize BC and dust content
         if eb_prms.switch_LAPs == 0:
@@ -85,11 +90,12 @@ class Layers():
         self.depths = depths
         self.types = types
         self.dry_masses = dry_masses
+        self.wet_masses = wet_masses
         self.irrwatercont = irrwatercont
-        self.saturated = saturated
         self.BC = BC
         self.dust = dust
-        print(self.heights)
+
+        print('Layers initialized')
         return 
     
     def getLayers(self,sfi_h0):
@@ -132,9 +138,10 @@ class Layers():
             layerh[-1] = layerh[-1] - (total_depth-sfi_h0[0])
         
             # Add firn layers
-            n_firn_layers = round(sfi_h0[1],0)
-            layerh.extend([sfi_h0[1]/n_firn_layers]*n_firn_layers)
-            layertype.extend(['firn']*n_firn_layers)
+            if sfi_h0[1] > 0:
+                n_firn_layers = round(sfi_h0[1],0)
+                layerh.extend([sfi_h0[1]/n_firn_layers]*n_firn_layers)
+                layertype.extend(['firn']*n_firn_layers)
         # Case where there is no snow, but there is firn*****
         elif sfi_h0[1] > 0:
             # Add firn layers that are approximately 0.2m deep
@@ -190,173 +197,135 @@ class Layers():
                        lambda x: slopes[2]*x+intercepts[2]])
         return layer_var
     
-    def subsurfaceMelt(self,Snet_surf,dt):
-        # Where to put this function?? 
-        # Fraction of radiation absorbed at the surface depends on surface type
-        if self.types[0] in ['snow']:
-            frac_absrad = 0.9
-        else:
-            frac_absrad = 0.8
-
-        # Extinction coefficient depends on layer type
-        extinct_coef = np.ones(self.nlayers)*1e8 # ensures unfilled layers have 0 heat
-        for idx,type in enumerate(self.types):
-            if type in ['snow']:
-                extinct_coef[idx] = 17.1
-            else:
-                extinct_coef[idx] = 2.5
-            # Cut off if the flux reaches zero threshold (1e-6)
-            if np.exp(-extinct_coef[idx]*self.depths[idx]) < 1e-6:
-                extinct_coef[idx] = 1e8
-                break
-        Snet_pen = Snet_surf*frac_absrad*np.exp(-extinct_coef*self.depths)/dt
-
-        # recalculate layer temperatures, leaving out the surface since surface temp is calculated separately
-        new_Tprofile = self.Tprofile
-        new_Tprofile[1:] += Snet_pen[1:]/(self.dry_masses[1:]*eb_prms.Cp_ice)*dt
-
-        # calculate melt from meltLayers function
-        layermelt = np.zeros(self.nlayers)
-        for layer,new_T in enumerate(new_Tprofile):
-            # check if temperature is above 0
-            if new_T > 0:
-                # calculate melt from the energy that raised the temperature above 0
-                melt = (new_T-0)*self.dry_masses[layer]*eb_prms.Cp_ice/eb_prms.Lh_rf
-                self.Tprofile[layer] = 0
-            else:
-                melt = 0
-                self.Tprofile[layer] = new_T
-            layermelt[layer] = melt
-        
-        return layermelt
-        
-
-    def percolate(self,layermelt,extra_water=0):
+    def addLayers(self,layers_to_add):
         """
-        Calculates the liquid water content in each layer by downward percolation and adjusts 
-        layer heights.
+        Adds layers to layers class.
 
         Parameters
         ----------
-        layermelt: np.ndarray
-            Array containing melt amount for each layer
-        extra_water : float
-            Additional liquid water input (eg. rainfall) [kg/m2 = kg]
-
-        Returns
-        -------
-        runoff : float
-            Runoff that was not absorbed into void space [m3]
+        layers_to_add : pd.Dataframe
+            Contains temperature 'T', water content 'w', height 'h', type 't', dry mass 'drym'
         """
-        melted_layers = []
-        for layer,melt in enumerate(layermelt):
-            # check if the layer fully melted
-            if melt >= self.dry_masses[layer]:
-                melted_layers.append(layer)
-                # pass the meltwater to the next layer
-                extra_water += melt
-            else:
-                # remove melt from the dry mass
-                self.dry_masses[layer] += -1*melt
-
-                # add melt and extra_water (melt from above) to layer water content
-                added_water = melt + extra_water
-                self.wprofile[layer] += added_water
-
-                # check if meltwater exceeds the irreducible water content of the layer
-                if self.wprofile[layer] >= self.irrwatercont[layer]:
-                    # set water content to irr. water content and add the difference to extra_water
-                    extra_water = self.wprofile[layer] - self.irrwatercont[layer]
-                    self.wprofile[layer] = self.irrwatercont[layer]
-                    self.saturated[layer] = 1 # set the layer to saturated
-                else: #if not overflowing, extra_water should be set back to 0
-                    extra_water = 0
-                
-                # get the change in layer height due to loss of solid mass
-                dh = -melt/self.pprofile[layer]
-                self.heights[layer] += dh
-
-        runoff = extra_water
-        self.removeLayers(melted_layers)
-        return runoff
-
-    def refreeze(self,Tprofile):
-        refreeze = 0
-        for layer, T in enumerate(Tprofile):
-            if T < 0 and self.wprofile[layer] > 0:
-                # calculate potential for refreeze 
-                E_temperature = np.abs(T)*self.dry_masses[layer]*eb_prms.Cp_ice
-                E_water = self.wprofile[layer]*eb_prms.Lh_rf
-                E_pore = (self.pprofile[layer]-eb_prms.density_ice)*self.heights[layer]*eb_prms.Lh_rf
-
-                # calculate amount of refreeze 
-                dm_ref = np.min([E_temperature,E_water,E_pore])/eb_prms.Lh_rf
-
-                # add refreeze to running sum
-                refreeze += dm_ref
-
-                # add refreeze to layer ice mass
-                self.dry_masses[layer] += dm_ref
-                self.heights[layer] = self.dry_masses[layer]/self.pprofile[layer]
-                self.Tprofile[layer] = -(E_temperature-dm_ref*eb_prms.Lh_rf/eb_prms.Cp_ice/self.dry_masses[layer])
-        return refreeze
-    
-    def removeLayers(self,layers_to_remove):
-        self.nlayers += -len(layers_to_remove)
-        self.pprofile = np.delete(self.pprofile,layers_to_remove)
-        self.Tprofile = np.delete(self.Tprofile,layers_to_remove)
-        self.wprofile = np.delete(self.wprofile,layers_to_remove)
-        self.heights = np.delete(self.heights,layers_to_remove)
-        self.types = np.delete(self.types,layers_to_remove)
-        self.dry_masses = np.delete(self.dry_masses,layers_to_remove)
-        self.irrwatercont = np.delete(self.irrwatercont,layers_to_remove)
-        self.saturated = np.delete(self.saturated,layers_to_remove)
-
-        # recalculate layer depths
-        self.depths = np.array([np.sum(self.heights[:i+1])-(self.heights[i]/2) for i in range(self.nlayers)])
+        self.nlayers += len(layers_to_add.loc['T'].values)
+        self.Tprofile = np.append(layers_to_add.loc['T'].values,self.Tprofile)
+        self.wprofile = np.append(layers_to_add.loc['w'].values,self.wprofile)
+        self.heights = np.append(layers_to_add.loc['h'].values,self.heights)
+        self.types = np.append(layers_to_add.loc['t'].values,self.types)
+        self.dry_masses = np.append(layers_to_add.loc['drym'].values,self.dry_masses)
+        self.updateLayerProperties()
         return
     
-    def solveHeatEq(self,dt):
-        # COPIED DIRECTLY FROM COSIPY
-        # number of layers
-        nl = self.nlayers
+    def removeLayer(self,layer_to_remove):
+        """
+        Removes layer from layers class.
 
-        # Define index arrays 
-        k   = np.arange(1,nl-1) # center points
-        kl  = np.arange(2,nl)   # lower points
-        ku  = np.arange(0,nl-2) # upper points
-        
-        # Get thermal diffusivity [m2 s-1]
-        K = 2.2*np.power(self.pprofile/eb_prms.density_ice,1.88)
-        
-        # Get snow layer heights    
-        hlayers = self.heights
+        Parameters
+        ----------
+        layer_to_remove : int
+            index of layer to remove
+        """
+        eb_prms.melt_counter += 1
+        self.nlayers -= 1
+        self.Tprofile = np.delete(self.Tprofile,layer_to_remove)
+        self.wprofile = np.delete(self.wprofile,layer_to_remove)
+        self.heights = np.delete(self.heights,layer_to_remove)
+        self.types = np.delete(self.types,layer_to_remove)
+        self.dry_masses = np.delete(self.dry_masses,layer_to_remove)
+        self.updateLayerProperties()
+        return
+    
+    def splitLayer(self,layer_to_split):
+        eb_prms.split_counter += 1
+        l = layer_to_split
+        self.nlayers += 1
+        self.Tprofile = np.insert(self.Tprofile,l,self.Tprofile[l])
+        self.types = np.insert(self.types,l,self.types[l])
+        self.wprofile[l] = self.wprofile[l].copy()/2
+        self.wprofile = np.insert(self.wprofile,l,self.wprofile[l])
+        self.heights[l] = self.heights[l].copy()/2
+        self.heights = np.insert(self.heights,l,self.heights[l]/2)
+        self.dry_masses[l] = self.dry_masses[l].copy()/2
+        self.dry_masses = np.insert(self.dry_masses,l,self.dry_masses[l]/2)
+        self.updateLayerProperties()
+        return
 
-        # Get grid spacing
-        diff = ((hlayers[0:nl-1]/2.0)+(hlayers[1:nl]/2.0))
-        hk = diff[0:nl-2]  # between z-1 and z
-        hk1 = diff[1:nl-1] # between z and z+1
-        
-        # Get temperature array from grid
-        T = self.Tprofile
-        Tnew = T.copy()
-        
-        Kl = (K[1:nl-1]+K[2:nl])/2.0
-        Ku = (K[0:nl-2]+K[1:nl-1])/2.0
-        
-        stab_t = 0.0
-        c_stab = 0.8
-        dt_stab  = c_stab * (min([min(diff[0:nl-2]**2/(2*Ku)),min(diff[1:nl-1]**2/(2*Kl))]))
-        
-        n_iters = 0
-        dt = 3600 # ******
-        while stab_t < dt:
-            dt_use = np.minimum(dt_stab, dt-stab_t)
-            stab_t = stab_t + dt_use
-
-            # Update the temperatures
-            Tnew[k] += ((Kl*dt_use*(T[kl]-T[k])/(hk1)) - (Ku*dt_use*(T[k]-T[ku])/(hk))) / (0.5*(hk+hk1))
-            T = Tnew.copy()
-            n_iters += 1
-        #print(n_iters)
-        return T
+    def mergeLayers(self,layer_to_merge):
+        l = layer_to_merge
+        if self.types[l+1] != 'ice':
+            eb_prms.merge_counter += 1
+            self.pprofile[l+1] = np.sum(self.pprofile[l:l+2]*self.wet_masses[l:l+2]/np.sum(self.wet_masses[l:l+2]))
+            self.wprofile[l+1] = np.sum(self.wprofile[l:l+2]) # *****can cause water to overflow irrwatercont
+            self.Tprofile[l+1] = np.mean(self.Tprofile[l:l+2])
+            self.heights[l+1] = np.sum(self.heights[l:l+2])
+            self.dry_masses[l+1] = np.sum(self.dry_masses[l:l+2])
+            self.removeLayer(l)
+        return
+    
+    def updateLayers(self):
+        for layer,dz in enumerate(self.heights):
+            try:
+                if self.types[layer] == 'snow':
+                    if dz < self.initial_heights[0]*0.5:
+                        self.mergeLayers(layer) # merges layer with next layer down
+                    elif dz > eb_prms.max_dz:
+                        self.splitLayer(layer)
+            except: # override error when layers are taken out during the loop and index gets too high
+                pass
+        return
+    
+    def updateLayerProperties(self,do=['depth','wetmass','density','irrwater']):
+        """
+        Recalculates nlayers, depths, wet mass, density from wet mass, and irreducible water
+        content from DRY density.
+        """
+        self.nlayers = len(self.heights)
+        # update bin middle depth
+        if 'depth' in do:
+            # recalculate layer depths
+            self.depths = np.array([np.sum(self.heights[:i+1])-(self.heights[i]/2) for i in range(self.nlayers)])
+        # update layer properties
+        if 'wetmass' or 'density' in do:
+            self.wet_masses = self.wprofile + self.dry_masses
+            self.pprofile = self.wet_masses / self.heights
+        # update irreducible water content
+        if 'irrwater' in do:
+            self.irrwatercont = self.getIrrWaterCont(self.dry_masses / self.heights)
+        return
+    
+    def updateLayerTypes(self):
+        for layer in range(self.addLayers):
+            if self.pprofile[layer] < eb_prms.density_firn:
+                self.types[layer] = 'snow'
+            elif self.pprofile[layer] < eb_prms.density_ice:
+                self.types[layer] = 'firn'
+            else:
+                self.types[layer] = 'ice'
+        return
+    
+    def addSnow(self,snowfall,airtemp,density=eb_prms.density_fresh_snow):
+        """
+        snowfall = fresh snow MASS in kg / m2
+        """
+        if self.types[0] in 'ice':
+            new_layer = pd.DataFrame([airtemp,0,snowfall/density,'snow',snowfall],index=['T','w','h','t','drym'])
+            self.addLayers(new_layer)
+        else:
+            new_layermass = self.dry_masses[0] + snowfall
+            self.pprofile[0] = (self.pprofile[0]*self.dry_masses[0] + density*snowfall)/(new_layermass)
+            self.dry_masses[0] = new_layermass
+            self.heights[0] += snowfall/density
+            if self.heights[0] > (eb_prms.dz_toplayer * 1.5) and (self.nlayers+1)<eb_prms.max_nlayers:
+                self.splitLayer(0)
+        self.updateLayerProperties()
+        return
+    
+    def getIrrWaterCont(self,pprofile=[0]):
+        if sum(pprofile) == 0: # default condition for function
+            pprofile = self.dry_masses / self.heights
+        pprofile = pprofile.astype(float)
+        density_ice = eb_prms.density_ice
+        porosity = (density_ice - pprofile)/density_ice
+        irrwatercont = 0.0143*np.exp(porosity)
+        ice_idx = np.where(self.types=='ice')[0]
+        irrwatercont[ice_idx] = 0 # ice layers cannot hold water
+        return irrwatercont
