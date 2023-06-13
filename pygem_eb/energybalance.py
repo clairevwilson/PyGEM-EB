@@ -57,7 +57,7 @@ class energyBalance():
         self.dt = dt
         return
 
-    def surfaceEB(self,surftemp,layerz,layertype,days_since_snowfall,albedo,mode='sum'):
+    def surfaceEB(self,surftemp,layers,surface,days_since_snowfall,mode='sum'):
         """
         Calculates the surface heat fluxes at each point on the glacier and applies mass-balance
         scheme to calculate melt and refreeze at each time point.
@@ -66,14 +66,12 @@ class energyBalance():
         ----------
         surftemp : float
             Temperature of the surface snow in Celsius
-        layerz : list-like
-            List of mid-layer depths
-        layertype : list-like
-            List of strings that define the type ('snow','firn', or 'ice') of each layer
+        layers
+            class object from pygem_eb.layers
+        surface
+            class object from pygem_eb.albedo
         days_since_snowfall : int
             Number of days since fresh snowfall
-        albedo : float
-            Broadband albedo
         method_turbulent : str, default: 'MO-similarity'
             'MO-similarity', 'bulk-aerodynamic', or 'Richardson': determines method for calculating 
             turbulent fluxes
@@ -88,28 +86,28 @@ class energyBalance():
             If mode is 'list', returns list in the order of SWin,SWout,LWin,LWout,rain,sensible,latent
         """
         # SHORTWAVE RADIATION
-        SWin,SWout = self.getSW(self.surfrad,albedo)
+        SWin,SWout = self.getSW(surface.albedo)
         Snet_surf = SWin + SWout
         self.SWin = SWin
         self.SWout = SWout
                     
         # LONGWAVE RADIATION (Lnet)
-        LWin,LWout = self.getLW(surftemp,self.tempC,self.tcc)
+        LWin,LWout = self.getLW(surftemp)
         Lnet = LWin + LWout
         self.LWin = LWin
         self.LWout = LWout
 
         # RAIN FLUX (Qp)
-        Qp = self.getRain(surftemp,self.tempC,self.prec)
+        Qp = self.getRain(surftemp)
         self.rain = Qp
 
         # TURBULENT FLUXES (Qs and Ql)
-        roughness = self.roughness_length(days_since_snowfall,layertype)
+        roughness = self.roughness_length(days_since_snowfall,layers.types) # ****** move this to surface
         if eb_prms.method_turbulent in ['MO-similarity']:
-            Qs, Ql = self.getTurbulentMO(self.tempC,surftemp,self.density,self.wind,self.sp,self.rH,roughness)
+            Qs, Ql = self.getTurbulentMO(surftemp,roughness)
         else:
             print('Only MO similarity method is set up for turbulent fluxes')
-            Qs, Ql = self.getTurbulentMO(self.tempC,surftemp,self.density,self.wind,self.sp,self.rH,roughness)
+            Qs, Ql = self.getTurbulentMO(surftemp,roughness)
         self.sens = Qs
         self.lat = Ql
 
@@ -125,41 +123,40 @@ class energyBalance():
         else:
             assert 1==0, 'argument \'mode\' in function surfaceEB should be sum, list or optim'
     
-    def getSW(self,surfrad,albedo):
+    def getSW(self,albedo):
         """
         Simplest parameterization for shortwave radiation which just adjusts it by modeled albedo.
         Returns the shortwave surface flux and the penetrating shortwave with each layer.
         """
         # sun_pos = solar.get_position(time,glacier_table['CenLon'],glacier_table['CenLat'])
-        Sin = surfrad/self.dt
-        Sout = -surfrad*albedo/self.dt #* (cos(theta))
+        Sin = self.surfrad/self.dt
+        Sout = -self.surfrad*albedo/self.dt #* (cos(theta))
 
         return Sin,Sout
 
-    def getLW(self,surftemp,airtemp,tcc):
+    def getLW(self,surftemp):
         """
         Scheme following Klok and Oerlemans (2002) for calculating net longwave radiation
         from the air temperature and cloud cover.
         """
-        airtempK = airtemp+273.15
         surftempK = float(surftemp)+273.15
-        ezt = self.vapor_pressure(airtemp)    # vapor pressure in hPa
-        Ecs = .23+ .433*(ezt/airtempK)**(1/8)  # clear-sky emissivity
+        ezt = self.vapor_pressure(self.tempC)    # vapor pressure in hPa
+        Ecs = .23+ .433*(ezt/self.tempK)**(1/8)  # clear-sky emissivity
         Ecl = 0.984                         # cloud emissivity, Klok and Oerlemans, 2002
-        Esky = Ecs*(1-tcc**2)+Ecl*tcc**2    # sky emissivity
-        Lin = eb_prms.sigma_SB*(Esky*airtempK**4)
+        Esky = Ecs*(1-self.tcc**2)+Ecl*self.tcc**2    # sky emissivity
+        Lin = eb_prms.sigma_SB*(Esky*self.tempK**4)
         Lout = -eb_prms.sigma_SB*surftempK**4
         return Lin,Lout
     
-    def getRain(self,surftemp,airtemp,prec):
+    def getRain(self,surftemp):
         """
         Calculates amount of energy supplied by precipitation that falls as rain.
         """
-        is_rain = airtemp > eb_prms.tsnow_threshold
-        Qp = is_rain*eb_prms.Cp_water*(airtemp-float(surftemp))*prec
+        is_rain = self.tempC > eb_prms.tsnow_threshold
+        Qp = is_rain*eb_prms.Cp_water*(self.tempC-float(surftemp))*self.prec
         return Qp
 
-    def getTurbulentMO(self,air_temp,surf_temp,air_density,wind_speed,pressure,rH,roughness):
+    def getTurbulentMO(self,surf_temp,roughness):
         """
         Calculates turbulent fluxes (sensible and latent heat) based on Monin-Obukhov Similarity 
         Theory, requiring iteration.
@@ -206,8 +203,8 @@ class energyBalance():
             z0q = z0/10     # Roughness length for moisture
 
             # calculate friction velocity using previous heat flux to get Obukhov length (L)
-            fric_vel = karman*wind_speed/(np.log(z/z0)-PsiM(zeta))
-            L = fric_vel**3*(air_temp+273.15)*air_density*eb_prms.Cp_air/(karman*eb_prms.gravity*Qs)
+            fric_vel = karman*self.wind/(np.log(z/z0)-PsiM(zeta))
+            L = fric_vel**3*(self.tempC+273.15)*self.density*eb_prms.Cp_air/(karman*eb_prms.gravity*Qs)
             if L<0.3: # DEBAM uses this correction to ensure it isn't over stablizied
                 L = 0.3
             zeta = z/L
@@ -215,15 +212,15 @@ class energyBalance():
             cD = karman**2/(np.log(z/z0)-PsiM(zeta)-PsiM(z0/L))**2
             cH = karman*cD**(1/2)/((np.log(z/z0t)-PsiT(zeta)-PsiT(z0t/L)))
             cE = karman*cD**(1/2)/((np.log(z/z0q)-PsiT(zeta)-PsiT(z0q/L)))
-            Qs = air_density*eb_prms.Cp_air*cH*wind_speed*(air_temp-float(surf_temp))
+            Qs = self.density*eb_prms.Cp_air*cH*self.wind*(self.tempC-float(surf_temp))
 
-            Ewz = self.vapor_pressure(air_temp)  # vapor pressure at 2m
+            Ewz = self.vapor_pressure(self.tempC)  # vapor pressure at 2m
             Ew0 = self.vapor_pressure(float(surf_temp)) # vapor pressure at the surface
-            qz = (rH/100)*0.622*(Ewz/(pressure-Ewz))
-            q0 = 1.0*0.622*(Ew0/(pressure-Ew0))
+            qz = (self.rH/100)*0.622*(Ewz/(self.sp-Ewz))
+            q0 = 1.0*0.622*(Ew0/(self.sp-Ew0))
             # qz = (rH2 * 0.622 * (Ew / (p - Ew))) / 100.0
             # q0 = (100.0 * 0.622 * (Ew0 / (p - Ew0))) / 100.0
-            Ql = air_density*Lv*cE*wind_speed*(qz-q0)
+            Ql = self.density*Lv*cE*self.wind*(qz-q0)
 
             count_iters += 1
             if count_iters > 10 or abs(previous_zeta - zeta) < .1:

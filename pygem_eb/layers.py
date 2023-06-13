@@ -42,35 +42,35 @@ class Layers():
 
         # Initialize SNOW layer density based on chosen method and data (snow_density)
         if eb_prms.option_initDensity in ['piecewise']:
-            pprofile = self.initProfilesPiecewise(snow_layerz,snow_density,'density')
+            density = self.initProfilesPiecewise(snow_layerz,snow_density,'density')
         elif eb_prms.option_initDensity in ['interp']:
-            pprofile = np.interp(snow_layerz,snow_density[0,:],snow_density[1,:])
+            density = np.interp(snow_layerz,snow_density[0,:],snow_density[1,:])
         else:
             assert 1==0, "Choose between 'piecewise' and 'interp' methods for density initialization"
 
         # Initialize FIRN AND ICE temperature and density
         # Calculate slope that linearly increases density from the bottom snow bin to the top of the ice layer
-        pslope = (eb_prms.density_ice - pprofile[-1])/(np.sum(sfi_h0[0:2])-depths[snow_idx[-1]])
+        pslope = (eb_prms.density_ice - density[-1])/(np.sum(sfi_h0[0:2])-depths[snow_idx[-1]])
         for idx,type in enumerate(types):
             if type not in ['snow']:
                 Tprofile = np.append(Tprofile,eb_prms.temp_temp)
             if type in ['firn']:
-                pprofile = np.append(pprofile,pprofile[snow_idx[-1]] + pslope*(depths[idx]-depths[snow_idx[-1]]))
+                density = np.append(density,density[snow_idx[-1]] + pslope*(depths[idx]-depths[snow_idx[-1]]))
             elif type in ['ice']:
-                pprofile = np.append(pprofile,eb_prms.density_ice)
+                density = np.append(density,eb_prms.density_ice)
 
         # Initialize water content [kg m-2]
         if eb_prms.option_initWater in ['zero_w0']:
-            wprofile = np.zeros(self.nlayers)
+            watercont = np.zeros(self.nlayers)
         elif eb_prms.option_initWater in ['initial_w0']:
             assert 1==0, "Only zero water content method is set up"
 
         # Define dry (solid) and wet (total) mass of each layer [kg m-2]
-        dry_masses = pprofile*heights
-        wet_masses = dry_masses + wprofile
+        dry_mass = density*heights
+        wet_mass = dry_mass + watercont
         # Define irreducible water content of each layer and set saturated value
-        irrwatercont = self.getIrrWaterCont(pprofile)
-        # saturated = np.where(wprofile == irrwatercont,1,0)
+        irrwatercont = self.getIrrWaterCont(density)
+        # saturated = np.where(watercont == irrwatercont,1,0)
 
         # Initialize BC and dust content
         if eb_prms.switch_LAPs == 0:
@@ -84,13 +84,13 @@ class Layers():
             dust = [eb_prms.dust_freshsnow,eb_prms.dust_freshsnow]
         
         self.Tprofile = Tprofile
-        self.pprofile = pprofile
-        self.wprofile = wprofile
+        self.density = density
+        self.watercont = watercont
         self.heights = heights
         self.depths = depths
         self.types = types
-        self.dry_masses = dry_masses
-        self.wet_masses = wet_masses
+        self.dry_mass = dry_mass
+        self.wet_mass = wet_mass
         self.irrwatercont = irrwatercont
         self.BC = BC
         self.dust = dust
@@ -208,10 +208,10 @@ class Layers():
         """
         self.nlayers += len(layers_to_add.loc['T'].values)
         self.Tprofile = np.append(layers_to_add.loc['T'].values,self.Tprofile)
-        self.wprofile = np.append(layers_to_add.loc['w'].values,self.wprofile)
+        self.watercont = np.append(layers_to_add.loc['w'].values,self.watercont)
         self.heights = np.append(layers_to_add.loc['h'].values,self.heights)
         self.types = np.append(layers_to_add.loc['t'].values,self.types)
-        self.dry_masses = np.append(layers_to_add.loc['drym'].values,self.dry_masses)
+        self.dry_mass = np.append(layers_to_add.loc['drym'].values,self.dry_mass)
         self.updateLayerProperties()
         return
     
@@ -227,10 +227,10 @@ class Layers():
         eb_prms.melt_counter += 1
         self.nlayers -= 1
         self.Tprofile = np.delete(self.Tprofile,layer_to_remove)
-        self.wprofile = np.delete(self.wprofile,layer_to_remove)
+        self.watercont = np.delete(self.watercont,layer_to_remove)
         self.heights = np.delete(self.heights,layer_to_remove)
         self.types = np.delete(self.types,layer_to_remove)
-        self.dry_masses = np.delete(self.dry_masses,layer_to_remove)
+        self.dry_mass = np.delete(self.dry_mass,layer_to_remove)
         self.updateLayerProperties()
         return
     
@@ -240,12 +240,12 @@ class Layers():
         self.nlayers += 1
         self.Tprofile = np.insert(self.Tprofile,l,self.Tprofile[l])
         self.types = np.insert(self.types,l,self.types[l])
-        self.wprofile[l] = self.wprofile[l].copy()/2
-        self.wprofile = np.insert(self.wprofile,l,self.wprofile[l])
+        self.watercont[l] = self.watercont[l].copy()/2
+        self.watercont = np.insert(self.watercont,l,self.watercont[l])
         self.heights[l] = self.heights[l].copy()/2
         self.heights = np.insert(self.heights,l,self.heights[l]/2)
-        self.dry_masses[l] = self.dry_masses[l].copy()/2
-        self.dry_masses = np.insert(self.dry_masses,l,self.dry_masses[l]/2)
+        self.dry_mass[l] = self.dry_mass[l].copy()/2
+        self.dry_mass = np.insert(self.dry_mass,l,self.dry_mass[l]/2)
         self.updateLayerProperties()
         return
 
@@ -253,11 +253,11 @@ class Layers():
         l = layer_to_merge
         if self.types[l+1] != 'ice':
             eb_prms.merge_counter += 1
-            self.pprofile[l+1] = np.sum(self.pprofile[l:l+2]*self.wet_masses[l:l+2]/np.sum(self.wet_masses[l:l+2]))
-            self.wprofile[l+1] = np.sum(self.wprofile[l:l+2]) # *****can cause water to overflow irrwatercont
+            self.density[l+1] = np.sum(self.density[l:l+2]*self.dry_mass[l:l+2]/np.sum(self.dry_mass[l:l+2]))
+            self.watercont[l+1] = np.sum(self.watercont[l:l+2]) # *****can cause water to overflow irrwatercont
             self.Tprofile[l+1] = np.mean(self.Tprofile[l:l+2])
             self.heights[l+1] = np.sum(self.heights[l:l+2])
-            self.dry_masses[l+1] = np.sum(self.dry_masses[l:l+2])
+            self.dry_mass[l+1] = np.sum(self.dry_mass[l:l+2])
             self.removeLayer(l)
         return
     
@@ -275,57 +275,57 @@ class Layers():
     
     def updateLayerProperties(self,do=['depth','wetmass','density','irrwater']):
         """
-        Recalculates nlayers, depths, wet mass, density from wet mass, and irreducible water
-        content from DRY density.
+        Recalculates nlayers, depths, wet mass, density, and irreducible water
+        content from DRY density. Can specify to only update certain properties.
         """
         self.nlayers = len(self.heights)
-        # update bin middle depth
         if 'depth' in do:
-            # recalculate layer depths
             self.depths = np.array([np.sum(self.heights[:i+1])-(self.heights[i]/2) for i in range(self.nlayers)])
-        # update layer properties
-        if 'wetmass' or 'density' in do:
-            self.wet_masses = self.wprofile + self.dry_masses
-            self.pprofile = self.wet_masses / self.heights
-        # update irreducible water content
+        if 'wetmass' in do:
+            self.wet_mass = self.watercont + self.dry_mass
+        if 'density' in do:
+            self.density = self.dry_mass / self.heights
         if 'irrwater' in do:
-            self.irrwatercont = self.getIrrWaterCont(self.dry_masses / self.heights)
+            self.irrwatercont = self.getIrrWaterCont(self.density)
         return
     
     def updateLayerTypes(self):
         for layer in range(self.addLayers):
-            if self.pprofile[layer] < eb_prms.density_firn:
+            if self.density[layer] < eb_prms.density_firn:
                 self.types[layer] = 'snow'
-            elif self.pprofile[layer] < eb_prms.density_ice:
+            elif self.density[layer] < eb_prms.density_ice:
                 self.types[layer] = 'firn'
             else:
                 self.types[layer] = 'ice'
         return
     
-    def addSnow(self,snowfall,airtemp,density=eb_prms.density_fresh_snow):
+    def addSnow(self,snowfall,airtemp,new_density=eb_prms.density_fresh_snow):
         """
         snowfall = fresh snow MASS in kg / m2
         """
         if self.types[0] in 'ice':
-            new_layer = pd.DataFrame([airtemp,0,snowfall/density,'snow',snowfall],index=['T','w','h','t','drym'])
+            new_layer = pd.DataFrame([airtemp,0,snowfall/new_density,'snow',snowfall],index=['T','w','h','t','drym'])
             self.addLayers(new_layer)
         else:
-            new_layermass = self.dry_masses[0] + snowfall
-            self.pprofile[0] = (self.pprofile[0]*self.dry_masses[0] + density*snowfall)/(new_layermass)
-            self.dry_masses[0] = new_layermass
-            self.heights[0] += snowfall/density
+            new_layermass = self.dry_mass[0] + snowfall
+            self.density[0] = (self.density[0]*self.dry_mass[0] + new_density*snowfall)/(new_layermass)
+            self.dry_mass[0] = new_layermass
+            self.heights[0] += snowfall/new_density
             if self.heights[0] > (eb_prms.dz_toplayer * 1.5) and (self.nlayers+1)<eb_prms.max_nlayers:
                 self.splitLayer(0)
         self.updateLayerProperties()
         return
     
-    def getIrrWaterCont(self,pprofile=[0]):
-        if sum(pprofile) == 0: # default condition for function
-            pprofile = self.dry_masses / self.heights
-        pprofile = pprofile.astype(float)
+    def getIrrWaterCont(self,density=[0]):
+        if sum(density) == 0: # default condition for function
+            density = self.dry_mass / self.heights
+        density = density.astype(float)
         density_ice = eb_prms.density_ice
-        porosity = (density_ice - pprofile)/density_ice
-        irrwatercont = 0.0143*np.exp(porosity)
+        porosity = (density_ice - density)/density_ice
+        irrwatercont = 0.0143*np.exp(3.3*porosity)
+        irrwatersat = irrwatercont*density/porosity # kg m-3, mass of liquid over pore volume
+        irrwatercont = irrwatersat*self.heights # kg m-2, mass of liquid in a layer
+
         ice_idx = np.where(self.types=='ice')[0]
         irrwatercont[ice_idx] = 0 # ice layers cannot hold water
         return irrwatercont
