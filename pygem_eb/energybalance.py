@@ -53,7 +53,7 @@ class energyBalance():
         # Define additional useful values
         self.wind = (self.uwind**2 + self.vwind**2)**(1/2)
         self.tempK = self.tempC + 273.15
-        self.prec =  self.prec / 3600 # make precip a rate in m/s
+        self.prec =  self.prec / 3600 # make precip into a rate in m/s
         self.dt = dt
         return
 
@@ -139,7 +139,7 @@ class energyBalance():
         Scheme following Klok and Oerlemans (2002) for calculating net longwave radiation
         from the air temperature and cloud cover.
         """
-        surftempK = float(surftemp)+273.15
+        surftempK = surftemp+273.15
         ezt = self.vapor_pressure(self.tempC)    # vapor pressure in hPa
         Ecs = .23+ .433*(ezt/self.tempK)**(1/8)  # clear-sky emissivity
         Ecl = 0.984                         # cloud emissivity, Klok and Oerlemans, 2002
@@ -153,7 +153,7 @@ class energyBalance():
         Calculates amount of energy supplied by precipitation that falls as rain.
         """
         is_rain = self.tempC > eb_prms.tsnow_threshold
-        Qp = is_rain*eb_prms.Cp_water*(self.tempC-float(surftemp))*self.prec
+        Qp = is_rain*eb_prms.Cp_water*(self.tempC-surftemp)*self.prec
         return Qp
 
     def getTurbulentMO(self,surf_temp,roughness):
@@ -212,10 +212,10 @@ class energyBalance():
             cD = karman**2/(np.log(z/z0)-PsiM(zeta)-PsiM(z0/L))**2
             cH = karman*cD**(1/2)/((np.log(z/z0t)-PsiT(zeta)-PsiT(z0t/L)))
             cE = karman*cD**(1/2)/((np.log(z/z0q)-PsiT(zeta)-PsiT(z0q/L)))
-            Qs = self.density*eb_prms.Cp_air*cH*self.wind*(self.tempC-float(surf_temp))
+            Qs = self.density*eb_prms.Cp_air*cH*self.wind*(self.tempC-surf_temp)
 
             Ewz = self.vapor_pressure(self.tempC)  # vapor pressure at 2m
-            Ew0 = self.vapor_pressure(float(surf_temp)) # vapor pressure at the surface
+            Ew0 = self.vapor_pressure(surf_temp) # vapor pressure at the surface
             qz = (self.rH/100)*0.622*(Ewz/(self.sp-Ewz))
             q0 = 1.0*0.622*(Ew0/(self.sp-Ew0))
             # qz = (rH2 * 0.622 * (Ew / (p - Ew))) / 100.0

@@ -163,7 +163,7 @@ if eb_prms.store_data:
 #loop through bins here so EB script is set up for only one bin (1D data)
 for bin in np.arange(eb_prms.n_bins):
     # initialize layers
-    initial_layers = eb_layers.Layers(temp_prof,density_prof,layer_depths[bin])
+    initial_layers = eb_layers.Layers(temp_prof,density_prof,layer_depths[bin]) # *****move to massbalance
     # initialize variables to store from mass balance
     massbal = mb.massBalance(climateds)
     # check runtime of main function

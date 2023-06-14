@@ -321,11 +321,11 @@ class Layers():
             density = self.dry_mass / self.heights
         density = density.astype(float)
         density_ice = eb_prms.density_ice
-        porosity = (density_ice - density)/density_ice
+        ice_idx = np.where(self.types=='ice')[0][0]
+        porosity = (density_ice - density[:ice_idx])/density_ice
         irrwatercont = 0.0143*np.exp(3.3*porosity)
-        irrwatersat = irrwatercont*density/porosity # kg m-3, mass of liquid over pore volume
-        irrwatercont = irrwatersat*self.heights # kg m-2, mass of liquid in a layer
-
-        ice_idx = np.where(self.types=='ice')[0]
-        irrwatercont[ice_idx] = 0 # ice layers cannot hold water
+        irrwatersat = irrwatercont*density[:ice_idx]/porosity # kg m-3, mass of liquid over pore volume
+        irrwatercont = irrwatersat*self.heights[:ice_idx] # kg m-2, mass of liquid in a layer
+        
+        irrwatercont = np.append(irrwatercont,0) # ice layer cannot hold water
         return irrwatercont

@@ -40,7 +40,7 @@ logging_level = 'DEBUG' # DEBUG, INFO, WARNING, ERROR, WORKFLOW, CRITICAL (recom
 #%% ===== CLIMATE DATA ===== 
 # Dates
 startdate = pd.to_datetime('1980-01-01 00:00')
-enddate = pd.to_datetime('1982-01-01 00:00')
+enddate = pd.to_datetime('1981-01-01 00:00')
 option_leapyear = 0 # 0 to exclude leap years
 # Reference period runs (runs up to present)
 ref_gcm_name = 'ERA5-hourly'        # reference climate dataset

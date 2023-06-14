@@ -34,5 +34,5 @@ class Surface():
         if type in 'snow' and amount > 1e-8:
             self.albedo = 0.85
         elif type in 'rain':
-            self.albedo = 0.6
+            self.albedo = 0.85
         return
