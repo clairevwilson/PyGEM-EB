@@ -57,7 +57,7 @@ class energyBalance():
         self.dt = dt
         return
 
-    def surfaceEB(self,surftemp,layers,surface,days_since_snowfall,mode='sum'):
+    def surfaceEB(self,surftemp,layers,albedo,days_since_snowfall,mode='sum'):
         """
         Calculates the surface heat fluxes at each point on the glacier and applies mass-balance
         scheme to calculate melt and refreeze at each time point.
@@ -68,8 +68,8 @@ class energyBalance():
             Temperature of the surface snow in Celsius
         layers
             class object from pygem_eb.layers
-        surface
-            class object from pygem_eb.albedo
+        albedo : float
+            Albedo of the surface
         days_since_snowfall : int
             Number of days since fresh snowfall
         method_turbulent : str, default: 'MO-similarity'
@@ -86,7 +86,7 @@ class energyBalance():
             If mode is 'list', returns list in the order of SWin,SWout,LWin,LWout,rain,sensible,latent
         """
         # SHORTWAVE RADIATION
-        SWin,SWout = self.getSW(surface.albedo)
+        SWin,SWout = self.getSW(albedo)
         Snet_surf = SWin + SWout
         self.SWin = SWin
         self.SWout = SWout

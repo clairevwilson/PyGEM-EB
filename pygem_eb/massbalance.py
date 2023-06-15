@@ -9,16 +9,24 @@ import pygem_eb.layers as eb_layers
 import pygem_eb.albedo as eb_albedo
 
 class massBalance():
-    def __init__(self,climateds):
+    def __init__(self,bin_idx):
+        self.bin_idx = bin_idx
+        temp_prof = np.array([[0,-30],[1,-10],[5,-8],[10,0]])
+        density_prof = np.array([[0,100],[1,300],[3,350],[8,600]])
+        layer_depths = [[1,0,20],[4,1,40],[5,2,40]]
+
         # Set up model time (dt is the time loop used for the mass + surface energy balances)
         self.dt = eb_prms.dt
+        self.days_since_snowfall = 0
         self.time_list = pd.date_range(eb_prms.startdate,eb_prms.enddate,freq=str(self.dt)+'S')
+        
+        # Initialize layers and surface classes
+        self.layers = eb_layers.Layers(temp_prof,density_prof,layer_depths[bin_idx],bin_idx)
+        self.surface = eb_albedo.Surface(self.layers,self.time_list)
 
-        # Time for storing data
+        # Time for storing data in netcdf
         self.time_to_store = pd.date_range(eb_prms.startdate,eb_prms.enddate,freq=eb_prms.storage_freq)
 
-        self.days_since_snowfall = 0
-    
         # Initialize variables to store fluxes
         self.SWin_output = []
         self.SWout_output = []
@@ -40,7 +48,7 @@ class massBalance():
         self.snowdensity_output = []
         return
     
-    def main(self,layers,climateds,bin_idx):
+    def main(self,climateds):
         """
         Runs the time loop and mass balance scheme to solve layer temperature
         and density profiles. 
@@ -53,68 +61,60 @@ class massBalance():
         bin_idx : int
             Index number of the bin being run.
         """
-        # STUPID STUPID STUPID******
-        good = xr.open_dataset('/home/claire/research/Output/EB/run_2023_06_07_hourly_3yrs.nc').isel(bin=0)
-        surftemps = good['surftemp'].to_numpy()
+        # # STUPID STUPID STUPID******
+        # good = xr.open_dataset('/home/claire/research/Output/EB/run_2023_06_07_hourly_3yrs.nc').isel(bin=0)
+        # surftemps = good['surftemp'].to_numpy()
+        layers = self.layers
+        surface = self.surface
 
-        # Initialize surface class for albedo / LAPs
-        surface = eb_albedo.Surface(layers,self.time_list)
-
-        # Initiate variables for loop
+        # Initialize time variable
         dt = self.dt
-        month = 0
-
-        # Store mass balance terms for each month and for each timestep
-        startdate = eb_prms.startdate
-        enddate = eb_prms.enddate
-        n_months = (enddate.year - startdate.year) * 12 + startdate.month - enddate.month
-        self.monthly_output = pd.DataFrame(data=np.zeros((n_months,5)),
-                                           columns=['melt','runoff','refreeze','accum','MB'],
-                                           index=np.arange(n_months))
-        # initialize space for "running" MB terms which sum each timestep -- reset to 0 monthly
+        timeidx = 0
+        
+        # Initialize space for "running" MB terms which sum each timestep -- reset to 0 monthly
         running_output = pd.DataFrame([[0],[0],[0],[0]],index=['melt','runoff','refreeze','accum'])    
 
         # ===== ENTER TIME LOOP =====
         # index [12960:12964]] will start on a summer day (June 29)
         # index 26281 ends the first year (1980)
-        timeidx = 0
         for time in self.time_list:
             # Initiate the energy balance to unpack climate data
-            enbal = eb.energyBalance(climateds,time,bin_idx,dt)
+            enbal = eb.energyBalance(climateds,time,self.bin_idx,dt)
 
             # Check if snowfall or rain occurred and update snow timestamp
             rain,snowfall = self.getPrecip(enbal,surface,time)
 
-            if time.hour < 1 and time.minute < 1:
-                # any daily happenings go here!!!
-                self.days_since_snowfall = (time - surface.snow_timestamp)/pd.Timedelta(days=1)
-                #update albedo
-                surface.getAlbedo(self.days_since_snowfall)
+            # Update surface daily
+            if time.hour < 1 and time.minute < 1: # Any daily happenings go here (update surface)
+                surface.days_since_snowfall = (time - surface.snow_timestamp)/pd.Timedelta(days=1)
+                self.days_since_snowfall = surface.days_since_snowfall
+                surface.updateSurface()
 
             # Add fresh snow to layers
             if snowfall > 0:
                 layers.addSnow(snowfall,enbal.tempC)
+
             # Calculate surface energy balance
+            surface.getSurfTemp(enbal,layers)
             surface.Qm = enbal.surfaceEB(surface.temp,layers,surface,self.days_since_snowfall)
 
             # Calculate subsurface heating/melt from penetrating SW
             if layers.nlayers > 1: # unnecessary to run these fxns if there is bare ice
                 Sin,Sout = enbal.getSW(surface.albedo)
                 subsurf_melt = self.getSubsurfMelt(layers,Sin+Sout)
-                
-                surface.temp = surftemps[timeidx]
-                # Recalculate surface temperature if freezing (Qm<0) or melting and the surface is subzero (Qm>0,Ts<0)
-                self.getSubzero(enbal,layers,surface)
             else: # if just one layer
                 subsurf_melt = [0]
-            surface.temp = surftemps[timeidx]
+
             # if time.month > 2 and abs(layers.Tprofile[0]) < 1e-2:
             #     print('START PRINTS',time)
             #     print('surface temp every',surface.temp)
             #     print('Temp',layers.Tprofile)
             #     print('Qm every',surface.Qm)
 
-            # Calculate melt when there is energy toward the surface and the surface is at 0C
+            # Calculate melt or subzero
+            # surface.temp = surftemps[timeidx]
+                # Recalculate surface temperature if freezing (Qm<0) or melting and the surface is subzero (Qm>0,Ts<0)
+                self.getSubzero(enbal,layers,surface)
             if surface.Qm > 0 and layers.Tprofile[0] >= 0: # make this ==? should never exceed 0 via above code
                 layermelt = self.getMelt(layers,surface,subsurf_melt)
             else:
@@ -181,7 +181,7 @@ class massBalance():
                     melt = running_output.loc['melt'][0]
                     accum = running_output.loc['accum'][0]
                     melte = np.mean(self.meltenergy_output[-720:])
-                    print(time.month_name(),time.year,'for bin no',bin_idx)
+                    print(time.month_name(),time.year,'for bin no',self.bin_idx)
                     print(f'|    Qm: {melte:.0f} W/m2              Melt: {melt:.2f} kg/m2  |')
                     print(f'| Air temp: {enbal.tempC:.3f} C       Accum: {accum:.2f} kg/m2   |')
                     if layers.nlayers > 3:
@@ -195,9 +195,7 @@ class massBalance():
                     print('================================================')
                     #print('Melt:',running_output.loc['melt'][0],' New snow:',running_output.loc['accum'][0])
 
-                # any monthly happenings go here!!
-                self.getMassBal(running_output,surface.temp,enbal,month)
-                month += 1
+
                 running_output[0] = [0,0,0,0] 
 
                 if time.month == 10:
@@ -275,7 +273,7 @@ class massBalance():
         Qm = surface.Qm
         loop = True
         while loop: # problem can occur if Qm is greater than 0 but surface temperature is negative
-            if Qm < 0: 
+            if Qm < 0 or (surftemp < 0 and layers.Tprofile[0] < 0): 
                 # Energy away from surface: need to change surface temperature to get 0 surface energy flux 
                 result = minimize(enbal.surfaceEB,surftemp,method='L-BFGS-B',bounds=((-60,0),),tol=1e-3,
                                 args=(layers,surface,self.days_since_snowfall,'optim'))
@@ -495,24 +493,24 @@ class massBalance():
         surface.updatePrecip(precip_type,rain+snow)
         return rain,snow
     
-    def getMassBal(self,running_values,surftemp,enbal,month):
-        if surftemp < 0:
-            sublimation = min(enbal.lat/(eb_prms.density_water * eb_prms.Lv_sub), 0)*self.dt
-            deposition = max(enbal.lat/(eb_prms.density_water * eb_prms.Lv_sub), 0)*self.dt
-            evaporation = 0
-            condensation = 0
-        else:
-            sublimation = 0
-            deposition = 0
-            evaporation = min(enbal.lat/(eb_prms.density_water * eb_prms.Lv_evap), 0)*self.dt
-            condensation = max(enbal.lat/(eb_prms.density_water * eb_prms.Lv_evap), 0)*self.dt
-        melt,runoff,refreeze,accum = running_values.loc[['melt','runoff','refreeze','accum']][0]
-        self.monthly_output.loc[month] = [melt,runoff,refreeze,accum,0]
+    # def getMassBal(self,running_values,surftemp,enbal,month):
+    #     if surftemp < 0:
+    #         sublimation = min(enbal.lat/(eb_prms.density_water * eb_prms.Lv_sub), 0)*self.dt
+    #         deposition = max(enbal.lat/(eb_prms.density_water * eb_prms.Lv_sub), 0)*self.dt
+    #         evaporation = 0
+    #         condensation = 0
+    #     else:
+    #         sublimation = 0
+    #         deposition = 0
+    #         evaporation = min(enbal.lat/(eb_prms.density_water * eb_prms.Lv_evap), 0)*self.dt
+    #         condensation = max(enbal.lat/(eb_prms.density_water * eb_prms.Lv_evap), 0)*self.dt
+    #     melt,runoff,refreeze,accum = running_values.loc[['melt','runoff','refreeze','accum']][0]
+    #     self.monthly_output.loc[month] = [melt,runoff,refreeze,accum,0]
 
-        # calculate total mass balance
-        MB = accum + refreeze - melt + deposition - evaporation - sublimation
-        self.monthly_output.loc[month]['MB'] = MB
-        return
+    #     # calculate total mass balance
+    #     MB = accum + refreeze - melt + deposition - evaporation - sublimation
+    #     self.monthly_output.loc[month]['MB'] = MB
+    #     return
     
     def storeVars(self,bin):
         with xr.open_dataset(eb_prms.output_name+'.nc') as dataset:

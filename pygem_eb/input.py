@@ -100,7 +100,7 @@ precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [K m-1]
 lapserate_dew = -0.002      # dew point temperature lapse rate [K m-1]
 tsnow_threshold = 1         # Threshold to consider freezing
-kp = 1                      # precipitation factor [-] 
+kp = 5                      # precipitation factor [-] 
 temp_temp = 0               # temperature of temperate ice in Celsius
 
 #%% MODEL PROPERTIES

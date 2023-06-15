@@ -8,7 +8,7 @@ class Layers():
     """
     Scheme for the multi-layer snowpack model.
     """
-    def __init__(self,snow_temp,snow_density,sfi_h0):
+    def __init__(self,snow_temp,snow_density,sfi_h0,bin_no):
         """
         Initialize the temperature, density and water content profile of the vertical layers.
 
@@ -20,6 +20,8 @@ class Layers():
             Array containing the initial snow density in kg m**-3 at associated depths.
         sfi_h0 : np.ndarray
             Array containing the initial snow, firn, and ice thicknesses [m]
+        bin_no : int
+            Bin number
         """
         # Calculate the layer depths based on initial snow, firn and ice depths
         heights,depths,types = self.getLayers(sfi_h0)
@@ -95,7 +97,7 @@ class Layers():
         self.BC = BC
         self.dust = dust
 
-        print('Layers initialized')
+        print(self.nlayers,'layers initialized for bin',bin_no)
         return 
     
     def getLayers(self,sfi_h0):
