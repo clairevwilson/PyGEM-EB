@@ -123,9 +123,7 @@ print('!! Using constant (not calibrated) kp and lapserate')
 # Read in data for initial temperatures and densities
 # temp_prof = pd.read_csv(eb_prms.initTemp_fp).to_numpy()[:,1:]
 # density_prof = pd.read_csv(eb_prms.initDensity_fp).to_numpy()[:,1:]
-temp_prof = np.array([[0,-30],[1,-10],[5,-8],[10,0]])
-density_prof = np.array([[0,100],[1,300],[3,350],[8,600]])
-layer_depths = [[1,0,20],[4,1,40],[5,2,40]]
+
 #print(climateds.sel(time=gcm_hours[0])['bin_temp'])
 
 # Set up files for storage
@@ -162,12 +160,10 @@ if eb_prms.store_data:
 # ===== RUN ENERGY BALANCE =====
 #loop through bins here so EB script is set up for only one bin (1D data)
 for bin in np.arange(eb_prms.n_bins):
-    # initialize layers
-    initial_layers = eb_layers.Layers(temp_prof,density_prof,layer_depths[bin]) # *****move to massbalance
     # initialize variables to store from mass balance
-    massbal = mb.massBalance(climateds)
+    massbal = mb.massBalance(bin)
     # check runtime of main function
-    results = massbal.main(initial_layers,climateds,bin)
+    results = massbal.main(climateds)
     print('Number of melted layers:',eb_prms.melt_counter)
     print('Number of split layers:',eb_prms.split_counter)
     print('Number of merged layers:',eb_prms.merge_counter)
