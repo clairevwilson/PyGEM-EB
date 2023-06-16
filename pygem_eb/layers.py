@@ -252,15 +252,18 @@ class Layers():
         return
 
     def mergeLayers(self,layer_to_merge):
+        """
+        Merges two layers, summing height, mass and water content and averaging other properties.
+        Layers merged will be the index passed and the layer below it
+        """
         l = layer_to_merge
-        if self.types[l+1] != 'ice' and np.diff(self.snowdens[l:l+2])<300: # don't merge layers if densities are too similar
-            eb_prms.merge_counter += 1
-            self.snowdens[l+1] = np.sum(self.snowdens[l:l+2]*self.dry_spec_mass[l:l+2]/np.sum(self.dry_spec_mass[l:l+2]))
-            self.watercont[l+1] = np.sum(self.watercont[l:l+2]) # *****can cause water to overflow irrwatercont, which will be routed next timestep
-            self.snowtemp[l+1] = np.mean(self.snowtemp[l:l+2])
-            self.heights[l+1] = np.sum(self.heights[l:l+2])
-            self.dry_spec_mass[l+1] = np.sum(self.dry_spec_mass[l:l+2])
-            self.removeLayer(l)
+        eb_prms.merge_counter += 1
+        self.snowdens[l+1] = np.sum(self.snowdens[l:l+2]*self.dry_spec_mass[l:l+2])/np.sum(self.dry_spec_mass[l:l+2])
+        self.watercont[l+1] = np.sum(self.watercont[l:l+2])
+        self.snowtemp[l+1] = np.mean(self.snowtemp[l:l+2])
+        self.heights[l+1] = np.sum(self.heights[l:l+2])
+        self.dry_spec_mass[l+1] = np.sum(self.dry_spec_mass[l:l+2])
+        self.removeLayer(l)
         return
     
     def updateLayers(self):
@@ -272,9 +275,11 @@ class Layers():
             layer_split = False
             dz = self.heights[layer]
             if self.types[layer] in ['snow','firn']:
-                if dz < min_heights(layer):
+                if dz < min_heights(layer) and self.types[layer]==self.types[layer+1]:
+                    # Layer too small. Merge but only if it's the same type as the layer underneath
                     self.mergeLayers(layer)
                 elif dz > max_heights(layer):
+                    # Layer too big. Split into two equal size layers
                     self.splitLayer(layer)
                     layer_split = True
             if not layer_split:
@@ -297,13 +302,25 @@ class Layers():
         return
     
     def updateLayerTypes(self):
-        for layer in range(self.addLayers):
-            if self.snowdens[layer] < eb_prms.density_firn:
-                self.types[layer] = 'snow'
-            elif self.snowdens[layer] < eb_prms.density_ice:
+        # Check for changes in layer type (excluding ice layer, which cannot change)
+        snowfirn_idx = np.append(self.snow_idx,np.where(self.types == 'firn')[0])
+        for layer,dens in enumerate(self.snowdens[snowfirn_idx]):
+            # New FIRN layer
+            if dens > eb_prms.density_firn and self.types[layer] != 'firn':
                 self.types[layer] = 'firn'
-            else:
+                self.snowdens[layer] = eb_prms.density_firn
+                # merge layers if there is firn under the new firn layer
+                if self.types[layer+1] in ['firn']: 
+                    self.mergeLayers(layer)
+                    print('new firn!')
+            # New ICE layer
+            if self.snowdens[layer] > eb_prms.density_ice:
                 self.types[layer] = 'ice'
+                self.snowdens[layer] = eb_prms.density_ice
+                # merge into ice below
+                if self.types[layer+1] in ['ice']:
+                    self.mergeLayers(layer)
+                    print('new ice!')
         return
     
     def addSnow(self,snowfall,airtemp,new_density=eb_prms.density_fresh_snow):

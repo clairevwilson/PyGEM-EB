@@ -26,6 +26,10 @@ class Surface():
         return
     
     def updateSurface(self):
+        """
+        Run every timestep to get properties that evolve with time. Keeps track of past surface in the case of fresh snowfall
+        after significant melt.
+        """
         self.getGrainSize()
         return
     
