@@ -8,7 +8,6 @@ import pygem.oggm_compat as oggm
 import pygem.pygem_modelsetup as modelsetup
 import class_climate
 import pygem_eb.massbalance as mb
-import pygem_eb.layers as eb_layers
 
 assert eb_prms.glac_no not in ['01.00570'], 'EB model can currently only run Gulkana glacier'
 
@@ -93,7 +92,7 @@ climateds = xr.Dataset(data_vars = dict(
 
 #initialize variables to be adjusted
 temp_adj = np.zeros((n_points,len(gcm_hours)))
-prec_adj = np.zeros((n_points,len(gcm_hours)))
+tp_adj = np.zeros((n_points,len(gcm_hours)))
 sp_adj = np.zeros((n_points,len(gcm_hours)))
 rh_adj = np.zeros((n_points,len(gcm_hours)))
 density_adj = np.zeros((n_points,len(gcm_hours)))
@@ -106,7 +105,7 @@ e_func = lambda T_C: 610.94*np.exp(17.625*T_C/(T_C+243.04))  #vapor pressure in 
 for idx,z in enumerate(climateds['bin_elev'].values):
     temp_adj[idx,:] = gcm_temp + eb_prms.lapserate*(z-gcm_elev)
     dtemp_adj[idx,:] = gcm_dtemp + eb_prms.lapserate_dew*(z-gcm_elev) - 273.15
-    prec_adj[idx,:] = gcm_prec*eb_prms.kp*(1+eb_prms.precgrad*(z-gcm_elev))
+    tp_adj[idx,:] = gcm_prec*eb_prms.kp*(1+eb_prms.precgrad*(z-gcm_elev))
     sp_adj[idx,:] = gcm_sp*np.power((gcm_temp + eb_prms.lapserate*(z-gcm_elev)+273.15)/(gcm_temp+273.15),
                            -eb_prms.gravity*eb_prms.molarmass_air/(eb_prms.R_gas*eb_prms.lapserate))
     rh_adj[idx,:] = e_func(dtemp_adj[idx,:]) / e_func(temp_adj[idx,:]) * 100
@@ -114,7 +113,7 @@ for idx,z in enumerate(climateds['bin_elev'].values):
 
 climateds = climateds.assign(bin_temp = (['bin','time'],temp_adj,{'units':'C'}))
 climateds = climateds.assign(bin_dtemp = (['bin','time'],dtemp_adj,{'units':'C'}))
-climateds = climateds.assign(bin_prec = (['bin','time'],prec_adj,{'units':'m'}))
+climateds = climateds.assign(bin_tp = (['bin','time'],tp_adj,{'units':'m'}))
 climateds = climateds.assign(bin_sp = (['bin','time'],sp_adj,{'units':'Pa'}))
 climateds = climateds.assign(bin_rh = (['bin','time'],rh_adj,{'units':'%'}))
 climateds = climateds.assign(bin_density = (['bin','time'],density_adj,{'units':'kg m-3'}))
@@ -146,9 +145,10 @@ if eb_prms.store_data:
             airtemp = (['time','bin'],zeros[:,:,0],{'units':'C'}),
             surftemp = (['time','bin'],zeros[:,:,0],{'units':'C'}),
             snowtemp = (['time','bin','layer'],zeros,{'units':'C'}),
-            snowwetmass = (['time','bin','layer'],zeros,{'units':'kg m-2'}),
-            snowdrymass = (['time','bin','layer'],zeros,{'units':'kg m-2'}),
-            snowdensity = (['time','bin','layer'],zeros,{'units':'kg m-3'})
+            watercont = (['time','bin','layer'],zeros,{'units':'kg m-2'}),
+            layerheight = (['time','bin','layer'],zeros,{'units':'m'}),
+            snowdensity = (['time','bin','layer'],zeros,{'units':'kg m-3'}),
+            snowdepth = (['time','bin'],zeros[:,:,0],{'units':'m'})
             ),
             coords=dict(
                 time=(['time'],time_to_store),
@@ -171,7 +171,6 @@ for bin in np.arange(eb_prms.n_bins):
     eb_prms.split_counter = 0
     eb_prms.merge_counter = 0
 
-    print(massbal.monthly_output)
     if eb_prms.store_data:
         massbal.storeVars(bin)
 

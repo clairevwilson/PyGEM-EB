@@ -4,7 +4,9 @@ import pygem_eb.input as eb_prms
 
 class energyBalance():
     """
-    Energy balance scheme that calculates the surface energy balance and penetrating shortwave radiation.
+    Energy balance scheme that calculates the surface energy balance and penetrating shortwave radiation. 
+    This class is updated within MassBalance every timestep, so it stores the current climate data and 
+    surface fluxes.
     """ 
     def __init__(self,climateds,time,bin_idx,dt):
         """
@@ -28,7 +30,7 @@ class energyBalance():
             climateds_now = climateds.sel(time=time)
             # Bin-dependent variables indexed by bin_idx
             self.tempC = climateds_now['bin_temp'].to_numpy()[bin_idx]
-            self.prec = climateds_now['bin_prec'].to_numpy()[bin_idx]
+            self.tp = climateds_now['bin_tp'].to_numpy()[bin_idx]
             self.sp = climateds_now['bin_sp'].to_numpy()[bin_idx]
             self.density = climateds_now['bin_density'].to_numpy()[bin_idx]
             self.rH = climateds_now['bin_rh'].to_numpy()[bin_idx]
@@ -41,7 +43,7 @@ class energyBalance():
             # Timestep is between hours, so interpolate using interpClimate function
             # Bin-dependent variables indexed by bin_idx
             self.tempC = self.interpClimate(climateds,time,'bin_temp',bin_idx)
-            self.prec = self.interpClimate(climateds,time,'bin_prec',bin_idx)
+            self.tp = self.interpClimate(climateds,time,'bin_tp',bin_idx)
             self.sp = self.interpClimate(climateds,time,'bin_sp',bin_idx)
             self.density = self.interpClimate(climateds,time,'bin_density',bin_idx)
             self.rH = self.interpClimate(climateds,time,'bin_rh',bin_idx)
@@ -53,7 +55,7 @@ class energyBalance():
         # Define additional useful values
         self.wind = (self.uwind**2 + self.vwind**2)**(1/2)
         self.tempK = self.tempC + 273.15
-        self.prec =  self.prec / 3600 # make precip into a rate in m/s
+        self.prec =  self.tp / 3600     # tp is hourly total precip, so prec is the rate in m/s
         self.dt = dt
         return
 
@@ -102,7 +104,7 @@ class energyBalance():
         self.rain = Qp
 
         # TURBULENT FLUXES (Qs and Ql)
-        roughness = self.roughness_length(days_since_snowfall,layers.types) # ****** move this to surface
+        roughness = self.roughness_length(days_since_snowfall,layers.types)
         if eb_prms.method_turbulent in ['MO-similarity']:
             Qs, Ql = self.getTurbulentMO(surftemp,roughness)
         else:
@@ -153,7 +155,7 @@ class energyBalance():
         Calculates amount of energy supplied by precipitation that falls as rain.
         """
         is_rain = self.tempC > eb_prms.tsnow_threshold
-        Qp = is_rain*eb_prms.Cp_water*(self.tempC-surftemp)*self.prec
+        Qp = is_rain*eb_prms.Cp_water*(self.tempC-surftemp)*self.prec*eb_prms.density_water
         return Qp
 
     def getTurbulentMO(self,surf_temp,roughness):
@@ -163,18 +165,8 @@ class energyBalance():
 
         Parameters
         ----------
-        air_temp : float
-            Air temperature at reference height [C]
         surf_temp : float
             Surface temperature of snowpack/ice [C]
-        air_density : float
-            Air density at reference height [kg m-3]
-        wind_speed : float
-            Wind speed at reference height [m s-1]
-        pressure : float
-            Air pressure at reference height [Pa]
-        rH : float
-            Relative humidity at reference height [%]
         roughness : float
             Surface roughness [m]
         """
@@ -237,6 +229,8 @@ class energyBalance():
         ----------
         days_since_snowfall : int
             Number of days since fresh snow occurred
+        layertype : np.ndarray
+            List of layer types to determine surface roughness
         """
         roughness_fresh_snow = 0.24                     # surface roughness length for fresh snow [mm] (Moelg et al. 2012, TC)
         roughness_ice = 1.7                             # surface roughness length for ice [mm] (Moelg et al. 2012, TC)
@@ -267,11 +261,13 @@ class energyBalance():
             shortwave radiation, and total cloud cover.
         time : datetime
             Timestamp to interpolate the climate variable.
+        varname : str
+            Variable name of variable in climateds
         bin_idx : int, default = -1
             Index number of the bin being run. Unspecified for running a variable that is elevation-independent.
         """
-        climate_before = climateds.sel(time=time.floor('H'))
-        climate_after = climateds.sel(time=time.ceil('H'))
+        climate_before = self.climateds.sel(time=time.floor('H'))
+        climate_after = self.climateds.sel(time=time.ceil('H'))
         if bin_idx == -1:
             before = climate_before[varname].to_numpy()
             after = climate_after[varname].to_numpy()

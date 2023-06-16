@@ -40,7 +40,7 @@ logging_level = 'DEBUG' # DEBUG, INFO, WARNING, ERROR, WORKFLOW, CRITICAL (recom
 #%% ===== CLIMATE DATA ===== 
 # Dates
 startdate = pd.to_datetime('1980-01-01 00:00')
-enddate = pd.to_datetime('1981-01-01 00:00')
+enddate = pd.to_datetime('1982-01-01 00:00')
 option_leapyear = 0 # 0 to exclude leap years
 # Reference period runs (runs up to present)
 ref_gcm_name = 'ERA5-hourly'        # reference climate dataset
@@ -75,7 +75,7 @@ initDensity_fp = main_directory + '/../data/init_density.csv'
 
 # Simulation options
 dt = 3600
-dt_heateq = 3600/6         # Time resolution of heat eq [s], should be integer multiple of 3600s so data can be stored on the hour
+dt_heateq = 3600/5         # Time resolution of heat eq [s], should be integer multiple of 3600s so data can be stored on the hour
 method_turbulent = 'MO-similarity'  # 'MO-similarity' or *****
 # option_SW
 # option_LW
@@ -91,7 +91,7 @@ BC_freshsnow = 1e6          # concentration of BC in fresh snow. Only used if sw
 dust_freshsnow = 1e6        # concentration of dust in fresh snow. Only used if switch_LAPs is not 2
 
 # Output
-store_data = False           # store data, true or false
+store_data = False          # store data, true or false
 storage_freq = 'H'          # frequency to store data using pandas offset aliases
 vars_to_store = 'all'       # list of variables to store
 
@@ -100,7 +100,7 @@ precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [K m-1]
 lapserate_dew = -0.002      # dew point temperature lapse rate [K m-1]
 tsnow_threshold = 1         # Threshold to consider freezing
-kp = 5                      # precipitation factor [-] 
+kp = 8                      # precipitation factor [-] 
 temp_temp = 0               # temperature of temperate ice in Celsius
 
 #%% MODEL PROPERTIES
@@ -126,7 +126,7 @@ density_std = 1.225         # air density at sea level [kg m^-3]
 albedo_fresh_snow = 0.85    # albedo of fresh snow [-] (Moelg et al. 2012, TC)
 albedo_firn = 0.55          # albedo of firn [-] (Moelg et al. 2012, TC)
 albedo_ice = 0.3            # albedo of ice [-] (Moelg et al. 2012, TC)
-viscosity_snow = 0.05  
+viscosity_snow = 0.5  
 dz_toplayer = 0.05          # thickness of the uppermost bin [m]
 layer_growth = 0.4          # rate of exponential growth of bin size (smaller layer growth = more layers) recommend 0.2-.6
 sigma_SB = 5.67037e-8       # Stefan-Boltzmann constant [W m-2 K-4]

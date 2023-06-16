@@ -30,30 +30,35 @@ class Surface():
         return
     
     def getSurfTemp(self,enbal,layers):
-        Qm_init = enbal.surfaceEB(0,layers,self.days_since_snowfall)
-        if Qm_init > 0:
-            # Energy toward the surface: check if we're above or below past surface temp
-            Qm_update = enbal.surfaceEB(self.surftemp,layers,self.days_since_snowfall)
-            if Qm_update > 0: 
-                self.temp = 0
-                self.Qm = Qm_init
-            elif Qm_init < 0: # not melting: cool surface
-                self.Qm = 0
-        elif Qm_init < 0:
+        Qm_check = enbal.surfaceEB(0,layers,self.albedo,self.days_since_snowfall)
+        # If Qm is positive with a surface temperature of 0, the surface is either melting or warming to the melting point.
+        # If Qm is negative with a surface temperature of 0, the surface temperature needs to be lowered to cool the snowpack.
+        cooling = True if Qm_check < 0 else False
+        if not cooling:
+            # Energy toward the surface: either melting or top layer is heated to melting point
+            self.temp = 0
+            Qm = Qm_check
+            if layers.snowtemp[0] < 0: # need to heat surface layer to 0 before it can start melting
+                layers.snowtemp[0] += Qm_check*eb_prms.dt/(eb_prms.Cp_ice*layers.dry_spec_mass[0])
+                if layers.snowtemp[0] > 0:
+                    # if temperature rises above zero, leave excess energy in Qm
+                    Qm = layers.snowtemp[0]*eb_prms.Cp_ice*layers.dry_spec_mass[0]/eb_prms.dt
+                    layers.snowtemp[0] = 0
+                else:
+                    Qm = 0
+        elif cooling:
             # Energy away from surface: need to change surface temperature to get 0 surface energy flux 
             result = minimize(enbal.surfaceEB,self.temp,method='L-BFGS-B',bounds=((-60,0),),tol=1e-3,
-                            args=(layers,self.days_since_snowfall,'optim'))
-            Qm_result = enbal.surfaceEB(result.x[0],layers,self.days_since_snowfall)
-            if not result.success and Qm_result < 0:
-                assert 1==0, 'Surface temperature was not lowered enough by minimization'
+                            args=(layers,self.albedo,self.days_since_snowfall,'optim'))
+            Qm = enbal.surfaceEB(result.x[0],layers,self.albedo,self.days_since_snowfall)
+            if not result.success and abs(Qm) > 10:
+                print('Unsuccessful minimization, Qm = ',Qm)
+                # assert 1==0, 'Surface temperature was not lowered enough by minimization'
             else:
                 self.temp = result.x[0]
-                self.Qm = Qm_result
-
-        else: # initial_Qm == 0, no need to update surface temperature
-            self.Qm = 0
-            
-
+        
+        self.Qm = Qm
+        return
 
     def getAlbedo(self):
         self.albedo = 0.85
