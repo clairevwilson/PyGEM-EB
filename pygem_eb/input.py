@@ -3,11 +3,13 @@ import os
 # External libraries
 import numpy as np
 import pandas as pd
+import xarray as xr
+import pygem.oggm_compat as oggm
 
-debug = True
+debug = False
 #%% ===== MODEL SETUP DIRECTORY =====
 main_directory = os.getcwd()
-# Output directory
+# Set up output idrectory and name for file
 output_filepath = main_directory + '/../Output/'
 output_sim_fp = output_filepath + 'simulations/'
 model_run_date = str(pd.Timestamp.today()).replace('-','_')[0:10]
@@ -16,6 +18,9 @@ while os.path.exists(output_name+'.nc'):
     file_number = int(output_name[-1]) + 1
     output_name = output_name[:-1] + str(file_number)
 
+#%% MODEL OPTIONS
+n_bins = 6
+parallel = True
 
 #%% ===== GLACIER SELECTION =====
 rgi_regionsO1 = [1]                 # 1st order region number (RGI V6.0)
@@ -28,6 +33,13 @@ rgi_regionsO2 = [2]                 # 2nd order region number (RGI V6.0)
 rgi_glac_number = 'all'
 glac_no = ['01.00570']
 
+# Set up bins
+gdir = oggm.single_flowline_glacier_directory(glac_no[0], logging_level='CRITICAL')
+fls = oggm.get_glacier_zwh(gdir)
+fls = fls.iloc[np.nonzero(fls['h'].to_numpy())] #filter out zero bins to get only initial glacier volume
+bin_indices = np.linspace(len(fls.index)-1,0,n_bins,dtype=int)
+bin_elev = fls.iloc[bin_indices]['z'].to_numpy()
+
 # Types of glaciers to include (True) or exclude (False)
 include_landterm = True                # Switch to include land-terminating glaciers
 include_laketerm = True                # Switch to include lake-terminating glaciers
@@ -39,8 +51,8 @@ logging_level = 'DEBUG' # DEBUG, INFO, WARNING, ERROR, WORKFLOW, CRITICAL (recom
 
 #%% ===== CLIMATE DATA ===== 
 # Dates
-startdate = pd.to_datetime('1980-01-01 00:00')
-enddate = pd.to_datetime('1985-01-01 00:00')
+startdate = pd.to_datetime('1980-04-01 00:00')
+enddate = pd.to_datetime('1986-04-01 00:00')
 option_leapyear = 0 # 0 to exclude leap years
 # Reference period runs (runs up to present)
 ref_gcm_name = 'ERA5-hourly'        # reference climate dataset
@@ -59,18 +71,12 @@ gcm_spinupyears = 0             # spin up years for simulation (output not set u
 # if gcm_spinupyears > 0:
 #     assert 0==1, 'Code needs to be tested to enure spinup years are correctly accounted for in output files'
 
-#%% MODEL OPTIONS
-n_bins = 3
-melt_counter = 0
-split_counter = 0
-merge_counter = 0
-
 # Initialization
 option_initWater = 'zero_w0'            # 'zero_w0' or 'initial_w0'
 option_initTemp = 'piecewise'           # 'piecewise' or 'interp'
 option_initDensity = 'piecewise'        # 'piecewise' or 'interp'
-initTemp_fp = main_directory + '/../data/init_temp.csv'
-initDensity_fp = main_directory + '/../data/init_density.csv'
+startssn = 'endaccum'                   # 'endaccum' or 'endmelt' -- sample data provided for Gulkana
+init_filepath = main_directory + '/pygem_eb/sample_init_data/startssn_initialTp.nc'.replace('startssn',startssn)
 # option_start_season = 'acc_end'         # 'acc_end' (end of accumulation), 'abl_end' (end of ablation) or 'other'
 
 # Simulation options
@@ -103,7 +109,6 @@ lapserate_dew = -0.002      # dew point temperature lapse rate [K m-1]
 tsnow_threshold = 1         # Threshold to consider freezing
 kp = 8                      # precipitation factor [-] 
 temp_temp = 0               # temperature of temperate ice in Celsius
-
 #%% MODEL PROPERTIES
 density_ice = 900           # Density of ice [kg m-3] (or Gt / 1000 km3)
 density_firn = 700          # Density threshold for firn
@@ -129,7 +134,17 @@ albedo_firn = 0.55          # albedo of firn [-] (Moelg et al. 2012, TC)
 albedo_ice = 0.3            # albedo of ice [-] (Moelg et al. 2012, TC)
 viscosity_snow = 1          # viscosity of snow Pa-s  
 dz_toplayer = 0.05          # thickness of the uppermost bin [m]
-layer_growth = 0.4          # rate of exponential growth of bin size (smaller layer growth = more layers) recommend 0.2-.6
+layer_growth = 0.6          # rate of exponential growth of bin size (smaller layer growth = more layers) recommend 0.2-.6
 sigma_SB = 5.67037e-8       # Stefan-Boltzmann constant [W m-2 K-4]
 max_nlayers = 20            # maximum number of vertical layers allowed
 max_dz = 1  # max layer height
+
+def get_uptime():
+    with open('/proc/uptime', 'r') as f:
+        uptime_seconds = float(f.readline().split()[0])
+
+    return uptime_seconds
+
+def interpzh(fls,n_bins,bin_elev):
+    print(fls['h'][0],fls['h'][np.where(fls['z']==np.median(fls['z']))[0]],fls['h'][len(fls.index)-1])
+    print(fls['h'])

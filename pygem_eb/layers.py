@@ -1,26 +1,32 @@
 import numpy as np
 import pandas as pd
+import xarray as xr
 import pygem_eb.input as eb_prms
 
 class Layers():
     """
     Scheme for the multi-layer snowpack model.
     """
-    def __init__(self,snow_temp,snow_density,sfi_h0,bin_no):
+    def __init__(self,bin_no):
         """
         Initialize the temperature, density and water content profile of the vertical layers.
 
         Parameters
         ----------
-        snow_temp : np.ndarray
-            Array containing the initial snow temperatures in Celsius at associated depths.
-        snow_density : np.ndarray
-            Array containing the initial snow density in kg m**-3 at associated depths.
-        sfi_h0 : np.ndarray
-            Array containing the initial snow, firn, and ice thicknesses [m]
         bin_no : int
             Bin number
         """
+        filepath = eb_prms.init_filepath
+        Tpds = xr.open_dataset(filepath)
+        layerdepth = Tpds.coords['layer_depth'].values
+        initialtemp = Tpds['snow_temp'].to_numpy()
+        initialdensity = Tpds['snow_density'].to_numpy()
+        snow_temp = [[layerdepth[i],initialtemp[i]] for i in range(len(initialtemp))]
+        snow_density = [[layerdepth[i],initialdensity[i]] for i in range(len(initialdensity))]
+        Tpds_interp = Tpds.interp(bin_elev=eb_prms.bin_elev[bin_no])
+        vars = ['snow_depth','firn_depth','ice_depth']
+        sfi_h0 = np.array([Tpds_interp[var].values for var in vars])
+
         # Calculate the layer depths based on initial snow, firn and ice depths
         heights,depths,types = self.getLayers(sfi_h0)
         self.nlayers = len(heights)
@@ -135,10 +141,13 @@ class Layers():
             layerh[-1] = layerh[-1] - (total_depth-sfi_h0[0])
         
             # Add firn layers
-            if sfi_h0[1] > 0:
-                n_firn_layers = round(sfi_h0[1],0)
+            if sfi_h0[1] > 0.75:
+                n_firn_layers = int(round(sfi_h0[1],0))
                 layerh.extend([sfi_h0[1]/n_firn_layers]*n_firn_layers)
                 layertype.extend(['firn']*n_firn_layers)
+            elif sfi_h0[1] > 0:
+                layerh.extend([sfi_h0[1]])
+                layertype.extend(['firn'])
         # Case where there is no snow, but there is firn*****
         elif sfi_h0[1] > 0:
             # Add firn layers that are approximately 0.2m deep
@@ -183,6 +192,7 @@ class Layers():
                 np.insert(snow_var,0,[0,100],axis=0)
 
         #calculate slopes and intercepts for the piecewise function
+        snow_var = np.array(snow_var)
         slopes = [(snow_var[i,1]-snow_var[i+1,1])/(snow_var[i,0]-snow_var[i+1,0]) for i in range(3)]
         intercepts = [snow_var[i+1,1] - slopes[i]*snow_var[i+1,0] for i in range(3)]
 
@@ -221,7 +231,6 @@ class Layers():
         layer_to_remove : int
             index of layer to remove
         """
-        eb_prms.melt_counter += 1
         self.nlayers -= 1
         self.snowtemp = np.delete(self.snowtemp,layer_to_remove)
         self.watercont = np.delete(self.watercont,layer_to_remove)
@@ -236,7 +245,6 @@ class Layers():
         Splits a single layer into two layers with half the height, mass, and water content.
         """
         if (self.nlayers+1) < eb_prms.max_nlayers:
-            eb_prms.split_counter += 1
             l = layer_to_split
             self.nlayers += 1
             self.snowtemp = np.insert(self.snowtemp,l,self.snowtemp[l])
@@ -257,7 +265,6 @@ class Layers():
         Layers merged will be the index passed and the layer below it
         """
         l = layer_to_merge
-        eb_prms.merge_counter += 1
         self.snowdens[l+1] = np.sum(self.snowdens[l:l+2]*self.dry_spec_mass[l:l+2])/np.sum(self.dry_spec_mass[l:l+2])
         self.watercont[l+1] = np.sum(self.watercont[l:l+2])
         self.snowtemp[l+1] = np.mean(self.snowtemp[l:l+2])

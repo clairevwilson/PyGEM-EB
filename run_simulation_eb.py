@@ -2,9 +2,9 @@
 import numpy as np
 import xarray as xr
 import pandas as pd
+from multiprocessing import Pool
 # Internal libraries
 import pygem_eb.input as eb_prms
-import pygem.oggm_compat as oggm
 import pygem.pygem_modelsetup as modelsetup
 import class_climate
 import pygem_eb.massbalance as mb
@@ -16,6 +16,7 @@ glacier_table = modelsetup.selectglaciersrgitable(eb_prms.glac_no,
                 rgi_regionsO1=eb_prms.rgi_regionsO1, rgi_regionsO2=eb_prms.rgi_regionsO2,
                 rgi_glac_number=eb_prms.rgi_glac_number, include_landterm=eb_prms.include_landterm,
                 include_laketerm=eb_prms.include_laketerm, include_tidewater=eb_prms.include_tidewater)
+
 dates_table = pd.DataFrame({'date' : pd.date_range(eb_prms.startdate,eb_prms.enddate,freq='h')})
 # Extract attributes for dates_table
 dates_table['year'] = dates_table['date'].dt.year
@@ -46,25 +47,6 @@ for step in range(dates_table.shape[0]):
     if dates_table.loc[step,'month'] >= 10:
         dates_table.loc[step,'wateryear'] = dates_table.loc[step,'year'] + 1
 
-# ===== BEGIN TRIAL-ERA GULKANA SETUP =====
-# READ GULKANA ELEVATIONS FROM OGGM GDIRS
-#this step is specific to the EB for three points on Gulkana
-#to generalize, need a variable geometry containing zwh for the points for the EB
-gdir = oggm.single_flowline_glacier_directory(eb_prms.glac_no[0], logging_level='CRITICAL')
-fls = oggm.get_glacier_zwh(gdir)
-fls = fls.iloc[np.nonzero(fls['h'].to_numpy())] #filter out zero bins to get only initial glacier volume
-z_stats = np.array([np.min(fls['z']),np.median(fls['z']),np.max(fls['z'])])
-
-#setup three points at minimum, median and maximum elevation band from OGGM
-median_index = np.where(fls['z']==z_stats[1])[0][0]
-w_stats = np.array([fls['w'][len(fls)-1],fls['w'][median_index],fls['w'][0]])
-h_stats = np.array([fls['h'][len(fls)-1],fls['h'][median_index],fls['h'][0]])
-bin_name = ['Bottom','Middle','Top']
-bin_idx = range(len(bin_name))
-geometry = pd.DataFrame({'z':z_stats,'w':w_stats,'h':h_stats,'idx':bin_idx},index=bin_name)
-n_points = len(bin_name)
-# ===== END TRIAL-ERA GULKANA SETUP =====
-
 # ===== LOAD CLIMATE DATA =====
 gcm = class_climate.GCM(name=eb_prms.ref_gcm_name)
 gcm_prec, gcm_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.prec_fn, gcm.prec_vn, glacier_table,dates_table)
@@ -78,25 +60,27 @@ gcm_vwind, gcm_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.vwind_fn, gcm.
 gcm_elev = gcm.importGCMfxnearestneighbor_xarray(gcm.elev_fn, gcm.elev_vn, glacier_table)
 
 # ===== SET UP CLIMATE DATASET =====
+n_bins = eb_prms.n_bins
+bin_idx = np.arange(0,n_bins)
 climateds = xr.Dataset(data_vars = dict(
-    bin_elev = (['bin'],z_stats,{'units':'m'}),
+    bin_elev = (['bin'],eb_prms.bin_elev,{'units':'m'}),
     bin_idx = (['bin'],bin_idx),
     surfrad = (['time'],gcm_surfrad[0],{'units':'J m-2'}),
     tcc = (['time'],gcm_tcc[0],{'units':'0-1'}),
     uwind = (['time'],gcm_uwind[0],{'units':'m s-1'}),
     vwind = (['time'],gcm_vwind[0],{'units':'m s-1'})),
     coords=dict(
-        bin=(['bin'],bin_name),
+        bin=(['bin'],bin_idx),
         time=(['time'],gcm_hours)
         ))
 
 #initialize variables to be adjusted
-temp_adj = np.zeros((n_points,len(gcm_hours)))
-tp_adj = np.zeros((n_points,len(gcm_hours)))
-sp_adj = np.zeros((n_points,len(gcm_hours)))
-rh_adj = np.zeros((n_points,len(gcm_hours)))
-density_adj = np.zeros((n_points,len(gcm_hours)))
-dtemp_adj = np.zeros((n_points,len(gcm_hours)))
+temp_adj = np.zeros((n_bins,len(gcm_hours)))
+tp_adj = np.zeros((n_bins,len(gcm_hours)))
+sp_adj = np.zeros((n_bins,len(gcm_hours)))
+rh_adj = np.zeros((n_bins,len(gcm_hours)))
+density_adj = np.zeros((n_bins,len(gcm_hours)))
+dtemp_adj = np.zeros((n_bins,len(gcm_hours)))
 
 # define function to calculate vapor pressure (needed for RH)
 e_func = lambda T_C: 610.94*np.exp(17.625*T_C/(T_C+243.04))  #vapor pressure in Pa, T in Celsius
@@ -118,12 +102,9 @@ climateds = climateds.assign(bin_sp = (['bin','time'],sp_adj,{'units':'Pa'}))
 climateds = climateds.assign(bin_rh = (['bin','time'],rh_adj,{'units':'%'}))
 climateds = climateds.assign(bin_density = (['bin','time'],density_adj,{'units':'kg m-3'}))
 print('!! Using constant (not calibrated) kp and lapserate')
-
 # Read in data for initial temperatures and densities
 # temp_prof = pd.read_csv(eb_prms.initTemp_fp).to_numpy()[:,1:]
 # density_prof = pd.read_csv(eb_prms.initDensity_fp).to_numpy()[:,1:]
-
-#print(climateds.sel(time=gcm_hours[0])['bin_temp'])
 
 # Set up files for storage
 if eb_prms.store_data:
@@ -138,8 +119,8 @@ if eb_prms.store_data:
             sensible = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
             latent = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
             meltenergy = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-            melt = (['time','bin'],zeros[:,:,0],{'units':'kg m-2'}),
-            refreeze = (['time','bin'],zeros[:,:,0],{'units':'kg m-2'}),
+            melt = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
+            refreeze = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
             runoff = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
             accum = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
             airtemp = (['time','bin'],zeros[:,:,0],{'units':'C'}),
@@ -152,26 +133,24 @@ if eb_prms.store_data:
             ),
             coords=dict(
                 time=(['time'],time_to_store),
-                bin = (['bin'],np.arange(eb_prms.n_bins)),
+                bin = (['bin'],bin_idx),
                 layer=(['layer'],np.arange(eb_prms.max_nlayers))
                 ))
     all_variables.to_netcdf(eb_prms.output_name+'.nc')
 
 # ===== RUN ENERGY BALANCE =====
 #loop through bins here so EB script is set up for only one bin (1D data)
-for bin in np.arange(eb_prms.n_bins):
-    # initialize variables to store from mass balance
-    massbal = mb.massBalance(bin)
-    # check runtime of main function
-    results = massbal.main(climateds)
-    print('Number of melted layers:',eb_prms.melt_counter)
-    print('Number of split layers:',eb_prms.split_counter)
-    print('Number of merged layers:',eb_prms.merge_counter)
-    eb_prms.melt_counter = 0
-    eb_prms.split_counter = 0
-    eb_prms.merge_counter = 0
-
-    if eb_prms.store_data:
-        massbal.storeVars(bin)
-
-    print('Success: moving onto bin',bin+1)
+if eb_prms.parallel:
+    def run_mass_balance(bin):
+        massbal = mb.massBalance(bin,climateds)
+        massbal.main(climateds)
+    processes_pool = Pool(eb_prms.n_bins)
+    processes_pool.map(run_mass_balance,range(eb_prms.n_bins))
+else:
+    for bin in np.arange(eb_prms.n_bins):
+        # initialize variables to store from mass balance
+        massbal = mb.massBalance(bin)
+        results = massbal.main(climateds)
+        
+        if bin<eb_prms.n_bins:
+            print('Success: moving onto bin',bin+1)

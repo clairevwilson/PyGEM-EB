@@ -11,22 +11,18 @@ class massBalance():
     Mass balance scheme which calculates layer and bin mass balance from melt, refreeze and accumulation.
     Contains main() function which executes the core of the model
     """
-    def __init__(self,bin_idx):
+    def __init__(self,bin_idx,climateds):
         """
         Initializes the layers and surface classes
         """
-        self.bin_idx = bin_idx
-        temp_prof = np.array([[0,-30],[1,-10],[5,-8],[10,0]])
-        density_prof = np.array([[0,100],[1,300],[3,350],[8,600]])
-        layer_depths = [[0.5,0,20],[4,1,40],[5,2,40]]
-
         # Set up model time (dt is the time loop used for the mass + surface energy balances)
         self.dt = eb_prms.dt
         self.days_since_snowfall = 0
         self.time_list = pd.date_range(eb_prms.startdate,eb_prms.enddate,freq=str(self.dt)+'S')
-        
+        self.bin_idx = bin_idx 
+
         # Initialize layers and surface classes
-        self.layers = eb_layers.Layers(temp_prof,density_prof,layer_depths[bin_idx],bin_idx)
+        self.layers = eb_layers.Layers(bin_idx)
         self.surface = eb_surface.Surface(self.layers,self.time_list)
 
         # Time for storing data in netcdf
@@ -187,12 +183,12 @@ class massBalance():
                     print(f'|    Qm: {melte:.0f} W/m2              Melt: {running_melt:.2f} m w.e.  |')
                     print(f'| Air temp: {enbal.tempC:.3f} C       Accum: {running_accum:.2f} m w.e.   |')
                     print(f'-------------surface temp: {surface.temp:.2f} C-------------')
-                    print(f'             snow height: {np.sum(layers.heights[layers.snow_idx]):.2f} m')
+                    print(f'|             snow height: {snowdepth:.2f} m             |')
                     if layers.nlayers > 3:
-                        print(f'|    {layers.nlayers} layers total, only displaying top few     |')
+                        print(f'|    {layers.nlayers} layers total, only displaying top few  |')
                     for l in range(min(3,layers.nlayers)):
                         print(f'--------------------layer {l}---------------------')
-                        print(f'     T = {layers.snowtemp[l]:.1f} C                 h = {layers.heights[l]:.3f} m     ')
+                        print(f'     T = {layers.snowtemp[l]:.1f} C                 h = {layers.heights[l]:.3f} m ')
                         print(f'                 p = {layers.snowdens[l]:.0f} kg/m3')
                         print(f'Water Mass : {layers.watercont[l]:.2f} kg/m2   Dry Mass : {layers.dry_spec_mass[l]:.2f} kg/m2')
                     print('================================================')
@@ -206,6 +202,8 @@ class massBalance():
                 if time.month == 10:
                     print('Update glacier geometry!')
             timeidx += 1
+        if eb_prms.store_data:
+            self.storeVars(self.bin_idx)
         return
 
     def getSubsurfMelt(self,layers,Snet_surf):
@@ -562,6 +560,7 @@ class massBalance():
             ds['melt'].loc[:,bin] = self.melt_output
             ds['refreeze'].loc[:,bin] = self.refreeze_output
             ds['runoff'].loc[:,bin] = self.runoff_output
+            ds['accum'].loc[:,bin] = self.accum_output
             ds['airtemp'].loc[:,bin] = self.airtemp_output
             ds['surftemp'].loc[:,bin] = self.surftemp_output
             ds['snowtemp'].loc[:,bin,:] = self.snowtemp_output
