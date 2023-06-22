@@ -7,6 +7,7 @@ import pygem.pygem_modelsetup as modelsetup
 import class_climate
 
 def getClimateData():
+    n_bins = eb_prms.n_bins
     # ===== GLACIER AND TIME PERIOD SETUP =====
     glacier_table = modelsetup.selectglaciersrgitable(eb_prms.glac_no,
                     rgi_regionsO1=eb_prms.rgi_regionsO1, rgi_regionsO2=eb_prms.rgi_regionsO2,
@@ -48,9 +49,9 @@ def getClimateData():
     if eb_prms.climate_input in ['GCM']:
         # ===== LOAD CLIMATE DATA =====
         gcm_tp, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.prec_fn, gcm.prec_vn, glacier_table,dates_table)
-        temp, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.temp_fn, gcm.temp_vn, glacier_table,dates_table)
-        dtemp, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.dtemp_fn, gcm.dtemp_vn, glacier_table,dates_table)
-        sp, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.press_fn, gcm.press_vn, glacier_table,dates_table)
+        gcm_temp, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.temp_fn, gcm.temp_vn, glacier_table,dates_table)
+        gcm_dtemp, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.dtemp_fn, gcm.dtemp_vn, glacier_table,dates_table)
+        gcm_sp, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.press_fn, gcm.press_vn, glacier_table,dates_table)
         tcc, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.tcc_fn, gcm.tcc_vn, glacier_table,dates_table)
         SWin, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.surfrad_fn, gcm.surfrad_vn, glacier_table,dates_table) 
         uwind, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.uwind_fn, gcm.uwind_vn, glacier_table,dates_table)                                                      
@@ -58,8 +59,9 @@ def getClimateData():
         gcm_elev = gcm.importGCMfxnearestneighbor_xarray(gcm.elev_fn, gcm.elev_vn, glacier_table)
         wind = np.sqrt(np.power(uwind[0],2)+np.power(vwind[0],2))
         LWin = np.empty(len(data_hours))
-        LWout = np.empty(len(data_hours))
-        SWout = np.empty(len(data_hours))
+        LWin[:] = np.nan
+        LWout = LWin.copy()
+        SWout = LWin.copy()
         SWin = SWin[0]
         tcc = tcc[0]
 
@@ -73,11 +75,11 @@ def getClimateData():
         # define function to calculate vapor pressure (needed for RH)
         e_func = lambda T_C: 610.94*np.exp(17.625*T_C/(T_C+243.04))  #vapor pressure in Pa, T in Celsius
         #loop through each elevation bin and adjust climate variables by lapse rate/barometric law
-        for idx,z in enumerate(climateds['bin_elev'].values):
-            temp[idx,:] = temp + eb_prms.lapserate*(z-gcm_elev)
-            dtemp[idx,:] = dtemp + eb_prms.lapserate_dew*(z-gcm_elev) - 273.15
+        for idx,z in enumerate(eb_prms.bin_elev):
+            temp[idx,:] = gcm_temp + eb_prms.lapserate*(z-gcm_elev)
+            dtemp[idx,:] = gcm_dtemp + eb_prms.lapserate_dew*(z-gcm_elev) - 273.15
             tp[idx,:] = gcm_tp*eb_prms.kp*(1+eb_prms.precgrad*(z-gcm_elev))
-            sp[idx,:] = sp*np.power((temp + eb_prms.lapserate*(z-gcm_elev)+273.15)/(temp+273.15),
+            sp[idx,:] = gcm_sp*np.power((gcm_temp + eb_prms.lapserate*(z-gcm_elev)+273.15)/(gcm_temp+273.15),
                                 -eb_prms.gravity*eb_prms.molarmass_air/(eb_prms.R_gas*eb_prms.lapserate))
             rh[idx,:] = e_func(dtemp[idx,:]) / e_func(temp[idx,:]) * 100
     elif eb_prms.climate_input in ['AWS']:
@@ -120,7 +122,6 @@ def getClimateData():
             sp = sp[0]
 
     # ===== SET UP CLIMATE DATASET =====
-    n_bins = eb_prms.n_bins
     bin_idx = np.arange(0,n_bins)
     climateds = xr.Dataset(data_vars = dict(
         bin_elev = (['bin'],eb_prms.bin_elev,{'units':'m'}),
@@ -134,8 +135,9 @@ def getClimateData():
             bin=(['bin'],bin_idx),
             time=(['time'],data_hours)
             ))
-    climateds = climateds.assign(bin_temp = (['bin','time'],[temp],{'units':'C'}))
-    climateds = climateds.assign(bin_tp = (['bin','time'],[tp],{'units':'m'}))
-    climateds = climateds.assign(bin_sp = (['bin','time'],[sp],{'units':'Pa'}))
-    climateds = climateds.assign(bin_rh = (['bin','time'],[rh],{'units':'%'}))
+
+    climateds = climateds.assign(bin_temp = (['bin','time'],temp,{'units':'C'}))
+    climateds = climateds.assign(bin_tp = (['bin','time'],tp,{'units':'m'}))
+    climateds = climateds.assign(bin_sp = (['bin','time'],sp,{'units':'Pa'}))
+    climateds = climateds.assign(bin_rh = (['bin','time'],rh,{'units':'%'}))
     return climateds

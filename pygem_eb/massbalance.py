@@ -123,7 +123,6 @@ class massBalance():
             for layer in layers_to_remove:
                 layers.removeLayer(layer)
             layers.updateLayers()
-            print(surface.Qm,layermelt,layers_to_remove,time)
 
             # Recalculate the temperature profile considering conduction
             if surface.temp != 0. or np.abs(np.sum(layers.snowtemp)) != 0.:

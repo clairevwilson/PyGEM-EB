@@ -19,8 +19,8 @@ while os.path.exists(output_name+'.nc'):
     output_name = output_name[:-1] + str(file_number)
 
 #%% MODEL OPTIONS
-n_bins = 1
-parallel = True
+n_bins = 3
+parallel = False
 
 #%% ===== GLACIER SELECTION =====
 rgi_regionsO1 = [1]                 # 1st order region number (RGI V6.0)
@@ -56,7 +56,7 @@ logging_level = 'DEBUG' # DEBUG, INFO, WARNING, ERROR, WORKFLOW, CRITICAL (recom
 # enddate = pd.to_datetime('2013-09-12 12:15')
 startdate = pd.to_datetime('1980-04-01 00:00')
 enddate = pd.to_datetime('1986-04-01 00:00')
-climate_input = 'AWS'
+climate_input = 'GCM'
 AWS_fn = main_directory + '/../climate_data/AWS/Storglaciaren/SITES_MET_TRS_SGL_dates_15MIN.csv'
 option_leapyear = 0 # 0 to exclude leap years
 # Reference period runs (runs up to present)
@@ -104,7 +104,7 @@ BC_freshsnow = 1e6          # concentration of BC in fresh snow. Only used if sw
 dust_freshsnow = 1e6        # concentration of dust in fresh snow. Only used if switch_LAPs is not 2
 
 # Output
-store_data = False          # store data, true or false
+store_data = True          # store data, true or false
 storage_freq = 'H'          # frequency to store data using pandas offset aliases
 vars_to_store = 'all'       # list of variables to store
 

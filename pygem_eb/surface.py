@@ -66,15 +66,18 @@ class Surface():
                 n_iters = 0
                 while loop:
                     Qm_check = enbal.surfaceEB(self.temp,layers,self.albedo,self.days_since_snowfall)
-                    if Qm_check > 2:
+                    if Qm_check > 0.5:
                         self.temp += 0.25
-                    elif Qm_check < -2:
+                    elif Qm_check < -0.5:
                         self.temp -= 0.25
                     self.temp = max(-60,self.temp)
-                    if self.temp == -70 and abs(Qm_check) > 5:
-                        print(Qm_check)
                     n_iters += 1
-                    if abs(Qm_check) < 2 or n_iters > 10:
+                    if abs(Qm_check) < 0.5 or n_iters > 10:
+                        if self.temp == -60:
+                            result = minimize(enbal.surfaceEB,-50,method='L-BFGS-B',bounds=((-60,0),),tol=1e-3,
+                                args=(layers,self.albedo,self.days_since_snowfall,'optim'))
+                            if result.x > -60:
+                                self.temp = result.x[0]
                         Qm = 0
                         loop = False
         self.Qm = Qm

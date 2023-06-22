@@ -55,7 +55,7 @@ if eb_prms.parallel:
 else:
     for bin in np.arange(eb_prms.n_bins):
         # initialize variables to store from mass balance
-        massbal = mb.massBalance(bin)
+        massbal = mb.massBalance(bin,climateds)
         results = massbal.main(climateds)
         
         if bin<eb_prms.n_bins:
