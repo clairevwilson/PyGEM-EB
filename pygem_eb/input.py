@@ -6,7 +6,7 @@ import pandas as pd
 import xarray as xr
 import pygem.oggm_compat as oggm
 
-debug = False
+debug = True
 #%% ===== MODEL SETUP DIRECTORY =====
 main_directory = os.getcwd()
 # Set up output idrectory and name for file
@@ -19,7 +19,7 @@ while os.path.exists(output_name+'.nc'):
     output_name = output_name[:-1] + str(file_number)
 
 #%% MODEL OPTIONS
-n_bins = 6
+n_bins = 1
 parallel = True
 
 #%% ===== GLACIER SELECTION =====
@@ -32,6 +32,7 @@ rgi_regionsO2 = [2]                 # 2nd order region number (RGI V6.0)
 #                 (3) use one of the functions from  utils._funcs_selectglaciers
 rgi_glac_number = 'all'
 glac_no = ['01.00570']
+#glac_no = ['08.00213']
 
 # Set up bins
 gdir = oggm.single_flowline_glacier_directory(glac_no[0], logging_level='CRITICAL')
@@ -51,8 +52,12 @@ logging_level = 'DEBUG' # DEBUG, INFO, WARNING, ERROR, WORKFLOW, CRITICAL (recom
 
 #%% ===== CLIMATE DATA ===== 
 # Dates
+# startdate = pd.to_datetime('2013-04-17 16:00')
+# enddate = pd.to_datetime('2013-09-12 12:15')
 startdate = pd.to_datetime('1980-04-01 00:00')
 enddate = pd.to_datetime('1986-04-01 00:00')
+climate_input = 'AWS'
+AWS_fn = main_directory + '/../climate_data/AWS/Storglaciaren/SITES_MET_TRS_SGL_dates_15MIN.csv'
 option_leapyear = 0 # 0 to exclude leap years
 # Reference period runs (runs up to present)
 ref_gcm_name = 'ERA5-hourly'        # reference climate dataset
@@ -87,6 +92,7 @@ method_turbulent = 'MO-similarity'  # 'MO-similarity' or *****
 # option_LW
 method_heateq = 'what' # 'Crank-Nicholson': neglects penetrating shortwave
 method_densification = 'Boone'
+method_cooling = 'iterative' # 'minimize' (slow) or 'iterative' (hopefully fast?)
 surftemp_guess =  -30   # guess for surface temperature of first timestep
 
 # Albedo switches
@@ -98,7 +104,7 @@ BC_freshsnow = 1e6          # concentration of BC in fresh snow. Only used if sw
 dust_freshsnow = 1e6        # concentration of dust in fresh snow. Only used if switch_LAPs is not 2
 
 # Output
-store_data = True          # store data, true or false
+store_data = False          # store data, true or false
 storage_freq = 'H'          # frequency to store data using pandas offset aliases
 vars_to_store = 'all'       # list of variables to store
 

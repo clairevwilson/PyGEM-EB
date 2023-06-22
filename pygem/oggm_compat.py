@@ -74,7 +74,7 @@ def single_flowline_glacier_directory(rgi_id, reset=pygem_prms.overwrite_gdirs, 
     if not reset:
         try:
             gdir = utils.GlacierDirectory(rgi_id)
-            gdir.read_pickle('inversion_flowlines')
+            gdir.read_pickle('model_flowlines')
             # If the above works the directory is already processed, return
             return gdir
         except:

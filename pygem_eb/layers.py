@@ -23,7 +23,7 @@ class Layers():
         initialdensity = Tpds['snow_density'].to_numpy()
         snow_temp = [[layerdepth[i],initialtemp[i]] for i in range(len(initialtemp))]
         snow_density = [[layerdepth[i],initialdensity[i]] for i in range(len(initialdensity))]
-        Tpds_interp = Tpds.interp(bin_elev=eb_prms.bin_elev[bin_no])
+        Tpds_interp = Tpds.interp(bin_elev=eb_prms.bin_elev[bin_no],kwargs={'fill_value':'extrapolate'})
         vars = ['snow_depth','firn_depth','ice_depth']
         sfi_h0 = np.array([Tpds_interp[var].values for var in vars])
 
@@ -172,7 +172,7 @@ class Layers():
         Parameters
         ----------
         layerz : np.ndarray
-            Bottom depth of the layers to be filled.
+            Middles depth of the layers to be filled.
         snow_var : np.ndarray
             Turning point snow temperatures or densities and the associated depths in pairs 
             by (depth,temp/density value). If a surface value (z=0) is not prescribed, temperature 
@@ -199,7 +199,7 @@ class Layers():
         #solve piecewise functions at each layer depth
         layer_var = np.piecewise(layerz,
                      [layerz <= snow_var[1,0], (layerz <= snow_var[2,0]) & (layerz > snow_var[1,0]),
-                      (layerz <= snow_var[3,0]) & (layerz > snow_var[2,0])],
+                      (layerz > snow_var[2,0])],
                       [lambda x: slopes[0]*x+intercepts[0],lambda x:slopes[1]*x+intercepts[1],
                        lambda x: slopes[2]*x+intercepts[2]])
         return layer_var
@@ -354,7 +354,10 @@ class Layers():
             density = self.dry_spec_mass / self.heights
         density = density.astype(float)
         density_ice = eb_prms.density_ice
-        ice_idx = np.where(self.types=='ice')[0][0]
+        try:
+            ice_idx = np.where(self.types=='ice')[0][0]
+        except:
+            print(self.types)
         porosity = (density_ice - density[:ice_idx])/density_ice
         irrwatercont = 0.0143*np.exp(3.3*porosity)
         irrwatersat = irrwatercont*density[:ice_idx]/porosity # kg m-3, mass of liquid over pore volume

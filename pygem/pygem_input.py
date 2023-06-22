@@ -29,8 +29,8 @@ rgi_glac_number = 'all'
 
 glac_no_skip = None
 #glac_no = None
-#glac_no = ['01.00704']
-glac_no = ['01.00570']
+#glac_no = ['01.00570']
+glac_no = ['08.00213']
 
 if glac_no is not None:
     rgi_regionsO1 = sorted(list(set([int(x.split('.')[0]) for x in glac_no])))

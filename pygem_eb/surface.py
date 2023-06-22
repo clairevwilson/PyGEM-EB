@@ -52,15 +52,31 @@ class Surface():
                     Qm = 0
         elif cooling:
             # Energy away from surface: need to change surface temperature to get 0 surface energy flux 
-            result = minimize(enbal.surfaceEB,self.temp,method='L-BFGS-B',bounds=((-60,0),),tol=1e-3,
-                            args=(layers,self.albedo,self.days_since_snowfall,'optim'))
-            Qm = enbal.surfaceEB(result.x[0],layers,self.albedo,self.days_since_snowfall)
-            if not result.success and abs(Qm) > 10:
-                print('Unsuccessful minimization, Qm = ',Qm)
-                # assert 1==0, 'Surface temperature was not lowered enough by minimization'
-            else:
-                self.temp = result.x[0]
-        
+            if eb_prms.method_cooling in ['minimize']:
+                result = minimize(enbal.surfaceEB,self.temp,method='L-BFGS-B',bounds=((-60,0),),tol=1e-3,
+                                args=(layers,self.albedo,self.days_since_snowfall,'optim'))
+                Qm = enbal.surfaceEB(result.x[0],layers,self.albedo,self.days_since_snowfall)
+                if not result.success and abs(Qm) > 10:
+                    print('Unsuccessful minimization, Qm = ',Qm)
+                    # assert 1==0, 'Surface temperature was not lowered enough by minimization'
+                else:
+                    self.temp = result.x[0]
+            elif eb_prms.method_cooling in ['iterative']:
+                loop = True
+                n_iters = 0
+                while loop:
+                    Qm_check = enbal.surfaceEB(self.temp,layers,self.albedo,self.days_since_snowfall)
+                    if Qm_check > 2:
+                        self.temp += 0.25
+                    elif Qm_check < -2:
+                        self.temp -= 0.25
+                    self.temp = max(-60,self.temp)
+                    if self.temp == -70 and abs(Qm_check) > 5:
+                        print(Qm_check)
+                    n_iters += 1
+                    if abs(Qm_check) < 2 or n_iters > 10:
+                        Qm = 0
+                        loop = False
         self.Qm = Qm
         return
 

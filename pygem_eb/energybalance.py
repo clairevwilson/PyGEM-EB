@@ -15,7 +15,7 @@ class energyBalance():
         Parameters
         ----------
         climateds : xr.Dataset
-            Climate dataset containing temperature, precipitation, pressure, air density, wind speed,
+            Climate dataset containing temperature, precipitation, pressure, wind speed,
             shortwave radiation, and total cloud cover.
         time : datetime
             Time to index the climate dataset.
@@ -32,28 +32,29 @@ class energyBalance():
             self.tempC = climateds_now['bin_temp'].to_numpy()[bin_idx]
             self.tp = climateds_now['bin_tp'].to_numpy()[bin_idx]
             self.sp = climateds_now['bin_sp'].to_numpy()[bin_idx]
-            self.density = climateds_now['bin_density'].to_numpy()[bin_idx]
             self.rH = climateds_now['bin_rh'].to_numpy()[bin_idx]
             # Elevation-invariant variables
-            self.uwind = climateds_now['uwind'].to_numpy()
-            self.vwind = climateds_now['vwind'].to_numpy()
+            self.wind = climateds_now['wind'].to_numpy()
             self.tcc = climateds_now['tcc'].to_numpy()
-            self.surfrad = climateds_now['surfrad'].to_numpy()
+            self.SWin = climateds_now['SWin'].to_numpy()
+            self.SWout = climateds_now['SWout'].to_numpy()
+            self.LWin = climateds_now['LWin'].to_numpy()
+            self.LWout = climateds_now['LWout'].to_numpy()
         else:
             # Timestep is between hours, so interpolate using interpClimate function
             # Bin-dependent variables indexed by bin_idx
             self.tempC = self.interpClimate(climateds,time,'bin_temp',bin_idx)
             self.tp = self.interpClimate(climateds,time,'bin_tp',bin_idx)
             self.sp = self.interpClimate(climateds,time,'bin_sp',bin_idx)
-            self.density = self.interpClimate(climateds,time,'bin_density',bin_idx)
             self.rH = self.interpClimate(climateds,time,'bin_rh',bin_idx)
             # Elevation-invariant variables
-            self.uwind = self.interpClimate(climateds,time,'uwind')
-            self.vwind = self.interpClimate(climateds,time,'vwind')
+            self.wind = self.interpClimate(climateds,time,'wind')
             self.tcc = self.interpClimate(climateds,time,'tcc')
-            self.surfrad = self.interpClimate(climateds,time,'surfrad')
+            self.SWin = self.interpClimate(climateds,time,'SWin')
+            self.SWout = self.interpClimate(climateds,time,'SWout')
+            self.LWin = self.interpClimate(climateds,time,'LWin')
+            self.LWout = self.interpClimate(climateds,time,'LWout')
         # Define additional useful values
-        self.wind = (self.uwind**2 + self.vwind**2)**(1/2)
         self.tempK = self.tempC + 273.15
         self.prec =  self.tp / 3600     # tp is hourly total precip, so prec is the rate in m/s
         self.dt = dt
@@ -131,24 +132,34 @@ class energyBalance():
         Returns the shortwave surface flux and the penetrating shortwave with each layer.
         """
         # sun_pos = solar.get_position(time,glacier_table['CenLon'],glacier_table['CenLat'])
-        Sin = self.surfrad/self.dt
-        Sout = -self.surfrad*albedo/self.dt #* (cos(theta))
+        SWin = self.SWin/self.dt
+        if np.isnan(self.SWout):
+            SWout = -self.SWin*albedo/self.dt #* (cos(theta))
+        else:
+            SWout = self.SWout
 
-        return Sin,Sout
+        return SWin,SWout
 
     def getLW(self,surftemp):
         """
         Scheme following Klok and Oerlemans (2002) for calculating net longwave radiation
         from the air temperature and cloud cover.
         """
-        surftempK = surftemp+273.15
-        ezt = self.vapor_pressure(self.tempC)    # vapor pressure in hPa
-        Ecs = .23+ .433*(ezt/self.tempK)**(1/8)  # clear-sky emissivity
-        Ecl = 0.984                         # cloud emissivity, Klok and Oerlemans, 2002
-        Esky = Ecs*(1-self.tcc**2)+Ecl*self.tcc**2    # sky emissivity
-        Lin = eb_prms.sigma_SB*(Esky*self.tempK**4)
-        Lout = -eb_prms.sigma_SB*surftempK**4
-        return Lin,Lout
+        if np.isnan(self.LWout):
+            surftempK = surftemp+273.15
+            LWout = -eb_prms.sigma_SB*surftempK**4
+        else:
+            LWout = self.LWout
+        
+        if np.isnan(self.LWin):
+            ezt = self.vapor_pressure(self.tempC)    # vapor pressure in hPa
+            Ecs = .23+ .433*(ezt/self.tempK)**(1/8)  # clear-sky emissivity
+            Ecl = 0.984                         # cloud emissivity, Klok and Oerlemans, 2002
+            Esky = Ecs*(1-self.tcc**2)+Ecl*self.tcc**2    # sky emissivity
+            LWin = eb_prms.sigma_SB*(Esky*self.tempK**4)
+        else:
+            LWin = self.LWin
+        return LWin,LWout
     
     def getRain(self,surftemp):
         """
@@ -194,9 +205,10 @@ class energyBalance():
             z0t = z0/100    # Roughness length for sensible heat
             z0q = z0/10     # Roughness length for moisture
 
-            # calculate friction velocity using previous heat flux to get Obukhov length (L)
+            # calculate friction velocity uSWing previous heat flux to get Obukhov length (L)
             fric_vel = karman*self.wind/(np.log(z/z0)-PsiM(zeta))
-            L = fric_vel**3*(self.tempC+273.15)*self.density*eb_prms.Cp_air/(karman*eb_prms.gravity*Qs)
+            air_dens = self.sp/eb_prms.R_gas/self.tempK*eb_prms.molarmass_air
+            L = fric_vel**3*(self.tempC+273.15)*air_dens*eb_prms.Cp_air/(karman*eb_prms.gravity*Qs)
             if L<0.3: # DEBAM uses this correction to ensure it isn't over stablizied
                 L = 0.3
             zeta = z/L
@@ -204,7 +216,7 @@ class energyBalance():
             cD = karman**2/(np.log(z/z0)-PsiM(zeta)-PsiM(z0/L))**2
             cH = karman*cD**(1/2)/((np.log(z/z0t)-PsiT(zeta)-PsiT(z0t/L)))
             cE = karman*cD**(1/2)/((np.log(z/z0q)-PsiT(zeta)-PsiT(z0q/L)))
-            Qs = self.density*eb_prms.Cp_air*cH*self.wind*(self.tempC-surf_temp)
+            Qs = air_dens*eb_prms.Cp_air*cH*self.wind*(self.tempC-surf_temp)
 
             Ewz = self.vapor_pressure(self.tempC)  # vapor pressure at 2m
             Ew0 = self.vapor_pressure(surf_temp) # vapor pressure at the surface
@@ -212,7 +224,7 @@ class energyBalance():
             q0 = 1.0*0.622*(Ew0/(self.sp-Ew0))
             # qz = (rH2 * 0.622 * (Ew / (p - Ew))) / 100.0
             # q0 = (100.0 * 0.622 * (Ew0 / (p - Ew0))) / 100.0
-            Ql = self.density*Lv*cE*self.wind*(qz-q0)
+            Ql = air_dens*Lv*cE*self.wind*(qz-q0)
 
             count_iters += 1
             if count_iters > 10 or abs(previous_zeta - zeta) < .1:
@@ -257,7 +269,7 @@ class energyBalance():
         Parameters
         ----------
         climateds : xr.Dataset
-            Climate dataset containing temperature, precipitation, pressure, air density, wind speed,
+            Climate dataset containing temperature, precipitation, pressure, wind speed,
             shortwave radiation, and total cloud cover.
         time : datetime
             Timestamp to interpolate the climate variable.
