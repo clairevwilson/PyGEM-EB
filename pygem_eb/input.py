@@ -19,7 +19,7 @@ while os.path.exists(output_name+'.nc'):
     output_name = output_name[:-1] + str(file_number)
 
 #%% MODEL OPTIONS
-n_bins = 6
+n_bins = 3
 parallel = True
 
 #%% ===== GLACIER SELECTION =====

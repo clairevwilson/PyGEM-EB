@@ -199,7 +199,7 @@ class Layers():
         #solve piecewise functions at each layer depth
         layer_var = np.piecewise(layerz,
                      [layerz <= snow_var[1,0], (layerz <= snow_var[2,0]) & (layerz > snow_var[1,0]),
-                      (layerz <= snow_var[3,0]) & (layerz > snow_var[2,0])],
+                      (layerz > snow_var[2,0])],
                       [lambda x: slopes[0]*x+intercepts[0],lambda x:slopes[1]*x+intercepts[1],
                        lambda x: slopes[2]*x+intercepts[2]])
         return layer_var
