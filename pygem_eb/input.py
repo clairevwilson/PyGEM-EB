@@ -20,7 +20,7 @@ while os.path.exists(output_name+'.nc'):
 
 #%% MODEL OPTIONS
 n_bins = 3
-parallel = False
+parallel = True
 
 #%% ===== GLACIER SELECTION =====
 rgi_regionsO1 = [1]                 # 1st order region number (RGI V6.0)
