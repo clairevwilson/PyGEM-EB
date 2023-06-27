@@ -62,8 +62,7 @@ class energyBalance():
 
     def surfaceEB(self,surftemp,layers,albedo,days_since_snowfall,mode='sum'):
         """
-        Calculates the surface heat fluxes at each point on the glacier and applies mass-balance
-        scheme to calculate melt and refreeze at each time point.
+        Calculates the surface heat fluxes for the current timestep.
 
         Parameters
         ----------

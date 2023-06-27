@@ -53,8 +53,11 @@ class Layers():
             assert 1==0, "Choose between 'piecewise' and 'interp' methods for density initialization"
 
         # Initialize FIRN AND ICE temperature and density
-        # Calculate slope that linearly increases density from the bottom snow bin to the top of the ice layer
-        pslope = (eb_prms.density_ice - snowdens[-1])/(np.sum(sfi_h0[0:2])-depths[snow_idx[-1]])
+        # Calculate firn density slope that linearly increases density from the bottom snow bin to the top of the ice layer
+        if sfi_h0[0] > 0 and sfi_h0[1] > 0:
+            pslope = (eb_prms.density_ice - snowdens[-1])/(np.sum(sfi_h0[0:2])-depths[snow_idx[-1]])
+        else:
+            pslope = (eb_prms.density_ice - eb_prms.density_firn)/(sfi_h0[1])
         for idx,type in enumerate(types):
             if type not in ['snow']:
                 snowtemp = np.append(snowtemp,eb_prms.temp_temp)
@@ -97,7 +100,6 @@ class Layers():
         self.BC = BC
         self.dust = dust
         self.snow_idx = snow_idx
-
         print(self.nlayers,'layers initialized for bin',bin_no)
         return 
     

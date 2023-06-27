@@ -7,6 +7,7 @@ import numpy as np
 import xarray as xr
 # Local libraries
 import pygem.pygem_input as pygem_prms
+import pygem_eb.input as eb_prms
 
 
 class GCM():
@@ -414,6 +415,88 @@ class GCM():
             print('Check units of air temperature or precipitation')
         return glac_variable_series, time_series
     
+class AWS():
+    def __init__(self,glacier_table,dates_table,freq,gcm):
+        self.fp = eb_prms.AWS_fn
+        dates = str(eb_prms.startdate)[0:10].replace('-','')+'-'+str(eb_prms.enddate)[0:10].replace('-','')
+        df = pd.read_csv(eb_prms.AWS_fn.replace('dates',dates)) # ,skiprows = 34 for Storglaciaren
+        vars = df.columns
+
+        data_start = pd.to_datetime(df.local_time[0])
+        data_end = pd.to_datetime(df.local_time.to_numpy()[-1])
+        df = df.set_index(pd.date_range(data_start,data_end,freq=freq))
+        df = df.loc[eb_prms.startdate:eb_prms.enddate]
+        if 'Precip_Stage_Incremental' in vars:
+            df.Precip_Weighing_Incremental.fillna(df.Precip_Stage_Incremental*1.48, inplace=True)
+        if 'Precip_Weighing_Incremental' in vars:
+            df['Precip_Weighing_Incremental'] = df['Precip_Weighing_Incremental'] / 1000
+        df = df.interpolate('time')
+        
+        for var in vars:
+            if var in ['T','t2m','T2','TA_2.0m','site_temp_USGS']:
+                self.temp = np.nan_to_num(df[var].resample('H').mean().to_numpy())
+            elif var in ['P','tp','Precip_Weighing_Incremental']:
+                self.tp = np.nan_to_num(df[var].resample('H').sum().to_numpy())
+            elif var in ['RH','RH_2.0m','RelHum']:
+                self.rh = np.nan_to_num(df[var].resample('H').mean().to_numpy())
+            elif var in ['SW_IN','RadiationIn']:
+                self.SWin = np.nan_to_num(df[var].resample('H').mean().to_numpy())
+            elif var in ['SW_OUT','RadiationOut']:
+                self.SWout = np.nan_to_num(df[var].resample('H').mean().to_numpy())
+            elif var in ['LW_IN']:
+                self.LWin = np.nan_to_num(df[var].resample('H').mean().to_numpy())
+            elif var in ['LW_OUT']:
+                self.LWout = np.nan_to_num(df[var].resample('H').mean().to_numpy())
+            elif var in ['WS','WindSpeed']:
+                self.wind = np.nan_to_num(df[var].resample('H').mean().to_numpy())
+            elif var in ['tcc']:
+                self.tcc = np.nan_to_num(df[var].resample('H').mean().to_numpy())
+            elif var in ['sp']:
+                self.sp = np.nan_to_num(df[var].resample('H').mean().to_numpy())
+
+        try:
+            clouds = self.tcc
+        except:
+            tcc, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.tcc_fn, gcm.tcc_vn, glacier_table,dates_table)
+            self.tcc = tcc[0]
+
+        try:
+            pressure = self.sp
+        except:
+            sp, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.press_fn, gcm.press_vn, glacier_table,dates_table)
+            self.sp = sp[0]
+
+        try:
+            shortwave = self.SWin
+        except:
+            SWin, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.surfrad_fn, gcm.surfrad_vn, glacier_table,dates_table)
+            self.SWin = SWin[0]
+            self.SWout = np.empty(len(data_hours))
+            self.SWout[:] = np.nan
+        
+        try:
+            longwave = self.LWin
+        except:
+            self.LWin = np.empty(len(data_hours))
+            self.LWin[:] = np.nan
+            self.LWout = self.LWin.copy()
+
+        try:
+            relhum = self.rh
+        except:
+            fn = eb_prms.AWS_fn.replace('1725','1480')
+            df = pd.read_csv(fn)
+            data_start = pd.to_datetime(df.local_time[0])
+            data_end = pd.to_datetime(df.local_time.to_numpy()[-1])
+            df = df.set_index(pd.date_range(data_start,data_end,freq=freq))
+            df = df.loc[eb_prms.startdate:eb_prms.enddate]
+            df = df.interpolate('time')
+            self.rh = np.nan_to_num(df['RelHum'].resample('H').mean().to_numpy())
+
+        if eb_prms.glac_no == ['01.00570']:
+            self.elev = 1725
+        return
+        
 
 #%% Testing
 if __name__ == '__main__':

@@ -9,11 +9,18 @@ import pygem_eb.surface as eb_surface
 class massBalance():
     """
     Mass balance scheme which calculates layer and bin mass balance from melt, refreeze and accumulation.
-    Contains main() function which executes the core of the model
+    Contains main() function which executes the core of the model.
     """
     def __init__(self,bin_idx,climateds):
         """
-        Initializes the layers and surface classes
+        Initializes the layers and surface classes.
+
+        Parameters
+        ----------
+        bin_idx : int
+            Index value of the elevation bin
+        climateds : xr.Dataset
+            Dataset containing elevation-adjusted climate data
         """
         # Set up model time (dt is the time loop used for the mass + surface energy balances)
         self.dt = eb_prms.dt
@@ -52,20 +59,14 @@ class massBalance():
     
     def main(self,climateds):
         """
-        Runs the time loop and mass balance scheme to solve layer temperature
-        and density profiles. 
+        Runs the time loop and mass balance scheme to solve for melt, refreeze, accumulation and runoff.
 
         Parameters
         ----------
         climateds : xr.Dataset
-            Climate dataset containing temperature, precipitation, pressure, air density, wind speed,
-            shortwave radiation, and total cloud cover.
-        bin_idx : int
-            Index number of the bin being run.
+            Dataset containing elevation-adjusted climate data
         """
-        # # STUPID STUPID STUPID******
-        # good = xr.open_dataset('/home/claire/research/Output/EB/run_2023_06_07_hourly_3yrs.nc').isel(bin=0)
-        # surftemps = good['surftemp'].to_numpy()
+        # Get layers and surface classes
         layers = self.layers
         surface = self.surface
 
@@ -119,7 +120,7 @@ class massBalance():
             # Percolate the meltwater and any liquid precipitation
             runoff,layers_to_remove = self.percolate(layers,layermelt,rain)
 
-            # Remove layers that were completely melted and update layer heights
+            # Remove layers that were completely melted and merge/split layers as needed
             for layer in layers_to_remove:
                 layers.removeLayer(layer)
             layers.updateLayers()
@@ -141,6 +142,7 @@ class massBalance():
             running_melt += np.sum(layermelt) / eb_prms.density_water
             running_refreeze += refreeze
             running_accum += snowfall / eb_prms.density_water
+            # print('melt,accum',np.sum(layermelt),snowfall)
 
             # Store data
             if time in self.time_to_store:
@@ -244,10 +246,10 @@ class massBalance():
         layermelt = np.zeros(layers.nlayers)
         for layer,new_T in enumerate(new_Tprofile):
             # check if temperature is above 0
-            if new_T > 0:
+            if new_T > 0.:
                 # calculate melt from the energy that raised the temperature above 0
-                melt = (new_T-0)*layers.dry_spec_mass[layer]*eb_prms.Cp_ice/eb_prms.Lh_rf
-                layers.snowtemp[layer] = 0
+                melt = (new_T-0.)*layers.dry_spec_mass[layer]*eb_prms.Cp_ice/eb_prms.Lh_rf
+                layers.snowtemp[layer] = 0.
             else:
                 melt = 0
                 layers.snowtemp[layer] = new_T
@@ -373,7 +375,7 @@ class massBalance():
         Lh_rf = eb_prms.Lh_rf
         refreeze = 0
         for layer, T in enumerate(layers.snowtemp):
-            if T < 0 and layers.watercont[layer] > 0:
+            if T < 0. and layers.watercont[layer] > 0:
                 # calculate potential for refreeze [J m-2]
                 E_temperature = np.abs(T)*layers.dry_spec_mass[layer]*Cp_ice  # cold content available 
                 E_water = layers.watercont[layer]*Lh_rf  # amount of water to freeze
@@ -427,10 +429,10 @@ class massBalance():
             # Loop through layers
             for layer,height in enumerate(layers.heights[snowfirn_idx]):
                 weight_above = eb_prms.gravity*np.sum(layers.dry_spec_mass[:layer]+layers.watercont[:layer])
-                viscosity = viscosity_0 * np.exp(c4*(0-snowtemp[layer])+c5*snowdens[layer])
+                viscosity = viscosity_0 * np.exp(c4*(0.-snowtemp[layer])+c5*snowdens[layer])
 
                 # get change in density and recalculate height 
-                dRho = (((weight_above*g)/viscosity) + c1*np.exp(-c2*(0-snowtemp[layer]) - c3*np.maximum(0.0,snowdens[layer]-density_0)))*snowdens[layer]*self.dt
+                dRho = (((weight_above*g)/viscosity) + c1*np.exp(-c2*(0.-snowtemp[layer]) - c3*np.maximum(0.,snowdens[layer]-density_0)))*snowdens[layer]*self.dt
                 snowdens[layer] += dRho
 
                 layers.snowdens = snowdens
@@ -463,7 +465,7 @@ class massBalance():
             rain = enbal.prec*eb_prms.density_water*self.dt  # kg m-2
             snow = 0
             precip_type = 'rain'
-        else:
+        else: # no precipitation
             precip_type = 'none'
             rain = 0
             snow = 0
@@ -479,7 +481,7 @@ class massBalance():
         density = layers.snowdens
         old_T = layers.snowtemp
         new_T = old_T.copy()
-        if nl > 1:
+        if nl > 1: #***** check on weird densities
             if np.max(density[:-1]) >= 900 or np.min(density) < 0:
                 print(density)
                 print('Height',height)

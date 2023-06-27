@@ -10,7 +10,6 @@ class Surface():
         # Set initial albedo based on surface type
         if layers.types[0] in ['snow']:
             self.albedo = eb_prms.albedo_fresh_snow
-            self.snow_timestamp = time[0]
         elif layers.types[0] in ['firn']:
             self.albedo = eb_prms.albedo_firn
         elif layers.types[0] in ['ice']:
@@ -23,6 +22,8 @@ class Surface():
         self.temp = eb_prms.surftemp_guess
         self.Qm = 0
         self.days_since_snowfall = 0
+
+        self.snow_timestamp = time[0] # ***** what to set snow timestamp at when we start on bare ice???
         return
     
     def updateSurface(self):

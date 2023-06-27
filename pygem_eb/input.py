@@ -20,7 +20,7 @@ while os.path.exists(output_name+'.nc'):
 
 #%% MODEL OPTIONS
 n_bins = 3
-parallel = True
+parallel = False
 
 #%% ===== GLACIER SELECTION =====
 rgi_regionsO1 = [1]                 # 1st order region number (RGI V6.0)
@@ -38,6 +38,7 @@ glac_no = ['01.00570']
 gdir = oggm.single_flowline_glacier_directory(glac_no[0], logging_level='CRITICAL')
 fls = oggm.get_glacier_zwh(gdir)
 fls = fls.iloc[np.nonzero(fls['h'].to_numpy())] #filter out zero bins to get only initial glacier volume
+med_idx = np.where(fls['z'].to_numpy()==np.median(fls['z'].to_numpy()))[0]
 bin_indices = np.linspace(len(fls.index)-1,0,n_bins,dtype=int)
 bin_elev = fls.iloc[bin_indices]['z'].to_numpy()
 
@@ -51,13 +52,17 @@ oggm_base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2
 logging_level = 'DEBUG' # DEBUG, INFO, WARNING, ERROR, WORKFLOW, CRITICAL (recommended WORKFLOW)
 
 #%% ===== CLIMATE DATA ===== 
+# Specify dataset
+climate_input = 'GCM' # GCM or AWS
+# AWS_fn = main_directory + '/../climate_data/AWS/Storglaciaren/SITES_MET_TRS_SGL_dates_15MIN.csv'
+AWS_fn = main_directory + '/../climate_data/AWS/Gulkana/LVL2/gulkana1725_hourly_LVL2.csv'
 # Dates
+dates_from_data = True
+# if dates_from_data:
 # startdate = pd.to_datetime('2013-04-17 16:00')
 # enddate = pd.to_datetime('2013-09-12 12:15')
-startdate = pd.to_datetime('1980-04-01 00:00')
-enddate = pd.to_datetime('1986-04-01 00:00')
-climate_input = 'GCM'
-AWS_fn = main_directory + '/../climate_data/AWS/Storglaciaren/SITES_MET_TRS_SGL_dates_15MIN.csv'
+startdate = pd.to_datetime('2015-10-01 00:00')
+enddate = pd.to_datetime('2018-10-01 00:00')
 option_leapyear = 0 # 0 to exclude leap years
 # Reference period runs (runs up to present)
 ref_gcm_name = 'ERA5-hourly'        # reference climate dataset
@@ -80,9 +85,8 @@ gcm_spinupyears = 0             # spin up years for simulation (output not set u
 option_initWater = 'zero_w0'            # 'zero_w0' or 'initial_w0'
 option_initTemp = 'piecewise'           # 'piecewise' or 'interp'
 option_initDensity = 'piecewise'        # 'piecewise' or 'interp'
-startssn = 'endaccum'                   # 'endaccum' or 'endmelt' -- sample data provided for Gulkana
+startssn = 'endmelt'                   # 'endaccum' or 'endmelt' -- sample data provided for Gulkana
 init_filepath = main_directory + '/pygem_eb/sample_init_data/startssn_initialTp.nc'.replace('startssn',startssn)
-# option_start_season = 'acc_end'         # 'acc_end' (end of accumulation), 'abl_end' (end of ablation) or 'other'
 
 # Simulation options
 dt = 3600
