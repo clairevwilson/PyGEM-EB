@@ -417,10 +417,23 @@ class GCM():
     
 class AWS():
     def __init__(self,glacier_table,dates_table,freq,gcm):
-        self.fp = eb_prms.AWS_fn
-        dates = str(eb_prms.startdate)[0:10].replace('-','')+'-'+str(eb_prms.enddate)[0:10].replace('-','')
-        df = pd.read_csv(eb_prms.AWS_fn.replace('dates',dates)) # ,skiprows = 34 for Storglaciaren
+        # Variable names for energy balance
+        self.temp_vn = 'T'
+        self.rh_vn = 'rh'
+        self.sp_vn = 'sp'
+        self.prec_vn = 'tp'
+        self.elev_vn = 'z'
+        self.tcc_vn = 'tcc'
+        self.SWin_vn = 'SWin'
+        self.SWout_vn = 'SWout'
+        self.LWin_vn = 'LWin'
+        self.LWout_vn = 'LWout'
+        self.wind_vn = 'wind'
+        # File name
+        self.fn = eb_prms.AWS_fn
+        df = pd.read_csv(eb_prms.AWS_fn)
         vars = df.columns
+        ntimesteps = np.shape(pd.date_range(eb_prms.startdate,eb_prms.enddate,freq='H'))[0]
 
         data_start = pd.to_datetime(df.local_time[0])
         data_end = pd.to_datetime(df.local_time.to_numpy()[-1])
@@ -428,73 +441,25 @@ class AWS():
         df = df.loc[eb_prms.startdate:eb_prms.enddate]
         if 'Precip_Stage_Incremental' in vars:
             df.Precip_Weighing_Incremental.fillna(df.Precip_Stage_Incremental*1.48, inplace=True)
-        if 'Precip_Weighing_Incremental' in vars:
-            df['Precip_Weighing_Incremental'] = df['Precip_Weighing_Incremental'] / 1000
         df = df.interpolate('time')
         
-        for var in vars:
-            if var in ['T','t2m','T2','TA_2.0m','site_temp_USGS']:
-                self.temp = np.nan_to_num(df[var].resample('H').mean().to_numpy())
-            elif var in ['P','tp','Precip_Weighing_Incremental']:
-                self.tp = np.nan_to_num(df[var].resample('H').sum().to_numpy())
-            elif var in ['RH','RH_2.0m','RelHum']:
-                self.rh = np.nan_to_num(df[var].resample('H').mean().to_numpy())
-            elif var in ['SW_IN','RadiationIn']:
-                self.SWin = np.nan_to_num(df[var].resample('H').mean().to_numpy())
-            elif var in ['SW_OUT','RadiationOut']:
-                self.SWout = np.nan_to_num(df[var].resample('H').mean().to_numpy())
-            elif var in ['LW_IN']:
-                self.LWin = np.nan_to_num(df[var].resample('H').mean().to_numpy())
-            elif var in ['LW_OUT']:
-                self.LWout = np.nan_to_num(df[var].resample('H').mean().to_numpy())
-            elif var in ['WS','WindSpeed']:
-                self.wind = np.nan_to_num(df[var].resample('H').mean().to_numpy())
-            elif var in ['tcc']:
-                self.tcc = np.nan_to_num(df[var].resample('H').mean().to_numpy())
-            elif var in ['sp']:
-                self.sp = np.nan_to_num(df[var].resample('H').mean().to_numpy())
-
-        try:
-            clouds = self.tcc
-        except:
-            tcc, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.tcc_fn, gcm.tcc_vn, glacier_table,dates_table)
-            self.tcc = tcc[0]
-
-        try:
-            pressure = self.sp
-        except:
-            sp, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.press_fn, gcm.press_vn, glacier_table,dates_table)
-            self.sp = sp[0]
-
-        try:
-            shortwave = self.SWin
-        except:
-            SWin, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.surfrad_fn, gcm.surfrad_vn, glacier_table,dates_table)
-            self.SWin = SWin[0]
-            self.SWout = np.empty(len(data_hours))
-            self.SWout[:] = np.nan
+        self.temp = df[self.temp_vn].resample('H').mean().to_numpy()
+        self.tp = df[self.temp_vn].resample('H').sum().to_numpy()
+        self.rh = df[self.rh_vn].resample('H').mean().to_numpy()
+        self.SWin = df[self.SWin_vn].resample('H').mean().to_numpy()
+        self.SWout = df[self.SWout_vn].resample('H').mean().to_numpy()
+        self.LWin = df[self.LWin_vn].resample('H').mean().to_numpy()
+        self.LWout = df[self.LWout_vn].resample('H').mean().to_numpy()
+        self.wind = df[self.wind_vn].resample('H').mean().to_numpy()
+        self.sp = df[self.sp_vn].resample('H').mean().to_numpy()
+        self.tcc = df[self.tcc_vn].resample('H').mean().to_numpy()
+        self.elev = df[self.elev_vn].to_numpy()[0]
         
-        try:
-            longwave = self.LWin
-        except:
-            self.LWin = np.empty(len(data_hours))
+        if np.all(np.isnan(self.LWin)):
+            self.LWin = np.empty(len(ntimesteps))
             self.LWin[:] = np.nan
             self.LWout = self.LWin.copy()
 
-        try:
-            relhum = self.rh
-        except:
-            fn = eb_prms.AWS_fn.replace('1725','1480')
-            df = pd.read_csv(fn)
-            data_start = pd.to_datetime(df.local_time[0])
-            data_end = pd.to_datetime(df.local_time.to_numpy()[-1])
-            df = df.set_index(pd.date_range(data_start,data_end,freq=freq))
-            df = df.loc[eb_prms.startdate:eb_prms.enddate]
-            df = df.interpolate('time')
-            self.rh = np.nan_to_num(df['RelHum'].resample('H').mean().to_numpy())
-
-        if eb_prms.glac_no == ['01.00570']:
-            self.elev = 1725
         return
         
 

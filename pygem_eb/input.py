@@ -32,7 +32,7 @@ rgi_regionsO2 = [2]                 # 2nd order region number (RGI V6.0)
 #                 (3) use one of the functions from  utils._funcs_selectglaciers
 rgi_glac_number = 'all'
 glac_no = ['01.00570']
-#glac_no = ['08.00213']
+# glac_no = ['08.00213']
 
 # Set up bins
 gdir = oggm.single_flowline_glacier_directory(glac_no[0], logging_level='CRITICAL')
@@ -54,14 +54,17 @@ logging_level = 'DEBUG' # DEBUG, INFO, WARNING, ERROR, WORKFLOW, CRITICAL (recom
 #%% ===== CLIMATE DATA ===== 
 # Specify dataset
 climate_input = 'GCM' # GCM or AWS
-# AWS_fn = main_directory + '/../climate_data/AWS/Storglaciaren/SITES_MET_TRS_SGL_dates_15MIN.csv'
-AWS_fn = main_directory + '/../climate_data/AWS/Gulkana/LVL2/gulkana1725_hourly_LVL2.csv'
+if climate_input in ['AWS']:
+    if glac_no == ['01.00570']:
+        AWS_fn = main_directory + '/../climate_data/AWS/Gulkana/LVL2/gulkana1725_hourly_LVL2.csv'
+    elif glac_no ==  ['08.00213']:
+        AWS_fn = main_directory + '/../climate_data/AWS/Storglaciaren/SITES_MET_TRS_SGL_dates_15MIN.csv'
 # Dates
 dates_from_data = True
 # if dates_from_data:
 # startdate = pd.to_datetime('2013-04-17 16:00')
 # enddate = pd.to_datetime('2013-09-12 12:15')
-startdate = pd.to_datetime('2015-10-01 00:00')
+startdate = pd.to_datetime('2015-10-01 00:00') # weighing gage installed in 2015
 enddate = pd.to_datetime('2018-10-01 00:00')
 option_leapyear = 0 # 0 to exclude leap years
 # Reference period runs (runs up to present)
