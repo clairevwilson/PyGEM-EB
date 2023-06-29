@@ -60,10 +60,12 @@ if eb_prms.climate_input in ['GCM']:
     vwind, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.vwind_fn, gcm.vwind_vn, glacier_table,dates_table)
     elev_data = gcm.importGCMfxnearestneighbor_xarray(gcm.elev_fn, gcm.elev_vn, glacier_table)
     wind = np.sqrt(np.power(uwind[0],2)+np.power(vwind[0],2))
+    winddir = np.arctan2(-uwind[0],-vwind[0]) * 180 / np.pi
     LWin = np.empty(len(data_hours))
     LWin[:] = np.nan
     LWout = LWin.copy()
     SWout = LWin.copy()
+    rh_data = LWin.copy()
     SWin = SWin[0]
     tcc = tcc[0]
     ntimesteps = len(data_hours)
@@ -71,12 +73,14 @@ elif eb_prms.climate_input in ['AWS']:
     aws = class_climate.AWS(glacier_table,dates_table,'H',gcm)
     temp_data = aws.temp
     tp_data = aws.tp
-    rh = np.array([aws.rh,aws.rh,aws.rh])
+    dtemp = aws.dtemp
+    rh_data = aws.rh
     SWin = aws.SWin
     SWout = aws.SWout
     LWin = aws.LWin
     LWout = aws.LWout
     wind = aws.wind
+    winddir = aws.winddir
     tcc = aws.tcc
     sp_data = aws.sp
     elev_data = aws.elev
@@ -96,9 +100,10 @@ for idx,z in enumerate(eb_prms.bin_elev):
     tp[idx,:] = tp_data*(1+eb_prms.precgrad*(z-elev_data)) # *eb_prms.kp for GCM******
     sp[idx,:] = sp_data*np.power((temp_data + eb_prms.lapserate*(z-elev_data)+273.15)/(temp_data+273.15),
                         -eb_prms.gravity*eb_prms.molarmass_air/(eb_prms.R_gas*eb_prms.lapserate))
-    if eb_prms.climate_input in ['GCM']:
-        dtemp[idx,:] = dtemp_data + eb_prms.lapserate_dew*(z-elev_data)-273.15
-        rh = e_func(dtemp) / e_func(temp) * 100
+    if not np.all(np.isnan(rh_data)): # if RH is not empty, get dtemp data from it
+        dtemp_data = rh_data / 100 * e_func(temp)
+    dtemp[idx,:] = dtemp_data + eb_prms.lapserate_dew*(z-elev_data)-273.15
+    rh = e_func(dtemp) / e_func(temp) * 100
 dates = pd.date_range(eb_prms.startdate,eb_prms.enddate,freq='h')
 
 # ===== SET UP CLIMATE DATASET =====
@@ -110,7 +115,8 @@ climateds = xr.Dataset(data_vars = dict(
     LWin = (['time'],LWin,{'units':'J m-2'}),
     LWout = (['time'],LWout,{'units':'J m-2'}),
     tcc = (['time'],tcc,{'units':'0-1'}),
-    wind = (['time'],wind,{'units':'m s-1'})),
+    wind = (['time'],wind,{'units':'m s-1'}),
+    winddir = (['time'],winddir,{'units':'deg'})),
     coords = dict(
         bin=(['bin'],bin_idx),
         time=(['time'],dates)
