@@ -104,7 +104,7 @@ class energyBalance():
         self.rain = Qp
 
         # TURBULENT FLUXES (Qs and Ql)
-        roughness = self.roughness_length(days_since_snowfall,layers.types)
+        roughness = self.roughness_length(days_since_snowfall,layers.ltype)
         if eb_prms.method_turbulent in ['MO-similarity']:
             Qs, Ql = self.getTurbulentMO(surftemp,roughness)
         else:

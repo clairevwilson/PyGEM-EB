@@ -16,66 +16,66 @@ class Layers():
         bin_no : int
             Bin number
         """
-        filepath = eb_prms.init_filepath
-        Tpds = xr.open_dataset(filepath)
-        layerdepth = Tpds.coords['layer_depth'].values
-        initialtemp = Tpds['snow_temp'].to_numpy()
-        initialdensity = Tpds['snow_density'].to_numpy()
-        snow_temp = [[layerdepth[i],initialtemp[i]] for i in range(len(initialtemp))]
-        snow_density = [[layerdepth[i],initialdensity[i]] for i in range(len(initialdensity))]
+        Tpds = xr.open_dataset(eb_prms.init_filepath)
+        # Extract datasets containing pairs of depth,value for temperature and density (elevation independent)
+        depth_data = Tpds.coords['layer_depth'].values
+        temp_data = [[depth_data[i],Tpds['snow_temp'].to_numpy()[i]] for i in range(len(depth_data))]
+        density_data = [[depth_data[i],Tpds['snow_density'].to_numpy()[i]] for i in range(len(depth_data))]
+
+        # Interpolate dataset for snow, firn and ice depth at bin elevation
         Tpds_interp = Tpds.interp(bin_elev=eb_prms.bin_elev[bin_no],kwargs={'fill_value':'extrapolate'})
         vars = ['snow_depth','firn_depth','ice_depth']
         sfi_h0 = np.array([Tpds_interp[var].values for var in vars])
 
         # Calculate the layer depths based on initial snow, firn and ice depths
-        heights,depths,types = self.getLayers(sfi_h0)
-        self.nlayers = len(heights)
-        self.types = types
-        self.heights = heights
-        self.depths = depths
+        lheight,ldepth,ltype = self.getLayers(sfi_h0)
+        self.nlayers = len(lheight)
+        self.ltype = ltype
+        self.lheight = lheight
+        self.ldepth = ldepth
 
         # Initialize SNOW layer temperatures based on chosen method and data (snow_temp)
-        snow_idx =  np.where(types=='snow')[0]
-        snow_layerz = depths[snow_idx] 
+        snow_idx =  np.where(ltype=='snow')[0]
+        snow_ldepth = ldepth[snow_idx] 
         if eb_prms.option_initTemp in ['piecewise']:
-            snowtemp = self.initProfilesPiecewise(snow_layerz,snow_temp,'temp')
+            ltemp = self.initProfilesPiecewise(snow_ldepth,temp_data,'temp')
         elif eb_prms.option_initTemp in ['interp']:
-            snowtemp = np.interp(snow_layerz,snow_temp[0,:],snow_temp[1,:])
+            ltemp = np.interp(snow_ldepth,temp_data[0,:],temp_data[1,:])
         else:
             assert 1==0, "Choose between 'piecewise' and 'interp' methods for temp initialization"
 
         # Initialize SNOW layer density based on chosen method and data (snow_density)
         if eb_prms.option_initDensity in ['piecewise']:
-            snowdens = self.initProfilesPiecewise(snow_layerz,snow_density,'density')
+            ldensity = self.initProfilesPiecewise(snow_ldepth,density_data,'density')
         elif eb_prms.option_initDensity in ['interp']:
-            snowdens = np.interp(snow_layerz,snow_density[0,:],snow_density[1,:])
+            ldensity = np.interp(snow_ldepth,density_data[0,:],density_data[1,:])
         else:
             assert 1==0, "Choose between 'piecewise' and 'interp' methods for density initialization"
 
         # Initialize FIRN AND ICE temperature and density
         # Calculate firn density slope that linearly increases density from the bottom snow bin to the top of the ice layer
         if sfi_h0[0] > 0 and sfi_h0[1] > 0:
-            pslope = (eb_prms.density_ice - snowdens[-1])/(np.sum(sfi_h0[0:2])-depths[snow_idx[-1]])
+            pslope = (eb_prms.density_ice - ldensity[-1])/(np.sum(sfi_h0[0:2])-ldepth[snow_idx[-1]])
         else:
             pslope = (eb_prms.density_ice - eb_prms.density_firn)/(sfi_h0[1])
-        for idx,type in enumerate(types):
+        for idx,type in enumerate(ltype):
             if type not in ['snow']:
-                snowtemp = np.append(snowtemp,eb_prms.temp_temp)
+                ltemp = np.append(ltemp,eb_prms.temp_temp)
             if type in ['firn']:
-                snowdens = np.append(snowdens,snowdens[snow_idx[-1]] + pslope*(depths[idx]-depths[snow_idx[-1]]))
+                ldensity = np.append(ldensity,ldensity[snow_idx[-1]] + pslope*(ldepth[idx]-ldepth[snow_idx[-1]]))
             elif type in ['ice']:
-                snowdens = np.append(snowdens,eb_prms.density_ice)
+                ldensity = np.append(ldensity,eb_prms.density_ice)
 
         # Initialize water content [kg m-2]
         if eb_prms.option_initWater in ['zero_w0']:
-            watercont = np.zeros(self.nlayers)
+            lwater = np.zeros(self.nlayers)
         elif eb_prms.option_initWater in ['initial_w0']:
             assert 1==0, "Only zero water content method is set up"
 
         # Define dry (solid) mass of each layer [kg m-2]
-        dry_spec_mass = snowdens*heights
+        ldrymass = ldensity*lheight
         # Define irreducible water content of each layer and set saturated value
-        irrwatercont = self.getIrrWaterCont(snowdens)
+        irrwatercont = self.getIrrWaterCont(ldensity)
         # saturated = np.where(watercont == irrwatercont,1,0)
 
         # Initialize BC and dust content
@@ -89,13 +89,13 @@ class Layers():
             BC = [eb_prms.BC_freshsnow,eb_prms.BC_freshsnow]
             dust = [eb_prms.dust_freshsnow,eb_prms.dust_freshsnow]
         
-        self.snowtemp = snowtemp
-        self.snowdens = snowdens
-        self.watercont = watercont
-        self.heights = heights
-        self.depths = depths
-        self.types = types
-        self.dry_spec_mass = dry_spec_mass
+        self.ltemp = ltemp
+        self.ldensity = ldensity
+        self.lwater = lwater
+        self.lheight = lheight
+        self.ldepth = ldepth
+        self.ltype = ltype
+        self.ldrymass = ldrymass
         self.irrwatercont = irrwatercont
         self.BC = BC
         self.dust = dust
@@ -216,11 +216,11 @@ class Layers():
             Contains temperature 'T', water content 'w', height 'h', type 't', dry mass 'drym'
         """
         self.nlayers += len(layers_to_add.loc['T'].values)
-        self.snowtemp = np.append(layers_to_add.loc['T'].values,self.snowtemp)
-        self.watercont = np.append(layers_to_add.loc['w'].values,self.watercont)
-        self.heights = np.append(layers_to_add.loc['h'].values,self.heights)
-        self.types = np.append(layers_to_add.loc['t'].values,self.types)
-        self.dry_spec_mass = np.append(layers_to_add.loc['drym'].values,self.dry_spec_mass)
+        self.ltemp = np.append(layers_to_add.loc['T'].values,self.ltemp)
+        self.lwater = np.append(layers_to_add.loc['w'].values,self.lwater)
+        self.lheight = np.append(layers_to_add.loc['h'].values,self.lheight)
+        self.ltype = np.append(layers_to_add.loc['t'].values,self.ltype)
+        self.ldrymass = np.append(layers_to_add.loc['drym'].values,self.ldrymass)
         self.updateLayerProperties()
         return
     
@@ -234,11 +234,11 @@ class Layers():
             index of layer to remove
         """
         self.nlayers -= 1
-        self.snowtemp = np.delete(self.snowtemp,layer_to_remove)
-        self.watercont = np.delete(self.watercont,layer_to_remove)
-        self.heights = np.delete(self.heights,layer_to_remove)
-        self.types = np.delete(self.types,layer_to_remove)
-        self.dry_spec_mass = np.delete(self.dry_spec_mass,layer_to_remove)
+        self.ltemp = np.delete(self.ltemp,layer_to_remove)
+        self.lwater = np.delete(self.lwater,layer_to_remove)
+        self.lheight = np.delete(self.lheight,layer_to_remove)
+        self.ltype = np.delete(self.ltype,layer_to_remove)
+        self.ldrymass = np.delete(self.ldrymass,layer_to_remove)
         self.updateLayerProperties()
         return
     
@@ -249,15 +249,15 @@ class Layers():
         if (self.nlayers+1) < eb_prms.max_nlayers:
             l = layer_to_split
             self.nlayers += 1
-            self.snowtemp = np.insert(self.snowtemp,l,self.snowtemp[l])
-            self.types = np.insert(self.types,l,self.types[l])
+            self.ltemp = np.insert(self.ltemp,l,self.ltemp[l])
+            self.ltype = np.insert(self.ltype,l,self.ltype[l])
 
-            self.watercont[l] = self.watercont[l]/2
-            self.watercont = np.insert(self.watercont,l,self.watercont[l])
-            self.heights[l] = self.heights[l]/2
-            self.heights = np.insert(self.heights,l,self.heights[l])
-            self.dry_spec_mass[l] = self.dry_spec_mass[l]/2
-            self.dry_spec_mass = np.insert(self.dry_spec_mass,l,self.dry_spec_mass[l])
+            self.lwater[l] = self.lwater[l]/2
+            self.lwater = np.insert(self.lwater,l,self.lwater[l])
+            self.lheight[l] = self.lheight[l]/2
+            self.lheight = np.insert(self.lheight,l,self.lheight[l])
+            self.ldrymass[l] = self.ldrymass[l]/2
+            self.ldrymass = np.insert(self.ldrymass,l,self.ldrymass[l])
         self.updateLayerProperties()
         return
 
@@ -267,11 +267,11 @@ class Layers():
         Layers merged will be the index passed and the layer below it
         """
         l = layer_to_merge
-        self.snowdens[l+1] = np.sum(self.snowdens[l:l+2]*self.dry_spec_mass[l:l+2])/np.sum(self.dry_spec_mass[l:l+2])
-        self.watercont[l+1] = np.sum(self.watercont[l:l+2])
-        self.snowtemp[l+1] = np.mean(self.snowtemp[l:l+2])
-        self.heights[l+1] = np.sum(self.heights[l:l+2])
-        self.dry_spec_mass[l+1] = np.sum(self.dry_spec_mass[l:l+2])
+        self.ldensity[l+1] = np.sum(self.ldensity[l:l+2]*self.ldrymass[l:l+2])/np.sum(self.ldrymass[l:l+2])
+        self.lwater[l+1] = np.sum(self.lwater[l:l+2])
+        self.ltemp[l+1] = np.mean(self.ltemp[l:l+2])
+        self.lheight[l+1] = np.sum(self.lheight[l:l+2])
+        self.ldrymass[l+1] = np.sum(self.ldrymass[l:l+2])
         self.removeLayer(l)
         return
     
@@ -282,9 +282,9 @@ class Layers():
         max_heights = lambda i: eb_prms.dz_toplayer * np.exp((i-1)*eb_prms.layer_growth) * 2
         while layer < self.nlayers:
             layer_split = False
-            dz = self.heights[layer]
-            if self.types[layer] in ['snow','firn']:
-                if dz < min_heights(layer) and self.types[layer]==self.types[layer+1]:
+            dz = self.lheight[layer]
+            if self.ltype[layer] in ['snow','firn']:
+                if dz < min_heights(layer) and self.ltype[layer]==self.ltype[layer+1]:
                     # Layer too small. Merge but only if it's the same type as the layer underneath
                     self.mergeLayers(layer)
                 elif dz > max_heights(layer):
@@ -300,34 +300,34 @@ class Layers():
         Recalculates nlayers, depths, density, and irreducible water
         content from DRY density. Can specify to only update certain properties.
         """
-        self.nlayers = len(self.heights)
-        self.snow_idx =  np.where(np.array(self.types)=='snow')[0]
+        self.nlayers = len(self.lheight)
+        self.snow_idx =  np.where(np.array(self.ltype)=='snow')[0]
         if 'depth' in do:
-            self.depths = np.array([np.sum(self.heights[:i+1])-(self.heights[i]/2) for i in range(self.nlayers)])
+            self.ldepth = np.array([np.sum(self.lheight[:i+1])-(self.lheight[i]/2) for i in range(self.nlayers)])
         if 'density' in do:
-            self.snowdens = self.dry_spec_mass / self.heights
+            self.ldensity = self.ldrymass / self.lheight
         if 'irrwater' in do:
-            self.irrwatercont = self.getIrrWaterCont(self.snowdens)
+            self.irrwatercont = self.getIrrWaterCont(self.ldensity)
         return
     
     def updateLayerTypes(self):
         # Check for changes in layer type (excluding ice layer, which cannot change)
-        snowfirn_idx = np.append(self.snow_idx,np.where(self.types == 'firn')[0])
-        for layer,dens in enumerate(self.snowdens[snowfirn_idx]):
+        snowfirn_idx = np.append(self.snow_idx,np.where(self.ltype == 'firn')[0])
+        for layer,dens in enumerate(self.ldensity[snowfirn_idx]):
             # New FIRN layer
-            if dens > eb_prms.density_firn and self.types[layer] != 'firn':
-                self.types[layer] = 'firn'
-                self.snowdens[layer] = eb_prms.density_firn
+            if dens > eb_prms.density_firn and self.ltype[layer] != 'firn':
+                self.ltype[layer] = 'firn'
+                self.ldensity[layer] = eb_prms.density_firn
                 # merge layers if there is firn under the new firn layer
-                if self.types[layer+1] in ['firn']: 
+                if self.ltype[layer+1] in ['firn']: 
                     self.mergeLayers(layer)
                     print('new firn!')
             # New ICE layer
-            if self.snowdens[layer] > eb_prms.density_ice:
-                self.types[layer] = 'ice'
-                self.snowdens[layer] = eb_prms.density_ice
+            if self.ldensity[layer] > eb_prms.density_ice:
+                self.ltype[layer] = 'ice'
+                self.ldensity[layer] = eb_prms.density_ice
                 # merge into ice below
-                if self.types[layer+1] in ['ice']:
+                if self.ltype[layer+1] in ['ice']:
                     self.mergeLayers(layer)
                     print('new ice!')
         return
@@ -336,34 +336,34 @@ class Layers():
         """
         snowfall = fresh snow MASS in kg / m2
         """
-        if self.types[0] in 'ice':
+        if self.ltype[0] in 'ice':
             new_layer = pd.DataFrame([airtemp,0,snowfall/new_density,'snow',snowfall],index=['T','w','h','t','drym'])
             self.addLayers(new_layer)
         else:
             # take weighted average of density and temperature of surface layer and new snow
-            new_layermass = self.dry_spec_mass[0] + snowfall
-            self.snowdens[0] = (self.snowdens[0]*self.dry_spec_mass[0] + new_density*snowfall)/(new_layermass)
-            self.snowtemp[0] = (self.snowtemp[0]*self.dry_spec_mass[0] + airtemp*snowfall)/(new_layermass)
-            self.dry_spec_mass[0] = new_layermass
-            self.heights[0] += snowfall/new_density
-            if self.heights[0] > (eb_prms.dz_toplayer * 1.5):
+            new_layermass = self.ldrymass[0] + snowfall
+            self.ldensity[0] = (self.ldensity[0]*self.ldrymass[0] + new_density*snowfall)/(new_layermass)
+            self.ltemp[0] = (self.ltemp[0]*self.ldrymass[0] + airtemp*snowfall)/(new_layermass)
+            self.ldrymass[0] = new_layermass
+            self.lheight[0] += snowfall/new_density
+            if self.lheight[0] > (eb_prms.dz_toplayer * 1.5):
                 self.splitLayer(0)
         self.updateLayerProperties()
         return
     
     def getIrrWaterCont(self,density=[0]):
-        if sum(density) == 0: # default condition for function
-            density = self.dry_spec_mass / self.heights
+        if sum(density) == 0: # if density is not specified, calculate from self
+            density = self.ldrymass / self.lheight
         density = density.astype(float)
         density_ice = eb_prms.density_ice
         try:
-            ice_idx = np.where(self.types=='ice')[0][0]
+            ice_idx = np.where(self.ltype=='ice')[0][0]
         except:
-            print(self.types)
+            print(self.ltype)
         porosity = (density_ice - density[:ice_idx])/density_ice
         irrwatercont = 0.0143*np.exp(3.3*porosity)
         irrwatersat = irrwatercont*density[:ice_idx]/porosity # kg m-3, mass of liquid over pore volume
-        irrwatercont = irrwatersat*self.heights[:ice_idx] # kg m-2, mass of liquid in a layer
+        irrwatercont = irrwatersat*self.lheight[:ice_idx] # kg m-2, mass of liquid in a layer
         
         irrwatercont = np.append(irrwatercont,0) # ice layer cannot hold water
         return irrwatercont
