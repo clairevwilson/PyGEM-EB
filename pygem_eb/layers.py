@@ -336,7 +336,7 @@ class Layers():
         """
         snowfall = fresh snow MASS in kg / m2
         """
-        if self.types[0] in 'ice':
+        if self.snowdens[0] > 300: #  ***** hardcoded threshold!
             new_layer = pd.DataFrame([airtemp,0,snowfall/new_density,'snow',snowfall],index=['T','w','h','t','drym'])
             self.addLayers(new_layer)
         else:

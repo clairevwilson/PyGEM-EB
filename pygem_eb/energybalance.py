@@ -87,7 +87,7 @@ class energyBalance():
             If mode is 'sum' or 'optim', returns the sum of heat fluxes
             If mode is 'list', returns list in the order of SWin,SWout,LWin,LWout,rain,sensible,latent
         """
-        # SHORTWAVE RADIATION
+        # SHORTWAVE RADIATION  (Snet_surf)
         SWin,SWout = self.getSW(albedo)
         Snet_surf = SWin + SWout
         self.SWin = SWin
@@ -204,7 +204,7 @@ class energyBalance():
             z0t = z0/100    # Roughness length for sensible heat
             z0q = z0/10     # Roughness length for moisture
 
-            # calculate friction velocity uSWing previous heat flux to get Obukhov length (L)
+            # calculate friction velocity using previous heat flux to get Obukhov length (L)
             fric_vel = karman*self.wind/(np.log(z/z0)-PsiM(zeta))
             air_dens = self.sp/eb_prms.R_gas/self.tempK*eb_prms.molarmass_air
             L = fric_vel**3*(self.tempC+273.15)*air_dens*eb_prms.Cp_air/(karman*eb_prms.gravity*Qs)
