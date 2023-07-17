@@ -53,12 +53,14 @@ logging_level = 'DEBUG' # DEBUG, INFO, WARNING, ERROR, WORKFLOW, CRITICAL (recom
 
 #%% ===== CLIMATE DATA ===== 
 # Specify dataset
-climate_input = 'GCM' # GCM or AWS
+climate_input = 'AWS' # GCM or AWS
+# AWS_fn = 'USER-SPECIFY'
 if climate_input in ['AWS']:
     if glac_no == ['01.00570']:
-        AWS_fn = main_directory + '/../climate_data/AWS/Gulkana/LVL2/gulkana1725_hourly_LVL2.csv'
+        AWS_fn = main_directory + '/../climate_data/AWS/Gulkana/gulkana1725_hourly_LVL2.csv'
     elif glac_no ==  ['08.00213']:
         AWS_fn = main_directory + '/../climate_data/AWS/Storglaciaren/SITES_MET_TRS_SGL_dates_15MIN.csv'
+    assert os.path.exists(AWS_fn)
 # Dates
 dates_from_data = True
 # if dates_from_data:
@@ -88,7 +90,7 @@ gcm_spinupyears = 0             # spin up years for simulation (output not set u
 option_initWater = 'zero_w0'            # 'zero_w0' or 'initial_w0'
 option_initTemp = 'piecewise'           # 'piecewise' or 'interp'
 option_initDensity = 'piecewise'        # 'piecewise' or 'interp'
-startssn = 'endmelt'                   # 'endaccum' or 'endmelt' -- sample data provided for Gulkana
+startssn = 'endmelt'                    # 'endaccum' or 'endmelt' -- sample density/temp data provided for Gulkana
 init_filepath = main_directory + '/pygem_eb/sample_init_data/startssn_initialTp.nc'.replace('startssn',startssn)
 
 # Simulation options
@@ -111,7 +113,8 @@ BC_freshsnow = 1e6          # concentration of BC in fresh snow. Only used if sw
 dust_freshsnow = 1e6        # concentration of dust in fresh snow. Only used if switch_LAPs is not 2
 
 # Output
-store_data = True          # store data, true or false
+store_data = False          # store data, true or false
+store_vars = ['MB','EB','Temp','Layers']        # Variables to store
 storage_freq = 'H'          # frequency to store data using pandas offset aliases
 vars_to_store = 'all'       # list of variables to store
 

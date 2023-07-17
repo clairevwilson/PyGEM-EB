@@ -8,11 +8,11 @@ class Surface():
     """ 
     def __init__(self,layers,time):
         # Set initial albedo based on surface type
-        if layers.types[0] in ['snow']:
+        if layers.ltype[0] in ['snow']:
             self.albedo = eb_prms.albedo_fresh_snow
-        elif layers.types[0] in ['firn']:
+        elif layers.ltype[0] in ['firn']:
             self.albedo = eb_prms.albedo_firn
-        elif layers.types[0] in ['ice']:
+        elif layers.ltype[0] in ['ice']:
             self.albedo = eb_prms.albedo_ice
 
         # Initialize BC, dust, grain_size, etc.
@@ -43,12 +43,12 @@ class Surface():
             # Energy toward the surface: either melting or top layer is heated to melting point
             self.temp = 0
             Qm = Qm_check
-            if layers.snowtemp[0] < 0: # need to heat surface layer to 0 before it can start melting
-                layers.snowtemp[0] += Qm_check*eb_prms.dt/(eb_prms.Cp_ice*layers.dry_spec_mass[0])
-                if layers.snowtemp[0] > 0:
+            if layers.ltemp[0] < 0: # need to heat surface layer to 0 before it can start melting
+                layers.ltemp[0] += Qm_check*eb_prms.dt/(eb_prms.Cp_ice*layers.ldrymass[0])
+                if layers.ltemp[0] > 0:
                     # if temperature rises above zero, leave excess energy in Qm
-                    Qm = layers.snowtemp[0]*eb_prms.Cp_ice*layers.dry_spec_mass[0]/eb_prms.dt
-                    layers.snowtemp[0] = 0
+                    Qm = layers.ltemp[0]*eb_prms.Cp_ice*layers.ldrymass[0]/eb_prms.dt
+                    layers.ltemp[0] = 0
                 else:
                     Qm = 0
         elif cooling:

@@ -108,7 +108,7 @@ class GCM():
             # Variable names for energy balance
             self.temp_vn = 't2m'
             self.dtemp_vn = 'd2m'
-            self.press_vn = 'sp'
+            self.sp_vn = 'sp'
             self.prec_vn = 'tp'
             self.elev_vn = 'z'
             self.tcc_vn = 'tcc'
@@ -122,9 +122,9 @@ class GCM():
             # Variable filenames
             self.temp_fn = 'ERA5_temp_hourly.nc'
             self.dtemp_fn = 'ERA5_dtemp_hourly.nc'
-            self.press_fn = 'ERA5_press_hourly.nc'
+            self.sp_fn = 'ERA5_sp_hourly.nc'
             self.tcc_fn = 'ERA5_tcc_hourly.nc'
-            self.surfrad_fn = 'ERA5_surfrad_hourly.nc'
+            self.surfrad_fn = 'ERA5_SWin_hourly.nc'
             self.vwind_fn = 'ERA5_vwind_hourly.nc'
             self.uwind_fn = 'ERA5_uwind_hourly.nc'
             self.prec_fn = 'ERA5_precip_hourly.nc'
@@ -443,23 +443,17 @@ class AWS():
             df.Precip_Weighing_Incremental.fillna(df.Precip_Stage_Incremental*1.48, inplace=True)
         df = df.interpolate('time')
         
-        self.temp = df[self.temp_vn].resample('H').mean().to_numpy()
-        self.tp = df[self.temp_vn].resample('H').sum().to_numpy()
-        self.rh = df[self.rh_vn].resample('H').mean().to_numpy()
-        self.SWin = df[self.SWin_vn].resample('H').mean().to_numpy()
-        self.SWout = df[self.SWout_vn].resample('H').mean().to_numpy()
-        self.LWin = df[self.LWin_vn].resample('H').mean().to_numpy()
-        self.LWout = df[self.LWout_vn].resample('H').mean().to_numpy()
-        self.wind = df[self.wind_vn].resample('H').mean().to_numpy()
-        self.sp = df[self.sp_vn].resample('H').mean().to_numpy()
-        self.tcc = df[self.tcc_vn].resample('H').mean().to_numpy()
+        self.temp = df[self.temp_vn].to_numpy()
+        self.tp = df[self.temp_vn].to_numpy()
+        self.rh = df[self.rh_vn].to_numpy()
+        self.SWin = df[self.SWin_vn].to_numpy()
+        self.SWout = df[self.SWout_vn].to_numpy()
+        self.LWin = df[self.LWin_vn].to_numpy()
+        self.LWout = df[self.LWout_vn].to_numpy()
+        self.wind = df[self.wind_vn].to_numpy()
+        self.sp = df[self.sp_vn].to_numpy()
+        self.tcc = df[self.tcc_vn].to_numpy()
         self.elev = df[self.elev_vn].to_numpy()[0]
-        
-        if np.all(np.isnan(self.LWin)):
-            self.LWin = np.empty(len(ntimesteps))
-            self.LWin[:] = np.nan
-            self.LWout = self.LWin.copy()
-
         return
         
 

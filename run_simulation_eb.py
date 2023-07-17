@@ -17,6 +17,7 @@ glacier_table = modelsetup.selectglaciersrgitable(eb_prms.glac_no,
                 rgi_glac_number=eb_prms.rgi_glac_number, include_landterm=eb_prms.include_landterm,
                 include_laketerm=eb_prms.include_laketerm, include_tidewater=eb_prms.include_tidewater)
 
+# dates_table = modelsetup.datesmodelrun(startyear=eb_prms.startdate, endyear=eb_prms.enddate)
 dates_table = pd.DataFrame({'date' : pd.date_range(eb_prms.startdate,eb_prms.enddate,freq='h')})
 # Extract attributes for dates_table
 dates_table['year'] = dates_table['date'].dt.year
@@ -53,7 +54,7 @@ if eb_prms.climate_input in ['GCM']:
     tp_data, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.prec_fn, gcm.prec_vn, glacier_table,dates_table)
     temp_data, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.temp_fn, gcm.temp_vn, glacier_table,dates_table)
     dtemp_data, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.dtemp_fn, gcm.dtemp_vn, glacier_table,dates_table)
-    sp_data, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.press_fn, gcm.press_vn, glacier_table,dates_table)
+    sp_data, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.sp_fn, gcm.sp_vn, glacier_table,dates_table)
     tcc, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.tcc_fn, gcm.tcc_vn, glacier_table,dates_table)
     SWin, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.surfrad_fn, gcm.surfrad_vn, glacier_table,dates_table) 
     uwind, data_hours = gcm.importGCMvarnearestneighbor_xarray(gcm.uwind_fn, gcm.uwind_vn, glacier_table,dates_table)                                                      
@@ -127,38 +128,8 @@ climateds = climateds.assign(bin_tp = (['bin','time'],tp,{'units':'m'}))
 climateds = climateds.assign(bin_sp = (['bin','time'],sp,{'units':'Pa'}))
 climateds = climateds.assign(bin_rh = (['bin','time'],rh,{'units':'%'}))
 
-# Set up files for storage
-bin_idx = range(n_bins)
-if eb_prms.store_data:
-    time_to_store = pd.date_range(eb_prms.startdate,eb_prms.enddate,freq=eb_prms.storage_freq)
-    zeros = np.zeros([len(time_to_store),n_bins,eb_prms.max_nlayers])
-    all_variables = xr.Dataset(data_vars = dict(
-            SWin = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-            SWout = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-            LWin = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-            LWout = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-            rain = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-            sensible = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-            latent = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-            meltenergy = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-            melt = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
-            refreeze = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
-            runoff = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
-            accum = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
-            airtemp = (['time','bin'],zeros[:,:,0],{'units':'C'}),
-            surftemp = (['time','bin'],zeros[:,:,0],{'units':'C'}),
-            snowtemp = (['time','bin','layer'],zeros,{'units':'C'}),
-            watercont = (['time','bin','layer'],zeros,{'units':'kg m-2'}),
-            layerheight = (['time','bin','layer'],zeros,{'units':'m'}),
-            snowdensity = (['time','bin','layer'],zeros,{'units':'kg m-3'}),
-            snowdepth = (['time','bin'],zeros[:,:,0],{'units':'m'})
-            ),
-            coords=dict(
-                time=(['time'],time_to_store),
-                bin = (['bin'],bin_idx),
-                layer=(['layer'],np.arange(eb_prms.max_nlayers))
-                ))
-    all_variables.to_netcdf(eb_prms.output_name+'.nc')
+# Initialize output class
+
 
 # ===== RUN ENERGY BALANCE =====
 #loop through bins here so EB script is set up for only one bin (1D data)

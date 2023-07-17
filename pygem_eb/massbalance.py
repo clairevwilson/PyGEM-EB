@@ -22,39 +22,19 @@ class massBalance():
         climateds : xr.Dataset
             Dataset containing elevation-adjusted climate data
         """
-        # Set up model time (dt is the time loop used for the mass + surface energy balances)
+        # Set up model time
         self.dt = eb_prms.dt
         self.days_since_snowfall = 0
         self.time_list = pd.date_range(eb_prms.startdate,eb_prms.enddate,freq=str(self.dt)+'S')
-        self.bin_idx = bin_idx 
+        self.bin_idx = bin_idx
 
         # Initialize layers and surface classes
         self.layers = eb_layers.Layers(bin_idx)
         self.surface = eb_surface.Surface(self.layers,self.time_list)
 
-        # Time for storing data in netcdf
-        self.time_to_store = pd.date_range(eb_prms.startdate,eb_prms.enddate,freq=eb_prms.storage_freq)
-
-        # Initialize variables to store fluxes
-        self.SWin_output = []
-        self.SWout_output = []
-        self.LWin_output = []
-        self.LWout_output = []
-        self.rain_output = []
-        self.sensible_output = []
-        self.latent_output = []
-        self.meltenergy_output = []
-        self.melt_output = []
-        self.refreeze_output = []
-        self.runoff_output = []
-        self.accum_output = []
-        self.airtemp_output = []
-        self.surftemp_output = []
-        self.snowtemp_output = []
-        self.watercont_output = []
-        self.snowdensity_output = []
-        self.layerheight_output = []
-        self.snowdepth_output = []
+        # Initialize output class
+        if eb_prms.store_data:
+            self.output = Output(self.time_list)
         return
     
     def main(self,climateds):
@@ -75,14 +55,14 @@ class massBalance():
         timeidx = 0
         
         # Initialize space for "running" MB terms which sum each timestep -- reset to 0 monthly
-        running_melt = 0
-        running_refreeze = 0
-        running_runoff = 0
-        running_accum = 0
+        melt_monthly = 0
+        refreeze_monthly = 0
+        runoff_monthly = 0
+        accum_monthly = 0
 
         # ===== ENTER TIME LOOP =====
-        # index [12960:12964]] will start on a summer day (June 29)
         for time in self.time_list:
+            # BEGIN MASS BALANCE
             # Initiate the energy balance to unpack climate data
             enbal = eb.energyBalance(climateds,time,self.bin_idx,dt)
 
@@ -117,7 +97,7 @@ class massBalance():
                 layermelt[0] = 0
 
             # Percolate the meltwater and any liquid precipitation
-            runoff,layers_to_remove = self.percolate(layers,layermelt,rain)
+            runoff,layers_to_remove = self.percolation(layers,layermelt,rain)
 
             # Remove layers that were completely melted and merge/split layers as needed
             for layer in layers_to_remove:
@@ -125,83 +105,66 @@ class massBalance():
             layers.updateLayers()
 
             # Recalculate the temperature profile considering conduction
-            if surface.temp != 0. or np.abs(np.sum(layers.snowtemp)) != 0.:
+            if surface.temp != 0. or np.abs(np.sum(layers.ltemp)) != 0.:
                 # Save time by not resolving temperature profile when glacier is isothermal
-                layers.snowtemp = self.solveHeatEq(layers,surface.temp,eb_prms.dt_heateq)
+                layers.ltemp = self.solveHeatEq(layers,surface.temp,eb_prms.dt_heateq)
 
             # Calculate refreeze
-            refreeze = self.refreeze(layers)
+            refreeze = self.refreezing(layers)
 
             # Run densification daily **** hard-coded timestep
             if time.hour < 1 and time.minute < 1:
                 self.densification(layers,self.dt*24)
 
-            # Store running (monthly) values (all in m w.e.)
-            running_runoff += runoff
-            running_melt += np.sum(layermelt) / eb_prms.density_water
-            running_refreeze += refreeze
-            running_accum += snowfall / eb_prms.density_water
-            # print('melt,accum',np.sum(layermelt),snowfall)
+            # END MASS BALANCE
+            self.runoff = runoff
+            self.melt = np.sum(layermelt) / eb_prms.density_water
+            self.refreeze = refreeze
+            self.accum = snowfall / eb_prms.density_water
+
+            # Store running (monthly) values (all in m w.e.) 
+            # **** this is mainly for debugging for the prints section
+            # can be removed for the final product
+            runoff_monthly += self.runoff
+            melt_monthly += self.melt
+            refreeze_monthly += self.refreeze
+            accum_monthly += self.accum
 
             # Store data
-            if time in self.time_to_store:
-                self.SWin_output.append(enbal.SWin)
-                self.SWout_output.append(enbal.SWout)
-                self.LWin_output.append(enbal.LWin)
-                self.LWout_output.append(enbal.LWout)
-                self.rain_output.append(enbal.rain)
-                self.sensible_output.append(enbal.sens)
-                self.latent_output.append(enbal.lat)
-                self.meltenergy_output.append(surface.Qm)
-                self.melt_output.append(np.sum(layermelt) / eb_prms.density_water)
-                self.refreeze_output.append(refreeze)
-                self.runoff_output.append(runoff)
-                self.accum_output.append(snowfall / eb_prms.density_water)
-                self.airtemp_output.append(enbal.tempC)
-                self.surftemp_output.append(surface.temp)
-                self.snowdepth_output.append(np.sum(layers.heights[layers.snow_idx]))
+            self.output.storeTimestep(self,enbal,surface,layers)
 
-                snowtemp = [None]*eb_prms.max_nlayers
-                watercont = snowtemp.copy()
-                layerheight = snowtemp.copy()
-                snowdensity = snowtemp.copy()
-                snowtemp[eb_prms.max_nlayers-layers.nlayers:] = layers.snowtemp
-                watercont[eb_prms.max_nlayers-layers.nlayers:] = layers.watercont
-                layerheight[eb_prms.max_nlayers-layers.nlayers:] = layers.heights
-                snowdensity[eb_prms.max_nlayers-layers.nlayers:] = layers.snowdens
-                self.snowtemp_output.append(snowtemp)
-                self.watercont_output.append(watercont)
-                self.layerheight_output.append(layerheight)
-                self.snowdensity_output.append(snowdensity)
-
-            # Monthly time check
+            # Monthly time check ***** debugging
             if (time+pd.Timedelta(hours=1)).is_month_start and time.hour == 23 and time.minute == 0:
                 if eb_prms.debug: # MONTHLY PRINTS
-                    melte = np.mean(self.meltenergy_output[-720:])
+                    melte = np.mean(self.output.meltenergy_output[-720:])
                     layers.updateLayerProperties
-                    snowdepth = np.sum(layers.heights[layers.snow_idx])
+                    snowdepth = np.sum(layers.lheight[layers.snow_idx])
                     print(time.month_name(),time.year,'for bin no',self.bin_idx)
-                    print(f'|    Qm: {melte:.0f} W/m2              Melt: {running_melt:.2f} m w.e.  |')
-                    print(f'| Air temp: {enbal.tempC:.3f} C       Accum: {running_accum:.2f} m w.e.   |')
+                    print(f'|    Qm: {melte:.0f} W/m2              Melt: {melt_monthly:.2f} m w.e.  |')
+                    print(f'| Air temp: {enbal.tempC:.3f} C       Accum: {accum_monthly:.2f} m w.e.   |')
                     print(f'-------------surface temp: {surface.temp:.2f} C-------------')
                     print(f'|             snow height: {snowdepth:.2f} m             |')
                     if layers.nlayers > 3:
                         print(f'|    {layers.nlayers} layers total, only displaying top few  |')
                     for l in range(min(3,layers.nlayers)):
                         print(f'--------------------layer {l}---------------------')
-                        print(f'     T = {layers.snowtemp[l]:.1f} C                 h = {layers.heights[l]:.3f} m ')
-                        print(f'                 p = {layers.snowdens[l]:.0f} kg/m3')
-                        print(f'Water Mass : {layers.watercont[l]:.2f} kg/m2   Dry Mass : {layers.dry_spec_mass[l]:.2f} kg/m2')
+                        print(f'     T = {layers.ltemp[l]:.1f} C                 h = {layers.lheight[l]:.3f} m ')
+                        print(f'                 p = {layers.ldensity[l]:.0f} kg/m3')
+                        print(f'Water Mass : {layers.lwater[l]:.2f} kg/m2   Dry Mass : {layers.ldrymass[l]:.2f} kg/m2')
                     print('================================================')
-                    print(layers.types)
-
-                running_melt = 0
-                running_refreeze = 0
-                running_runoff = 0
-                running_accum = 0
+                    print(layers.ltype)
+                # Reset monthly values
+                melt_monthly = 0
+                refreeze_monthly = 0
+                runoff_monthly = 0
+                accum_monthly = 0
+            
+            # Advance timestep
             timeidx += 1
+        
+        # Completed bin: store data
         if eb_prms.store_data:
-            self.storeVars(self.bin_idx)
+            self.output.storeData(self.bin_idx)
         return
 
     def getSubsurfMelt(self,layers,Snet_surf):
@@ -220,26 +183,26 @@ class massBalance():
             Array containing subsurface melt amounts [kg m-2]
         """
         # Fraction of radiation absorbed at the surface depends on surface type
-        if layers.types[0] in ['snow']:
+        if layers.ltype[0] in ['snow']:
             frac_absrad = 0.9
         else:
             frac_absrad = 0.8
 
         # Extinction coefficient depends on layer type
         extinct_coef = np.ones(layers.nlayers)*1e8 # ensures unfilled layers have 0 heat
-        for idx,type in enumerate(layers.types):
+        for idx,type in enumerate(layers.ltype):
             if type in ['snow']:
                 extinct_coef[idx] = 17.1
             else:
                 extinct_coef[idx] = 2.5
             # Cut off if the flux reaches zero threshold (1e-6)
-            if np.exp(-extinct_coef[idx]*layers.depths[idx]) < 1e-6:
+            if np.exp(-extinct_coef[idx]*layers.ldepth[idx]) < 1e-6:
                 break
-        Snet_pen = Snet_surf*(1-frac_absrad)*np.exp(-extinct_coef*layers.depths)/self.dt
+        Snet_pen = Snet_surf*(1-frac_absrad)*np.exp(-extinct_coef*layers.ldepth)/self.dt
 
         # recalculate layer temperatures, leaving out the surface since surface temp is calculated separately
-        new_Tprofile = layers.snowtemp.copy()
-        new_Tprofile[1:] = layers.snowtemp[1:] + Snet_pen[1:]/(layers.dry_spec_mass[1:]*eb_prms.Cp_ice)*self.dt
+        new_Tprofile = layers.ltemp.copy()
+        new_Tprofile[1:] = layers.ltemp[1:] + Snet_pen[1:]/(layers.ldrymass[1:]*eb_prms.Cp_ice)*self.dt
 
         # calculate melt from temperatures above 0
         layermelt = np.zeros(layers.nlayers)
@@ -247,11 +210,11 @@ class massBalance():
             # check if temperature is above 0
             if new_T > 0.:
                 # calculate melt from the energy that raised the temperature above 0
-                melt = (new_T-0.)*layers.dry_spec_mass[layer]*eb_prms.Cp_ice/eb_prms.Lh_rf
-                layers.snowtemp[layer] = 0.
+                melt = (new_T-0.)*layers.ldrymass[layer]*eb_prms.Cp_ice/eb_prms.Lh_rf
+                layers.ltemp[layer] = 0.
             else:
                 melt = 0
-                layers.snowtemp[layer] = new_T
+                layers.ltemp[layer] = new_T
             layermelt[layer] = melt
 
         return layermelt
@@ -279,29 +242,29 @@ class massBalance():
         layermelt = subsurf_melt.copy()
 
         surface_melt = surface.Qm*self.dt/eb_prms.Lh_rf         # melt in kg/m2
-        if surface_melt > layers.dry_spec_mass[0]:
+        if surface_melt > layers.ldrymass[0]:
             # melt by surface energy balance completely melts surface layer, so check if it melts further layers
-            fully_melted = np.where(np.array([np.sum(layers.dry_spec_mass[:i+1]) for i in range(layers.nlayers)]) <= surface_melt)[0]
+            fully_melted = np.where(np.array([np.sum(layers.ldrymass[:i+1]) for i in range(layers.nlayers)]) <= surface_melt)[0]
 
             # calculate how much additional melt will occur in the first layer that's not fully melted
-            newsurface_melt = surface_melt - np.sum(layers.dry_spec_mass[fully_melted])
+            newsurface_melt = surface_melt - np.sum(layers.ldrymass[fully_melted])
             newsurface_idx = fully_melted[-1] + 1
             # it's possible to fully melt that layer too when combined with penetrating SW melt:
-            if newsurface_melt + layermelt[newsurface_idx] > layers.dry_spec_mass[newsurface_idx]:
+            if newsurface_melt + layermelt[newsurface_idx] > layers.ldrymass[newsurface_idx]:
                 fully_melted = np.append(fully_melted,newsurface_idx)
                 # push new surface to the next layer down
-                newsurface_melt -= layers.dry_spec_mass[newsurface_idx]
+                newsurface_melt -= layers.ldrymass[newsurface_idx]
                 newsurface_idx += 1
 
             # set melt amounts from surface melt into melt array
-            layermelt[fully_melted] = layers.dry_spec_mass[fully_melted] 
+            layermelt[fully_melted] = layers.ldrymass[fully_melted] 
             layermelt[newsurface_idx] += newsurface_melt 
         else:
             # only surface layer is melting
             layermelt[0] = surface_melt
         return layermelt
         
-    def percolate(self,layers,layermelt,extra_water=0):
+    def percolation(self,layers,layermelt,extra_water=0):
         """
         Calculates the liquid water content in each layer by downward percolation and adjusts 
         layer heights.
@@ -325,29 +288,29 @@ class massBalance():
         melted_layers = []
         for layer,melt in enumerate(layermelt):
             # check if the layer fully melted
-            if melt >= layers.dry_spec_mass[layer]:
+            if melt >= layers.ldrymass[layer]:
                 melted_layers.append(layer)
                 # pass the meltwater to the next layer
-                extra_water += layers.dry_spec_mass[layer]+layers.watercont[layer]
+                extra_water += layers.ldrymass[layer]+layers.lwater[layer]
             else:
                 # remove melt from the dry mass
-                layers.dry_spec_mass[layer] -= melt
+                layers.ldrymass[layer] -= melt
 
                 # add melt and extra_water (melt from above) to layer water content
                 added_water = melt + extra_water
-                layers.watercont[layer] += added_water
+                layers.lwater[layer] += added_water
 
                 # check if meltwater exceeds the irreducible water content of the layer
                 layers.updateLayerProperties('irrwater')
-                if layers.watercont[layer] >= layers.irrwatercont[layer]:
+                if layers.lwater[layer] >= layers.irrwatercont[layer]:
                     # set water content to irr. water content and add the difference to extra_water
-                    extra_water = layers.watercont[layer] - layers.irrwatercont[layer]
-                    layers.watercont[layer] = layers.irrwatercont[layer]
+                    extra_water = layers.lwater[layer] - layers.irrwatercont[layer]
+                    layers.lwater[layer] = layers.irrwatercont[layer]
                 else: #if not overflowing, extra_water should be set back to 0
                     extra_water = 0
                 
                 # get the change in layer height due to loss of solid mass (volume only considers solid)
-                layers.heights[layer] -= melt/layers.snowdens[layer]
+                layers.lheight[layer] -= melt/layers.ldensity[layer]
                 # need to update layer depths
                 layers.updateLayerProperties() 
 
@@ -356,7 +319,7 @@ class massBalance():
 
         return runoff,melted_layers
 
-    def refreeze(self,layers):
+    def refreezing(self,layers):
         """
         Calculates refreeze in layers due to temperatures below freezing with liquid water content.
 
@@ -373,12 +336,12 @@ class massBalance():
         density_ice = eb_prms.density_ice
         Lh_rf = eb_prms.Lh_rf
         refreeze = 0
-        for layer, T in enumerate(layers.snowtemp):
-            if T < 0. and layers.watercont[layer] > 0:
+        for layer, T in enumerate(layers.ltemp):
+            if T < 0. and layers.lwater[layer] > 0:
                 # calculate potential for refreeze [J m-2]
-                E_temperature = np.abs(T)*layers.dry_spec_mass[layer]*Cp_ice  # cold content available 
-                E_water = layers.watercont[layer]*Lh_rf  # amount of water to freeze
-                E_pore = (density_ice*layers.heights[layer]-layers.dry_spec_mass[layer])*Lh_rf # pore space available
+                E_temperature = np.abs(T)*layers.ldrymass[layer]*Cp_ice  # cold content available 
+                E_water = layers.lwater[layer]*Lh_rf  # amount of water to freeze
+                E_pore = (density_ice*layers.lheight[layer]-layers.ldrymass[layer])*Lh_rf # pore space available
 
                 # calculate amount of refreeze in kg m-2
                 dm_ref = np.min([abs(E_temperature),abs(E_water),abs(E_pore)])/Lh_rf     # cannot be negative
@@ -387,13 +350,13 @@ class massBalance():
                 refreeze += dm_ref /  eb_prms.density_water
 
                 # add refreeze to layer ice mass
-                layers.dry_spec_mass[layer] += dm_ref
+                layers.ldrymass[layer] += dm_ref
                 # update layer temperature from latent heat
-                layers.snowtemp[layer] = -(E_temperature-dm_ref*Lh_rf)/Cp_ice/layers.dry_spec_mass[layer]
+                layers.ltemp[layer] = -(E_temperature-dm_ref*Lh_rf)/Cp_ice/layers.ldrymass[layer]
                 # update water content
-                layers.watercont[layer] = max(0,layers.watercont[layer]-dm_ref) # cannot be negative
+                layers.lwater[layer] = max(0,layers.lwater[layer]-dm_ref) # cannot be negative
                 # recalculate layer heights from new mass and update layers
-                layers.heights[layer] = layers.dry_spec_mass[layer]/layers.snowdens[layer]
+                layers.lheight[layer] = layers.ldrymass[layer]/layers.ldensity[layer]
                 layers.updateLayerProperties()
         return refreeze
     
@@ -410,11 +373,11 @@ class massBalance():
             Timestep at which densification is applied [s]
         """
         # only apply to snow and firn layers
-        snowfirn_idx = np.append(layers.snow_idx,np.where(layers.types == 'firn')[0])
+        snowfirn_idx = np.append(layers.snow_idx,np.where(layers.ltype == 'firn')[0])
 
         if eb_prms.method_densification in ['Boone']:
-            snowdens = layers.snowdens.copy()
-            snowtemp = layers.snowtemp.copy()
+            ldensity = layers.ldensity.copy()
+            ltemp = layers.ltemp.copy()
             # Constants
             g = eb_prms.gravity
             c1 = 2.8e-6
@@ -426,26 +389,26 @@ class massBalance():
             density_0 = eb_prms.density_fresh_snow
 
             # Loop through layers
-            for layer,height in enumerate(layers.heights[snowfirn_idx]):
-                weight_above = eb_prms.gravity*np.sum(layers.dry_spec_mass[:layer]+layers.watercont[:layer])
-                viscosity = viscosity_0 * np.exp(c4*(0.-snowtemp[layer])+c5*snowdens[layer])
+            for layer,height in enumerate(layers.lheight[snowfirn_idx]):
+                weight_above = eb_prms.gravity*np.sum(layers.ldrymass[:layer]+layers.lwater[:layer])
+                viscosity = viscosity_0 * np.exp(c4*(0.-ltemp[layer])+c5*ldensity[layer])
 
                 # get change in density and recalculate height 
-                dRho = (((weight_above*g)/viscosity) + c1*np.exp(-c2*(0.-snowtemp[layer]) - c3*np.maximum(0.,snowdens[layer]-density_0)))*snowdens[layer]*self.dt
-                snowdens[layer] += dRho
+                dRho = (((weight_above*g)/viscosity) + c1*np.exp(-c2*(0.-ltemp[layer]) - c3*np.maximum(0.,ldensity[layer]-density_0)))*ldensity[layer]*self.dt
+                ldensity[layer] += dRho
 
-                layers.snowdens = snowdens
-                layers.heights[layer] = layers.dry_spec_mass[layer]/layers.snowdens[layer]
+                layers.ldensity = ldensity
+                layers.lheight[layer] = layers.ldrymass[layer]/layers.ldensity[layer]
                 layers.updateLayerProperties('depth')
                 layers.updateLayerTypes()
 
         else:
             # get change in height and recalculate density from resulting compression
-            for layer,height in enumerate(layers.heights[snowfirn_idx]):
-                weight_above = eb_prms.gravity*np.sum(layers.dry_spec_mass[:layer])
+            for layer,height in enumerate(layers.lheight[snowfirn_idx]):
+                weight_above = eb_prms.gravity*np.sum(layers.ldrymass[:layer])
                 dD = height*weight_above/eb_prms.viscosity_snow/self.dt
-                layers.heights[layer] -= dD
-                layers.snowdens[layer] = layers.dry_spec_mass[layer] / layers.heights[layer]
+                layers.lheight[layer] -= dD
+                layers.ldensity[layer] = layers.ldrymass[layer] / layers.lheight[layer]
                 layers.updateLayerProperties('depth')
                 layers.updateLayerTypes()
 
@@ -476,16 +439,16 @@ class massBalance():
         Resolves the temperature profile from conduction of heat using Forward-in-Time-Central-in-Space (FTCS) scheme
         """
         nl = layers.nlayers
-        height = layers.heights
-        density = layers.snowdens
-        old_T = layers.snowtemp
+        height = layers.lheight
+        density = layers.ldensity
+        old_T = layers.ltemp
         new_T = old_T.copy()
         if nl > 1: #***** check on weird densities
             if np.max(density[:-1]) >= 900 or np.min(density) < 0:
                 print(density)
                 print('Height',height)
-                print('Dry mass',layers.dry_spec_mass)
-                print('Water',layers.watercont)
+                print('Dry mass',layers.ldrymass)
+                print('Water',layers.lwater)
         # conductivity = 2.2*np.power(density/eb_prms.density_ice,1.88)
         conductivity = 0.21e-01 + 0.42e-03 * density + 0.22e-08 * density ** 3
         Cp_ice = eb_prms.Cp_ice
@@ -544,27 +507,131 @@ class massBalance():
     #     self.monthly_output.loc[month]['MB'] = MB
     #     return
     
-    def storeVars(self,bin):
+class Output():
+    def __init__(self,time):
+        n_bins = eb_prms.n_bins
+        bin_idx = range(n_bins)
+        zeros = np.zeros([len(time),n_bins,eb_prms.max_nlayers])
+
+        # Create variable name dict
+        vn_dict = {'EB':['SWin','SWout','LWin','LWout','rain','sensible','latent','meltenergy'],
+                   'MB':['melt','refreeze','runoff','accum','snowdepth'],
+                   'Temp':['airtemp','surftemp'],
+                   'Layers':['layertemp','layerdensity','layerwater','layerheight']}
+
+        # Create file to store outputs
+        all_variables = xr.Dataset(data_vars = dict(
+                SWin = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
+                SWout = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
+                LWin = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
+                LWout = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
+                rain = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
+                sensible = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
+                latent = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
+                meltenergy = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
+                melt = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
+                refreeze = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
+                runoff = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
+                accum = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
+                airtemp = (['time','bin'],zeros[:,:,0],{'units':'C'}),
+                surftemp = (['time','bin'],zeros[:,:,0],{'units':'C'}),
+                layertemp = (['time','bin','layer'],zeros,{'units':'C'}),
+                layerwater = (['time','bin','layer'],zeros,{'units':'kg m-2'}),
+                layerheight = (['time','bin','layer'],zeros,{'units':'m'}),
+                layerdensity = (['time','bin','layer'],zeros,{'units':'kg m-3'}),
+                snowdepth = (['time','bin'],zeros[:,:,0],{'units':'m'})
+                ),
+                coords=dict(
+                    time=(['time'],time),
+                    bin = (['bin'],bin_idx),
+                    layer=(['layer'],np.arange(eb_prms.max_nlayers))
+                    ))
+        vars_list = vn_dict[eb_prms.store_vars[0]]
+        for var in eb_prms.store_vars[1:]:
+            vars_list.extend(vn_dict[var])
+        all_variables[vars_list].to_netcdf(eb_prms.output_name+'.nc')
+
+        # Initialize energy balance outputs
+        self.SWin_output = []
+        self.SWout_output = []
+        self.LWin_output = []
+        self.LWout_output = []
+        self.rain_output = []
+        self.sensible_output = []
+        self.latent_output = []
+        self.meltenergy_output = []
+
+        # Initialize mass balance outputs
+        self.melt_output = []
+        self.refreeze_output = []
+        self.runoff_output = []
+        self.accum_output = []
+        self.airtemp_output = []
+        self.surftemp_output = []
+
+        # Initialize layer outputs
+        self.layertemp_output = []
+        self.layerwater_output = []
+        self.layerdensity_output = []
+        self.layerheight_output = []
+        self.snowdepth_output = []
+        return
+    
+    def storeTimestep(self,massbal,enbal,surface,layers):
+        self.SWin_output.append(enbal.SWin)
+        self.SWout_output.append(enbal.SWout)
+        self.LWin_output.append(enbal.LWin)
+        self.LWout_output.append(enbal.LWout)
+        self.rain_output.append(enbal.rain)
+        self.sensible_output.append(enbal.sens)
+        self.latent_output.append(enbal.lat)
+        self.meltenergy_output.append(surface.Qm)
+        self.melt_output.append(massbal.melt)
+        self.refreeze_output.append(massbal.refreeze)
+        self.runoff_output.append(massbal.runoff)
+        self.accum_output.append(massbal.accum)
+        self.airtemp_output.append(enbal.tempC)
+        self.surftemp_output.append(surface.temp)
+        self.snowdepth_output.append(np.sum(layers.lheight[layers.snow_idx]))
+
+        layertemp = [None]*eb_prms.max_nlayers
+        layerwater = layertemp.copy()
+        layerheight = layertemp.copy()
+        layerdensity = layertemp.copy()
+        layertemp[eb_prms.max_nlayers-layers.nlayers:] = layers.ltemp
+        layerwater[eb_prms.max_nlayers-layers.nlayers:] = layers.lwater
+        layerheight[eb_prms.max_nlayers-layers.nlayers:] = layers.lheight
+        layerdensity[eb_prms.max_nlayers-layers.nlayers:] = layers.ldensity
+        self.layertemp_output.append(layertemp)
+        self.layerwater_output.append(layerwater)
+        self.layerheight_output.append(layerheight)
+        self.layerdensity_output.append(layerdensity)
+    
+    def storeData(self,bin):
         with xr.open_dataset(eb_prms.output_name+'.nc') as dataset:
             ds = dataset.load()
-            ds['SWin'].loc[:,bin] = self.SWin_output
-            ds['SWout'].loc[:,bin] = self.SWout_output
-            ds['LWin'].loc[:,bin] = self.LWin_output
-            ds['LWout'].loc[:,bin] = self.LWout_output
-            ds['rain'].loc[:,bin] = self.rain_output
-            ds['sensible'].loc[:,bin] = self.sensible_output
-            ds['latent'].loc[:,bin] = self.latent_output
-            ds['meltenergy'].loc[:,bin] = self.meltenergy_output
-            ds['melt'].loc[:,bin] = self.melt_output
-            ds['refreeze'].loc[:,bin] = self.refreeze_output
-            ds['runoff'].loc[:,bin] = self.runoff_output
-            ds['accum'].loc[:,bin] = self.accum_output
-            ds['airtemp'].loc[:,bin] = self.airtemp_output
-            ds['surftemp'].loc[:,bin] = self.surftemp_output
-            ds['snowtemp'].loc[:,bin,:] = self.snowtemp_output
-            ds['layerheight'].loc[:,bin,:] = self.layerheight_output
-            ds['snowdensity'].loc[:,bin,:] = self.snowdensity_output
-            ds['watercont'].loc[:,bin,:] = self.watercont_output
-            ds['snowdepth'].loc[:,bin] = self.snowdepth_output
+            if 'EB' in eb_prms.store_vars:
+                ds['SWin'].loc[:,bin] = self.SWin_output
+                ds['SWout'].loc[:,bin] = self.SWout_output
+                ds['LWin'].loc[:,bin] = self.LWin_output
+                ds['LWout'].loc[:,bin] = self.LWout_output
+                ds['rain'].loc[:,bin] = self.rain_output
+                ds['sensible'].loc[:,bin] = self.sensible_output
+                ds['latent'].loc[:,bin] = self.latent_output
+                ds['meltenergy'].loc[:,bin] = self.meltenergy_output
+            if 'MB' in eb_prms.store_vars:
+                ds['melt'].loc[:,bin] = self.melt_output
+                ds['refreeze'].loc[:,bin] = self.refreeze_output
+                ds['runoff'].loc[:,bin] = self.runoff_output
+                ds['accum'].loc[:,bin] = self.accum_output
+                ds['snowdepth'].loc[:,bin] = self.snowdepth_output
+            if 'Temp' in eb_prms.store_vars:
+                ds['airtemp'].loc[:,bin] = self.airtemp_output
+                ds['surftemp'].loc[:,bin] = self.surftemp_output
+            if 'Layers' in eb_prms.store_vars:
+                ds['layertemp'].loc[:,bin,:] = self.layertemp_output
+                ds['layerheight'].loc[:,bin,:] = self.layerheight_output
+                ds['layerdensity'].loc[:,bin,:] = self.layerdensity_output
+                ds['layerwater'].loc[:,bin,:] = self.layerwater_output
         ds.to_netcdf(eb_prms.output_name+'.nc')
         return
