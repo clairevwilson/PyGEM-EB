@@ -9,23 +9,22 @@ lat_max = 72
 
 all_vars = ['2m_temperature','total_precipitation','surface_pressure','2m_dewpoint_temperature',
             '10m_u_component_of_wind','10m_v_component_of_wind','surface_solar_radiation_downwards']
-var = '10m_u_component_of_wind'
+var = '10m_v_component_of_wind'
 
 # Output information
 file_format = 'netcdf'
-folder_out = '/home/claire/research/CDS'
+# folder_out = 'D:/ERA5_hourly/'+var+'/'
+folder_out = '/home/claire/research/CDS/'
 downloaded_file = 'ERA5_'+var+'_Alaskayear_hourly.nc'
 downloaded_file = os.path.join(folder_out, downloaded_file)
 
 # Set up time
-start_year = 1980
+start_year = 2012
 end_year = 2021
 years = [ str(start_year +i ) for i in range(end_year - start_year + 1)] 
 start_day = 1
 end_day = 31
 days = [ str(start_day +i ).zfill(2) for i in range(end_day - start_day + 1)]
-
-# Extract unique lat/lon cell where there are glaciers 
 
 c = cdsapi.Client()
 
