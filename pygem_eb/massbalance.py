@@ -419,7 +419,7 @@ class massBalance():
             # there is precipitation and it falls as snow--set fresh snow timestamp
             surface.snow_timestamp = time
             rain = 0
-            density_fresh_snow = max(109*6*(enbal.tempC-0)+26*enbal.wind**0.5,50) # from CROCUS ***** CITE
+            density_fresh_snow = max(109*6*(enbal.tempC-0.)+26*enbal.wind**0.5,50) # from CROCUS ***** CITE
             snow = enbal.prec*density_fresh_snow*self.dt # kg m-2
             precip_type = 'snow'
         elif enbal.tempC > eb_prms.tsnow_threshold:
