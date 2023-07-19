@@ -33,8 +33,7 @@ class massBalance():
         self.surface = eb_surface.Surface(self.layers,self.time_list)
 
         # Initialize output class
-        if eb_prms.store_data:
-            self.output = Output(self.time_list)
+        self.output = Output(self.time_list)
         return
     
     def main(self,climateds):

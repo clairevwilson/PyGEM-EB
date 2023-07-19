@@ -17,36 +17,7 @@ glacier_table = modelsetup.selectglaciersrgitable(eb_prms.glac_no,
                 rgi_glac_number=eb_prms.rgi_glac_number, include_landterm=eb_prms.include_landterm,
                 include_laketerm=eb_prms.include_laketerm, include_tidewater=eb_prms.include_tidewater)
 
-# dates_table = modelsetup.datesmodelrun(startyear=eb_prms.startdate, endyear=eb_prms.enddate)
-dates_table = pd.DataFrame({'date' : pd.date_range(eb_prms.startdate,eb_prms.enddate,freq='h')})
-# Extract attributes for dates_table
-dates_table['year'] = dates_table['date'].dt.year
-dates_table['month'] = dates_table['date'].dt.month
-dates_table['day'] = dates_table['date'].dt.day
-dates_table['hour'] = dates_table['date'].dt.hour
-dates_table['daysinmonth'] = dates_table['date'].dt.daysinmonth
-dates_table['timestep'] = np.arange(len(dates_table['date']))
-# Set index
-dates_table.set_index('timestep', inplace=True)
-
-# Remove leap year days if user selected this with option_leapyear
-if eb_prms.option_leapyear == 0:
-    # First, change 'daysinmonth' number
-    mask1 = dates_table['daysinmonth'] == 29
-    dates_table.loc[mask1,'daysinmonth'] = 28
-    # Next, remove the 29th days from the dates
-    mask2 = ((dates_table['month'] == 2) & (dates_table['day'] == 29))
-    dates_table.drop(dates_table[mask2].index, inplace=True)
-    dates_table['timestep'] = np.arange(len(dates_table['date']))
-    dates_table.set_index('timestep', inplace=True)
-
-# Add column for water year
-# Water year for northern hemisphere using USGS definition (October 1 - September 30th),
-# e.g., water year for 2000 is from October 1, 1999 - September 30, 2000
-dates_table['wateryear'] = dates_table['year']
-for step in range(dates_table.shape[0]):
-    if dates_table.loc[step,'month'] >= 10:
-        dates_table.loc[step,'wateryear'] = dates_table.loc[step,'year'] + 1
+dates_table = modelsetup.datesmodelrun(startyear=eb_prms.startdate, endyear=eb_prms.enddate)
 
 gcm = class_climate.GCM(name=eb_prms.ref_gcm_name)
 if eb_prms.climate_input in ['GCM']:
@@ -71,10 +42,10 @@ if eb_prms.climate_input in ['GCM']:
     tcc = tcc[0]
     ntimesteps = len(data_hours)
 elif eb_prms.climate_input in ['AWS']:
-    aws = class_climate.AWS(glacier_table,dates_table,'H',gcm)
+    aws = class_climate.AWS(eb_prms.AWS_fn,dates_table)
     temp_data = aws.temp
     tp_data = aws.tp
-    dtemp = aws.dtemp
+    dtemp_data = aws.dtemp
     rh_data = aws.rh
     SWin = aws.SWin
     SWout = aws.SWout

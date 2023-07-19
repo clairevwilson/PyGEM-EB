@@ -57,7 +57,7 @@ climate_input = 'AWS' # GCM or AWS
 # AWS_fn = 'USER-SPECIFY'
 if climate_input in ['AWS']:
     if glac_no == ['01.00570']:
-        AWS_fn = main_directory + '/../climate_data/AWS/Gulkana/gulkana1725_hourly_LVL2.csv'
+        AWS_fn = main_directory + '/../climate_data/AWS/gulkana1725_hourly.csv'
     elif glac_no ==  ['08.00213']:
         AWS_fn = main_directory + '/../climate_data/AWS/Storglaciaren/SITES_MET_TRS_SGL_dates_15MIN.csv'
     assert os.path.exists(AWS_fn)
