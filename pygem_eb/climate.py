@@ -141,12 +141,13 @@ class Climate():
             # open and check units of climate data
             ds = xr.open_dataset(fn)
             if var != 'elev':
-                if 'bc' in var or 'dust' in var:
-                    ds = ds.sel(time=dates)
-                elif eb_prms.reanalysis == 'ERA5-hourly':
+                dep_var = 'bc' in var or 'dust' in var
+                if not dep_var and eb_prms.reanalysis == 'ERA5-hourly':
                     assert dates[0] >= pd.to_datetime(ds.time.values[0])
                     assert dates[-1] <= pd.to_datetime(ds.time.values[-1])
                     ds = ds.interp(time=dates)
+                else:
+                    ds = ds.sel(time=dates)
             ds = self.check_units(var,ds)
             # index by lat and lon
             vn = self.var_dict[var]['vn'] 
