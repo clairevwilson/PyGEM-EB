@@ -129,8 +129,8 @@ if dates_from_data:
 else:
     # startdate = pd.to_datetime('2000-05-01 00:30') 
     # enddate = pd.to_datetime('2002-07-31 23:30')
-    startdate = pd.to_datetime('2020-04-20 00:30')    # Gulkana AWS dates
-    enddate = pd.to_datetime('2020-08-10 00:30')
+    startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
+    enddate = pd.to_datetime('2023-08-10 00:30')
     # startdate = pd.to_datetime('2008-05-04 18:30')    # South dates
     # enddate = pd.to_datetime('2008-09-14 00:30')
     # startdate = pd.to_datetime('2016-05-11 00:30') # JIF sample dates
@@ -167,10 +167,10 @@ method_conductivity = 'OstinAndersson'  # 'OstinAndersson', 'VanDusen','Sturm','
 # method_grainsizetable = 'interpolate' # unused
 
 # CONSTANT SWITCHES
-constant_snowfall_density = False       # False or density in kg m-3
-constant_conductivity = k_ice = 2.33       # False or conductivity in W K-1 m-1
+constant_snowfall_density = False        # False or density in kg m-3
+constant_conductivity = k_ice = 0.6      # False or conductivity in W K-1 m-1
 constant_freshgrainsize = False          # False or grain size in um (54.5 is standard)
-constant_drdry = 1e-4                  # False or dry metamorphism grain size growth rate [um s-1] (1e-4 seems reasonable)
+constant_drdry = False                   # False or dry metamorphism grain size growth rate [um s-1] (1e-4 seems reasonable)
 
 # ALBEDO SWITCHES
 switch_snow = 1             # 0 to turn off fresh snow feedback; 1 to include it

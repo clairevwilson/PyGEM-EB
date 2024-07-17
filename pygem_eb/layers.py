@@ -619,9 +619,9 @@ class Layers():
 
                 # Dry metamorphism
                 if np.any(g < FRESH_GRAINSIZE):
-                    drdrydt = dr0*np.power(tau/(tau + 1.0),1/kap)/3600
+                    drdrydt = dr0*np.power(tau/(tau + 1e-6),1/kap)/3600
                 else:
-                    drdrydt = dr0*np.power(tau/(tau + 1e6*(g - FRESH_GRAINSIZE)),1/kap)/3600
+                    drdrydt = dr0*np.power(tau/(tau + g - FRESH_GRAINSIZE),1/kap)/3600
                 drdry = drdrydt * dt
 
             # Wet metamorphism
