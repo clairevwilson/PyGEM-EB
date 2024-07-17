@@ -131,7 +131,8 @@ class Climate():
         # get reanalysis data geopotential
         z_fp = self.reanalysis_fp + self.var_dict['elev']['fn']
         z_vn = self.var_dict['elev']['vn']
-        zds = xr.open_dataset(z_fp).sel(lat=lat,lon=lon,method='nearest')
+        zds = xr.open_dataset(z_fp)
+        zds = zds.sel({self.lat_vn:lat,self.lon_vn:lon},method='nearest')
         zds = self.check_units('elev',zds)
         self.reanalysis_elev = zds.isel(time=0)[z_vn].values
 
@@ -140,11 +141,20 @@ class Climate():
             # open and check units of climate data
             ds = xr.open_dataset(fn)
             if var != 'elev':
-                ds = ds.sel(time=dates)
+                if 'bc' in var or 'dust' in var:
+                    ds = ds.sel(time=dates)
+                elif eb_prms.reanalysis == 'ERA5-hourly':
+                    assert dates[0] >= pd.to_datetime(ds.time.values[0])
+                    assert dates[-1] <= pd.to_datetime(ds.time.values[-1])
+                    ds = ds.interp(time=dates)
             ds = self.check_units(var,ds)
             # index by lat and lon
-            vn = self.var_dict[var]['vn']
-            data = ds.sel(lat=lat, lon=lon, method='nearest')[vn].values
+            vn = self.var_dict[var]['vn'] 
+            lat_vn,lon_vn = [self.lat_vn,self.lon_vn]
+            if 'bc' in var or 'dust' in var:
+                if eb_prms.reanalysis == 'ERA5-hourly':
+                    lat_vn,lon_vn = ['lat','lon']
+            data = ds.sel({lat_vn:lat,lon_vn:lon}, method='nearest')[vn].values
             # adjust elevation-dependent variables
             if var in ['temp','tp','sp']:
                 data = self.bin_adjust(data.ravel(), var, self.reanalysis_elev)
@@ -264,20 +274,23 @@ class Climate():
                        'bcdry':'kg m-2 s-1', 'bcwet':'kg m-2 s-1',
                        'dustdry':'kg m-2 s-1', 'dustwet':'kg m-2 s-1'}
         vn = list(ds.keys())[0]
-        units_in =  ds[vn].attrs['units']
+        units_in =  ds[vn].attrs['units'].replace('*','')
         units_out = model_units[var]
         if units_in != units_out:
             if var == 'temp' and units_in == 'K':
                 ds[vn] = ds[vn] - 273.15
-            elif var == 'rh' and units_in == '1':
+            elif var == 'rh' and units_in in ['1','0-1']:
                 ds[vn] = ds[vn] * 100
-            elif var == 'tp' and units_in == 'kg m-2 s-1':
-                ds[vn] = ds[vn] / 1000 * 3600
+            elif var == 'tp':
+                if units_in == 'kg m-2 s-1':
+                    ds[vn] = ds[vn] / 1000 * 3600
+                elif units_in == 'm':
+                    ds[vn] = ds[vn] / 3600
             elif var == 'SWin' and units_in == 'W m-2':
                 ds[vn] = ds[vn] * 3600
             elif var == 'LWin' and units_in == 'W m-2':
                 ds[vn] = ds[vn] * 3600
-            elif var == 'elev' and units_in == 'm+2 s-2':
+            elif var == 'elev' and units_in in ['m+2 s-2','m2 s-2']:
                 ds[vn] = ds[vn] / eb_prms.gravity
             else:
                 print(f'WARNING: units did not match for {var} but were not updated')
@@ -312,6 +325,11 @@ class Climate():
         return RMSE
 
     def get_vardict(self):
+        # Determine filetag for MERRA2 lat/lon gridded files
+        flat = str(int(np.floor(self.lat/10)*10))
+        flon = str(int(np.floor(self.lon/10)*10))
+        tag = eb_prms.MERRA2_filetag if eb_prms.MERRA2_filetag else f'{flat}_{flon}'
+
         # Update filenames for MERRA-2 (need grid lat/lon)
         self.reanalysis_fp = eb_prms.main_directory + '/../climate_data/'
         self.var_dict = {'temp':{'fn':[],'vn':[]},
@@ -325,9 +343,6 @@ class Climate():
             'lat':{'fn':'','vn':''}, 'lon':{'fn':'','vn':''}}
         if eb_prms.reanalysis == 'MERRA2':
             self.reanalysis_fp += 'MERRA2/'
-            flat = str(int(np.floor(self.lat/10)*10))
-            flon = str(int(np.floor(self.lon/10)*10))
-            tag = eb_prms.MERRA2_filetag if eb_prms.MERRA2_filetag else f'{flat}_{flon}'
             self.var_dict['temp']['vn'] = 'T2M'
             self.var_dict['rh']['vn'] = 'RH2M'
             self.var_dict['sp']['vn'] = 'PS'
@@ -361,9 +376,8 @@ class Climate():
             self.var_dict['bcdry']['fn'] = f'BCDP002/MERRA2_BCDP002_{tag}.nc'
             self.var_dict['dustwet']['fn'] = f'DUWT003/MERRA2_DUWT003_{tag}.nc'
             self.var_dict['dustdry']['fn'] = f'DUDP003/MERRA2_DUDP003_{tag}.nc'
-        elif eb_prms.reanalysis == 'ERA5':
-            assert 1==0, 'Model is currently set up to run MERRA-2'
-            self.reanalysis_fp += 'ERA5/'
+        elif eb_prms.reanalysis == 'ERA5-hourly':
+            self.reanalysis_fp += 'ERA5/ERA5_hourly/'
             # Variable names for energy balance
             self.var_dict['temp']['vn'] = 't2m'
             self.var_dict['rh']['vn'] = 'rh'
@@ -393,11 +407,11 @@ class Climate():
             self.var_dict['vwind']['fn'] = 'ERA5_vwind_hourly.nc'
             self.var_dict['uwind']['fn'] = 'ERA5_uwind_hourly.nc'
             self.var_dict['tp']['fn'] = 'ERA5_tp_hourly.nc'
-            self.var_dict['elev']['fn'] = 'pygems elev path'
-            self.var_dict['bcwet']['fn'] = 'BCWT002/MERRA2_BCWT002_LAT_LON.nc'
-            self.var_dict['bcdry']['fn'] = 'BCDP002/MERRA2_BCDP002_LAT_LON.nc'
-            self.var_dict['dustwet']['fn'] = 'DUWT003/MERRA2_DUWT003_LAT_LON.nc'
-            self.var_dict['dustdry']['fn'] = 'DUDP003/MERRA2_DUDP003_LAT_LON.nc'
+            self.var_dict['elev']['fn'] = 'ERA5_geopotential_2000.nc'
+            self.var_dict['bcwet']['fn'] = f'./../../MERRA2/BCWT002/MERRA2_BCWT002_{tag}.nc'
+            self.var_dict['bcdry']['fn'] = f'./../../MERRA2/BCDP002/MERRA2_BCDP002_{tag}.nc'
+            self.var_dict['dustwet']['fn'] = f'./../../MERRA2/DUWT003/MERRA2_DUWT003_{tag}.nc'
+            self.var_dict['dustdry']['fn'] = f'./../../MERRA2/DUDP003/MERRA2_DUDP003_{tag}.nc'
 
     # UNUSED --- MOVE TO PYGEM EB GRAVEYARD
     # from sklearn.ensemble import RandomForestRegressor
