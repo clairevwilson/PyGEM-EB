@@ -106,7 +106,7 @@ albedo_out_fp = main_directory + '/../Output/EB/albedo.csv'
 
 # ========== CLIMATE AND TIME INPUTS ========== 
 reanalysis = 'MERRA2' # 'MERRA2' (or 'ERA5-hourly' -- BROKEN)
-temp_bias_adjust = True # adjust MERRA-2 temperatures according to bias?
+temp_bias_adjust = True   # adjust MERRA-2 temperatures according to bias?
 MERRA2_filetag = False    # False or string to follow 'MERRA2_VAR_' in MERRA2 filename
 AWS_fp = main_directory + '/../climate_data/AWS/'
 AWS_fn = AWS_fp+glac_props[glac_no[0]]['AWS_fn']
@@ -129,8 +129,8 @@ if dates_from_data:
 else:
     # startdate = pd.to_datetime('2000-05-01 00:30') 
     # enddate = pd.to_datetime('2002-07-31 23:30')
-    startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
-    enddate = pd.to_datetime('2023-08-10 00:30')
+    startdate = pd.to_datetime('2020-04-20 00:30')    # Gulkana AWS dates
+    enddate = pd.to_datetime('2020-08-10 00:30')
     # startdate = pd.to_datetime('2008-05-04 18:30')    # South dates
     # enddate = pd.to_datetime('2008-09-14 00:30')
     # startdate = pd.to_datetime('2016-05-11 00:30') # JIF sample dates
@@ -252,10 +252,10 @@ roughness_fresh_snow = 0.24 # surface roughness length for fresh snow [mm] (Moel
 roughness_firn = 4          # surface roughness length for firn [mm] (Moelg et al. 2012, TC)
 ratio_BC2_BCtot = 2.08      # Ratio to transform BC bin 2 deposition to total BC
 ratio_DU3_DUtot = 3         # Ratio to transform dust bin 3 deposition to total dust
-ratio_DU_bin1 = 0.0834444   # Ratio to transform total dust to SNICAR Bin 1 (0.05-0.5um)
-ratio_DU_bin2 = 0.19784     # " SNICAR Bin 2 (0.5-1.25um)
+ratio_DU_bin1 = 0.0751      # Ratio to transform total dust to SNICAR Bin 1 (0.05-0.5um)
+ratio_DU_bin2 = 0.20535     # " SNICAR Bin 2 (0.5-1.25um)
 ratio_DU_bin3 = 0.481675    # " SNICAR Bin 3 (1.25-2.5um)
-ratio_DU_bin4 = 0.203786    # " SNICAR Bin 4 (2.5-5um)
+ratio_DU_bin4 = 0.203775    # " SNICAR Bin 4 (2.5-5um)
 ratio_DU_bin5 = 0.034       # " SNICAR Bin 5 (5-50um)
 diffuse_cloud_limit = 0.6   # Threshold to consider cloudy vs clear-sky in SNICAR
 mb_threshold = 1e-3         # Threshold to consider not conserving mass

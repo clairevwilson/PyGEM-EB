@@ -374,22 +374,24 @@ class Layers():
                     self.split_layer(layer)
                     layer_split = True
             elif self.ltype[layer] in ['firn']:
-                if dz < firn_min_height:
+                if dz < firn_min_height and self.ltype[layer]==self.ltype[layer+1]:
                     self.merge_layers(layer)
                 elif dz > firn_max_height:
                     self.split_layer(layer)
                     layer_split = True
             if not layer_split:
                 layer += 1
+
+        # END OF SUMMER SNOW --> FIRN *****
         # if time.day_of_year == 0 and time.hour == 0:
         #     begin_winter = False
-        if time.day_of_year == 244 and time.hour == 0:
-            # conditions for first snowfall of winter: merge snow into single firn layer
-            merge_count = max(0,len(self.snow_idx) - 2)
-            for _ in range(merge_count):
-                self.merge_layers(0)
-                self.ltype[0] = 'firn'
-            print(merge_count+1,'layers merged into firn')
+        # if time.day_of_year == 244 and time.hour == 0:
+        #     # conditions for first snowfall of winter: merge snow into single firn layer
+        #     merge_count = max(0,len(self.snow_idx) - 2)
+        #     for _ in range(merge_count):
+        #         self.merge_layers(0)
+        #         self.ltype[0] = 'firn'
+        #     print(merge_count+1,'layers merged into firn')
         return
     
     def update_layer_props(self,do=['depth','density']):
@@ -537,7 +539,6 @@ class Layers():
         """
         # CONSTANTS
         WET_C = eb_prms.wet_snow_C
-        GRAVITY = eb_prms.gravity
         PI = np.pi
         RFZ_GRAINSIZE = eb_prms.rfz_grainsize
         dt = eb_prms.daily_dt
