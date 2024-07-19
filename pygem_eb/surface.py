@@ -287,10 +287,6 @@ class Surface():
         # Grain size files are every 1um till 1500um, then every 500
         idx_1500 = np.where(lgrainsize>1500)[0]
         lgrainsize[idx_1500] = np.round(lgrainsize[idx_1500]/500) * 500
-        if len(np.where(lgrainsize<0)[0])>0:
-            print(lgrainsize)
-            print('Claire needs to fix a negative grain size issue, dont worry about it')
-            lgrainsize[np.where(lgrainsize<0)[0]] = 1500
         lgrainsize = lgrainsize.tolist()
 
         # Convert LAPs from mass to concentration in ppb

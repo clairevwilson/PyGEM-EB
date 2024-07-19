@@ -50,8 +50,12 @@ class Layers():
         self.lwater = lwater                # LAYER WATER CONTENT [kg m-2]
 
         # Initialize LAPs (black carbon and dust)
-        lBC = np.ones(self.nlayers)*eb_prms.BC_freshsnow*lheight
-        ldust = np.ones(self.nlayers)*eb_prms.dust_freshsnow*lheight 
+        if eb_prms.switch_LAPs == 1:
+            lBC = np.ones(self.nlayers)*eb_prms.BC_freshsnow*lheight
+            ldust = np.ones(self.nlayers)*eb_prms.dust_freshsnow*lheight 
+        else:
+            lBC = np.zeros(self.nlayers)
+            ldust = np.zeros(self.nlayers)
         self.lBC = lBC                      # LAYER BLACK CARBON MASS [kg m-2]
         self.ldust = ldust                  # LAYER DUST MASS [kg m-2]
 
@@ -490,12 +494,17 @@ class Layers():
                 new_grainsize = np.piecewise(airtemp,
                                     [airtemp<=-30,-30<airtemp<0,airtemp>=0],
                                     [54.5,54.5+5*(airtemp+30),204.5])
+
             new_height = snowfall/new_density
             new_BC = enbal.bcwet * enbal.dt
             new_dust = enbal.dustwet * enbal.dt
             new_snow = snowfall
             surface.snow_timestamp = timestamp
 
+        if eb_prms.switch_LAPs != 1:
+            new_BC = 0
+            new_dust = 0
+            
         # Conditions: if any are TRUE, create a new layer
         new_layer_conds = np.array([self.ltype[0] in 'ice',
                             self.ltype[0] in 'firn',
@@ -541,6 +550,7 @@ class Layers():
         WET_C = eb_prms.wet_snow_C
         PI = np.pi
         RFZ_GRAINSIZE = eb_prms.rfz_grainsize
+        FIRN_GRAINSIZE = 2000 # **** FIRN GRAIN SIZE?
         dt = eb_prms.daily_dt
 
         if eb_prms.constant_freshgrainsize:
@@ -548,7 +558,7 @@ class Layers():
         else:
             FRESH_GRAINSIZE = np.piecewise(airtemp,[airtemp<=-30,-30<airtemp<0,airtemp>=0],
                                        [54.5,54.5+5*(airtemp+30),204.5])
-
+            
         if len(self.snow_idx) > 0:
             # bins is a list of indices to calculate grain size on
             if not bins:
@@ -595,6 +605,7 @@ class Layers():
                 p[np.where(p < 50)[0]] = 50
                 p[np.where(p > 400)[0]] = 400
                 dTdz[np.where(dTdz > 300)[0]] = 300
+                T[np.where(T < 223.15)[0]] = 223.15
                 T[np.where(T > 273.15)[0]] = 273.15
 
                 if True: # eb_prms.method_grainsizetable in ['interpolate']:
@@ -607,9 +618,9 @@ class Layers():
                     diag = np.zeros((n,n,n),dtype=bool)
                     for i in range(n):
                         diag[i,i,i] = True
-                    tau = ds.taumat.to_numpy()[diag]
-                    kap = ds.kapmat.to_numpy()[diag]
-                    dr0 = ds.dr0mat.to_numpy()[diag]
+                    tau = ds.taumat.to_numpy()[diag].astype(float)
+                    kap = ds.kapmat.to_numpy()[diag].astype(float)
+                    dr0 = ds.dr0mat.to_numpy()[diag].astype(float)
 
                 # elif eb_prms.method_grainsizetable in ['ML']:
                 #     X = np.vstack([T,p,dTdz]).T
@@ -633,11 +644,14 @@ class Layers():
            
             # Sum contributions of old snow, new snow and refreeze
             grainsize = aged_grainsize*f_old + FRESH_GRAINSIZE*f_new + RFZ_GRAINSIZE*f_rfz
+            
+            # Enforce maximum grainsize
+            grainsize[np.where(grainsize > FIRN_GRAINSIZE)[0]] = FIRN_GRAINSIZE
             self.grainsize[bins] = grainsize
-            self.grainsize[self.firn_idx] = 2000 # **** FIRN GRAIN SIZE?
+            self.grainsize[self.firn_idx] = FIRN_GRAINSIZE 
             self.grainsize[self.ice_idx] = 5000
         elif len(self.firn_idx) > 0: # no snow, but there is firn
-            self.grainsize[self.firn_idx] = 2000
+            self.grainsize[self.firn_idx] = FIRN_GRAINSIZE
             self.grainsize[self.ice_idx] = 5000
         else: # no snow or firn, just ice
             self.grainsize[self.ice_idx] = 5000

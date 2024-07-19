@@ -398,9 +398,15 @@ class energyBalance():
             self.bcdry = 1e-14 # kg m-2 s-1
         if np.isnan(self.dustdry):
             self.dustdry = 1e-13 # kg m-2 s-1
+        
+        # Switch runs have no BC
+        if eb_prms.switch_LAPs == 0:
+            self.bcdry = 0
+            self.dustdry = 0
 
-        layers.lBC[0] += self.bcdry * self.dt * BC_RATIO * DEP_FACTOR
-        layers.ldust[0] += self.dustdry * self.dt * DUST_RATIO
+        if layers.ltype[0] != 'ice':
+            layers.lBC[0] += self.bcdry * self.dt * BC_RATIO * DEP_FACTOR
+            layers.ldust[0] += self.dustdry * self.dt * DUST_RATIO
         return 
     
     def get_roughness(self,days_since_snowfall,layertype):

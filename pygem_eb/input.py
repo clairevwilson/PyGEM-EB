@@ -127,10 +127,10 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    # startdate = pd.to_datetime('2000-05-01 00:30') 
-    # enddate = pd.to_datetime('2002-07-31 23:30')
-    startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
-    enddate = pd.to_datetime('2023-08-10 00:30')
+    startdate = pd.to_datetime('2009-05-10 00:30') 
+    enddate = pd.to_datetime('2009-08-31 23:30')
+    # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
+    # enddate = pd.to_datetime('2023-08-10 00:30')
     # startdate = pd.to_datetime('2008-05-04 18:30')    # South dates
     # enddate = pd.to_datetime('2008-09-14 00:30')
     # startdate = pd.to_datetime('2016-05-11 00:30') # JIF sample dates
@@ -168,7 +168,7 @@ method_conductivity = 'OstinAndersson'  # 'OstinAndersson', 'VanDusen','Sturm','
 
 # CONSTANT SWITCHES
 constant_snowfall_density = False        # False or density in kg m-3
-constant_conductivity = k_ice = 0.6      # False or conductivity in W K-1 m-1
+constant_conductivity = k_ice = 1        # False or conductivity in W K-1 m-1
 constant_freshgrainsize = False          # False or grain size in um (54.5 is standard)
 constant_drdry = False                   # False or dry metamorphism grain size growth rate [um s-1] (1e-4 seems reasonable)
 
@@ -203,12 +203,12 @@ layer_growth = 0.4          # Rate of exponential growth of bin size (smaller la
 precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 roughness_ice = 1.7         # surface roughness length for ice [mm] (Moelg et al. 2012, TC)
-ksp_BC = 0.5                  # 0.1-0.2 meltwater scavenging efficiency of BC (from CLM5)
-ksp_dust = 0.015            # 0.015 meltwater scavenging efficiency of dust (from CLM5)
+ksp_BC = 1                  # 0.1-0.2 meltwater scavenging efficiency of BC (from CLM5)
+ksp_dust = 0.2              # 0.015 meltwater scavenging efficiency of dust (from CLM5)
 roughness_aging_rate = 0.1  # effect of aging on roughness length: 60 days from 0.24 to 4.0 => 0.06267
 albedo_TOD = [12]           # List of time(s) of day to calculate albedo [hr] 
 initSSA = 80                # initial estimate of Specific Surface Area of fresh snowfall (interpolation tables)
-dep_factor = 0.5            # multiplicative factor to adjust MERRA-2 deposition
+dep_factor = 1              # multiplicative factor to adjust MERRA-2 deposition
 BC_freshsnow = 9e-7         # concentration of BC in fresh snow [kg m-3]
 dust_freshsnow = 6e-4       # concentration of dust in fresh snow [kg m-3]
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
