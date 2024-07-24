@@ -155,7 +155,10 @@ class Climate():
             if 'bc' in var or 'dust' in var:
                 if eb_prms.reanalysis == 'ERA5-hourly':
                     lat_vn,lon_vn = ['lat','lon']
-            data = ds.sel({lat_vn:lat,lon_vn:lon}, method='nearest')[vn].values
+            ds = ds.sel({lat_vn:lat,lon_vn:lon}, method='nearest')[vn]
+            assert np.abs(ds.coords[lat_vn].values - float(lat)) <= 0.5, 'Wrong grid cell accessed'
+            assert np.abs(ds.coords[lon_vn].values - float(lon)) <= 0.5, 'Wrong grid cell accessed'
+            data = ds.values
             # adjust elevation-dependent variables
             if var in ['temp','tp','sp']:
                 data = self.bin_adjust(data.ravel(), var, self.reanalysis_elev)

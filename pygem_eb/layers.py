@@ -51,8 +51,7 @@ class Layers():
 
         # Initialize LAPs (black carbon and dust)
         if eb_prms.switch_LAPs == 1:
-            lBC = np.ones(self.nlayers)*eb_prms.BC_freshsnow*lheight
-            ldust = np.ones(self.nlayers)*eb_prms.dust_freshsnow*lheight 
+            lBC,ldust = self.get_LAPs()
         else:
             lBC = np.zeros(self.nlayers)
             ldust = np.zeros(self.nlayers)
@@ -146,6 +145,16 @@ class Layers():
         # Get depth of layers (distance from surface to midpoint of layer) [m]
         nlayers = len(lheight)
         ldepth = [np.sum(lheight[:i+1])-(lheight[i]/2) for i in range(nlayers)]
+
+        # Arrays
+        lheight = np.array(lheight)
+        ldepth = np.array(ldepth)
+        ltype = np.array(ltype)
+
+        # Assign indices
+        self.snow_idx = np.where(ltype=='snow')[0]
+        self.firn_idx = np.where(ltype=='firn')[0]
+        self.ice_idx = np.where(ltype=='ice')[0]
         return np.array(lheight), np.array(ldepth), np.array(ltype), nlayers
 
     def get_Tpw(self,initial_sfi):
@@ -162,9 +171,8 @@ class Layers():
             Arrays containing layer temperature [C], density [kg m-3]
             and water content [kg m-2]
         """
-        snow_idx =  np.where(self.ltype=='snow')[0]
-        firn_idx =  np.where(self.ltype=='firn')[0]
-        ice_idx =  np.where(self.ltype=='ice')[0]
+        snow_idx =  self.snow_idx
+        ice_idx =  self.ice_idx
 
         # Read in temp and density data from csv
         temp_data = pd.read_csv(eb_prms.initial_temp_fp)[['depth','temp']].to_numpy()
@@ -195,6 +203,7 @@ class Layers():
                 self.ldepth[ice_idx[0]]-self.ldepth[snow_idx[-1]])
         elif initial_sfi[1] > 0: # firn and no snow
             pslope = (eb_prms.density_ice - eb_prms.density_firn)/(initial_sfi[1])
+        
         # Add firn and ice layer densities
         for (type,depth) in zip(self.ltype,self.ldepth):
             if type in ['firn']:
@@ -208,6 +217,38 @@ class Layers():
         lwater = np.zeros(self.nlayers)
 
         return ltemp,ldensity,lwater
+    
+    def get_LAPs(self):
+        n = self.nlayers
+        lheight = self.lheight
+        ldepth = self.ldepth
+        if eb_prms.initialize_LAPs in ['fresh']:
+            lBC = np.ones(n)*eb_prms.BC_freshsnow*lheight
+            ldust = np.ones(n)*eb_prms.dust_freshsnow*lheight 
+        elif eb_prms.initialize_LAPs in ['interp']:
+            BC_data = pd.read_csv(eb_prms.initial_LAP_fp,index_col=0)
+            dust_data = pd.read_csv(eb_prms.initial_LAP_fp.replace('BC','dust'),index_col=0)
+
+            # add boundaries for interpolation
+            BC_data.loc[0,'BC'] = eb_prms.BC_freshsnow
+            dust_data.loc[0,'dust'] = eb_prms.dust_freshsnow
+            BC_data.loc[10,'BC'] = eb_prms.BC_freshsnow
+            dust_data.loc[10,'dust'] = eb_prms.dust_freshsnow
+            BC_data = BC_data.sort_index()
+            dust_data = dust_data.sort_index()
+
+            # interpolate concentration by depth
+            BC_depth = BC_data.index.to_numpy()
+            dust_depth = dust_data.index.to_numpy()
+            cBC = np.interp(ldepth,BC_depth,BC_data.to_numpy().flatten())
+            cdust = np.interp(ldepth,dust_depth,dust_data.to_numpy().flatten())
+
+            # calculate mass from concentration
+            lBC = cBC * lheight
+            ldust = cdust * lheight
+        lBC[self.ice_idx] = 0
+        ldust[self.ice_idx] = 0
+        return lBC, ldust            
     
     def init_piecewise(self,ldepth,snow_var,varname):
         """

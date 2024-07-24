@@ -203,6 +203,7 @@ def dh_vs_stake(stake_df,ds_list,time,labels=['Model'],bin=0,t='Surface Height C
         days = pd.date_range(start,end,freq='d')
 
     stake_df = stake_df.loc[days-pd.Timedelta(minutes=30)]
+    stake_df['CMB'] -= stake_df['CMB'].iloc[0]
     for i,ds in enumerate(ds_list):
         c = plt.cm.Dark2(i)
         ds = ds.sel(time=time,bin=bin).resample(time='d').sum()
@@ -1084,7 +1085,7 @@ def visualize_layers(ds,bin,dates,vars,force_layers=False,
         if var in ['layerBC']:
             bounds = [-2,30]
         if var in ['layerdust']:
-            bounds = [-5,50]
+            bounds = [-5,30]
         elif var in ['layerdensity']:
             bounds = [50,800] if plot_firn else [0,500]
         elif var in ['layerwater']:

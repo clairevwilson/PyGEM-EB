@@ -26,6 +26,10 @@ glac_props = {'01.00570':{'name':'Gulkana',
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
             '01.00709':{'name':'Mendenhall',
                             'site_elev':1316},
+            '01.01390':{'name':'Taku',
+                            'site_elev':1166},
+            '01.00704':{'name':'Gilkey',
+                            'site_elev':1459},
             '01.16195':{'name':'South',
                             'site_elev':2280,
                             'AWS_fn':'Preprocessed/south/south2280_2008.csv'},
@@ -99,6 +103,7 @@ glac_no_str = str(glac_no[0]).replace('.','_')
 grainsize_fp = main_directory + '/pygem_eb/sample_data/grainsize/drygrainsize(SSAin=60).nc'
 initial_temp_fp = main_directory + '/pygem_eb/sample_data/gulkanaBtemp.csv'
 initial_density_fp = main_directory + '/pygem_eb/sample_data/gulkanaBdensity.csv'
+initial_LAP_fp = main_directory + f'/../Data/Nagorski/May_Mend-2_BC.csv'
 snicar_input_fp = main_directory + '/biosnicar-py/biosnicar/inputs.yaml'
 shading_fp = main_directory + f'/shading/out/{glac_name}{site}_shade.csv'
 temp_bias_fp = main_directory + '/pygem_eb/sample_data/gulkana/Gulkana_MERRA2_temp_bias.csv'
@@ -137,13 +142,15 @@ else:
     # enddate = pd.to_datetime('2016-07-18 00:30')
     
 n_months = np.round((enddate-startdate)/pd.Timedelta(days=30))
-print(f'Running {n_bins} bin(s) at {bin_elev} m a.s.l. for {n_months} months starting in {startdate.month_name()}, {startdate.year}')
+if debug:
+    (f'Running {n_bins} bin(s) at {bin_elev} m a.s.l. for {n_months} months starting in {startdate.month_name()}, {startdate.year}')
 
 #  ========== MODEL OPTIONS ========== 
 # INITIALIATION
 initialize_water = 'zero_w0'        # 'zero_w0' or 'initial_w0'
 initialize_temp = 'interp'          # 'piecewise', 'interp' or 'ripe' (all temps=0)
 initialize_dens = 'interp'          # 'piecewise' or 'interp'
+initialize_LAPs = 'interp'          # 'fresh' or 'interp'
 surftemp_guess =  -10               # guess for surface temperature of first timestep
 if 6 < startdate.month < 9:         # initialize without snow
     initial_snowdepth = np.array([0]*n_bins).ravel()
