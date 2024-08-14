@@ -20,7 +20,7 @@ use_AWS = False          # Use AWS data? (or just reanalysis)
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/gulkanaB24.csv'}, 
+                            'AWS_fn':'Preprocessed/Gulkana2011:.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -57,7 +57,7 @@ glac_props = {'01.00570':{'name':'Gulkana',
 
 if glac_no == ['01.00570']:
     # Gulkana runs have specific sites with associated elevation / shading
-    site = 'B'
+    site = 'AB'
     site_fp = os.path.join(os.getcwd(),'pygem_eb/sample_data/gulkana/site_constants.csv')
     site_df = pd.read_csv(site_fp,index_col='site')
     bin_elev = [site_df.loc[site]['elevation']]
@@ -80,7 +80,7 @@ bin_ice_depth = np.ones(len(bin_elev)) * 200
 assert len(bin_elev) == n_bins, 'Check n_bins in input'
 
 # ========== DIRECTORIES AND FILEPATHS ========== 
-machine = 'Torch'
+machine = 'Campfire'
 main_directory = os.getcwd()
 output_filepath = main_directory + '/../Output/'
 output_sim_fp = output_filepath + 'simulations/'
@@ -132,8 +132,8 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2009-05-10 00:30') 
-    enddate = pd.to_datetime('2009-08-31 23:30')
+    startdate = pd.to_datetime('2000-07-10 01:00:00') 
+    enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
     # startdate = pd.to_datetime('2008-05-04 18:30')    # South dates
@@ -158,7 +158,7 @@ if 6 < startdate.month < 9:         # initialize without snow
 # OUTPUT
 store_vars = ['MB','EB','Temp','Layers']  # Variables to store of the possible set: ['MB','EB','Temp','Layers']
 store_bands = False     # Store spectral albedo .csv
-store_climate = False   # Store climate dataset .nc
+store_climate = False    # Store climate dataset .nc
 
 # TIMESTEP
 dt = 3600                   # Model timestep [s]
@@ -201,12 +201,14 @@ grainsize_ds = xr.open_dataset(grainsize_fp)
 
 # ========== PARAMETERS ==========
 # play with
-snow_threshold_low = 0      # lower threshold for linear snow-rain scaling [C]
-snow_threshold_high = 1     # upper threshold for linear snow-rain scaling [C]
+Boone_c1 = 2.7e-6           # s-1 (2.7e-6) --> 2.7e-4
+Boone_c5 = 0.018            # m3 kg-1 (0.018) --> 0.07
 albedo_ice = 0.2            # albedo of ice [-] 
 dz_toplayer = 0.05          # Thickness of the uppermost bin [m]
 layer_growth = 0.4          # Rate of exponential growth of bin size (smaller layer growth = more layers) recommend 0.3-.6
 # leave
+snow_threshold_low = 0      # lower threshold for linear snow-rain scaling [C]
+snow_threshold_high = 1     # upper threshold for linear snow-rain scaling [C]
 precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 roughness_ice = 1.7         # surface roughness length for ice [mm] (Moelg et al. 2012, TC)

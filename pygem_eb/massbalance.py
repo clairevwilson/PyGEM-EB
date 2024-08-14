@@ -552,11 +552,11 @@ class massBalance():
 
         if eb_prms.method_densification in ['Boone']:
             # EMPIRICAL PARAMETERS
-            c1 = 2.7e-6     # s-1 (2.7e-6) --> 2.7e-4
+            c1 = eb_prms.Boone_c1    # s-1 (2.7e-6) --> 2.7e-4
             c2 = 0.042      # K-1 (0.042)
             c3 = 0.046      # m3 kg-1 (0.046)
             c4 = 0.081      # K-1 (0.081)
-            c5 = 0.018       # m3 kg-1 (0.018) --> 0.07
+            c5 = eb_prms.Boone_c5      # m3 kg-1 (0.018) --> 0.07
 
             for layer in snowfirn_idx:
                 weight_above = GRAVITY*np.sum(ldm[:layer]+lw[:layer])

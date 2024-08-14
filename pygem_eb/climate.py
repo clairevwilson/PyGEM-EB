@@ -127,6 +127,8 @@ class Climate():
         lat = self.lat
         lon = self.lon
         self.need_vars = vars
+
+        interpolate = dates[0].minute != 30 and eb_prms.reanalysis == 'MERRA2'
         
         # get reanalysis data geopotential
         z_fp = self.reanalysis_fp + self.var_dict['elev']['fn']
@@ -145,6 +147,8 @@ class Climate():
                 if not dep_var and eb_prms.reanalysis == 'ERA5-hourly':
                     assert dates[0] >= pd.to_datetime(ds.time.values[0])
                     assert dates[-1] <= pd.to_datetime(ds.time.values[-1])
+                    ds = ds.interp(time=dates)
+                elif interpolate:
                     ds = ds.interp(time=dates)
                 else:
                     ds = ds.sel(time=dates)
