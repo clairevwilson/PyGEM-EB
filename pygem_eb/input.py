@@ -103,7 +103,7 @@ glac_no_str = str(glac_no[0]).replace('.','_')
 grainsize_fp = main_directory + '/pygem_eb/sample_data/grainsize/drygrainsize(SSAin=60).nc'
 initial_temp_fp = main_directory + '/pygem_eb/sample_data/gulkanaBtemp.csv'
 initial_density_fp = main_directory + '/pygem_eb/sample_data/gulkanaBdensity.csv'
-initial_LAP_fp = main_directory + f'/../Data/Nagorski/May_Mend-2_BC.csv'
+initial_LAP_fp = main_directory + f'/pygem_eb/sample_data/May_Mend-2_BC.csv' # f'/../Data/Nagorski/May_Mend-2_BC.csv'
 snicar_input_fp = main_directory + '/biosnicar-py/biosnicar/inputs.yaml'
 shading_fp = main_directory + f'/shading/out/{glac_name}{site}_shade.csv'
 temp_bias_fp = main_directory + '/pygem_eb/sample_data/gulkana/Gulkana_MERRA2_temp_bias.csv'
