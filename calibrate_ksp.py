@@ -4,9 +4,6 @@ import xarray as xr
 import os, sys
 
 class HiddenPrints:
-    """
-    Class to hide prints when running SNICAR
-    """
     def __enter__(self):
         self._original_stdout = sys.stdout
         sys.stdout = open(os.devnull, 'w')
@@ -18,36 +15,17 @@ class HiddenPrints:
     
 # import model
 import pygem_eb.input as eb_prms
-eb_prms.startdate = pd.to_datetime('2023-04-18 00:30')
 eb_prms.enddate = eb_prms.startdate + pd.Timedelta(hours=2)
-eb_prms.new_file = False
-eb_prms.debug = False
 with HiddenPrints():
     import run_simulation_eb as sim
 eb_prms.store_data = True
+eb_prms.new_file = False
+eb_prms.debug = False
 
 # ===== CALIBRATION DATA =====
-# GULKANA
-# # surface height change
-# stake_df = pd.read_csv('~/research/MB_data/Stakes/gulkanaAB23_ALL.csv')
-# stake_df.index = pd.to_datetime(stake_df['Date'])
-# dates_index = pd.date_range(eb_prms.startdate,eb_prms.enddate) - pd.Timedelta(minutes=30)
-# stake_df = stake_df.loc[dates_index]
-# # snow temperatures
-# temp_df = pd.read_csv('~/research/MB_data/Gulkana/field_data/iButton_2023_all.csv')
-# temp_df.index = pd.to_datetime(temp_df['Datetime'])
-# temp_df = temp_df.loc[eb_prms.startdate:eb_prms.enddate]
-# h = np.array([10,40,80,120,160,200,240,280,320,350])
 # JIF
 data_fp = '/home/claire/research/Data/Nagorski/bcdust.csv'
 df = pd.read_csv(data_fp,index_col=0).iloc[:-1]
-
-# model parameters
-params = {
-    'kp':[0.5,0.8],
-    'albedo_ice':[0.1,0.3],
-    'k_ice':[1,4]
-}
 
 # read command line args
 args = sim.get_args()
@@ -73,12 +51,12 @@ def choose_param(current,past,sign,varname):
         new = np.mean(np.array([current,new]))
         diff = np.abs(np.array(past) - new)
     if new < 0:
-        if varname in ['ksp_BC']:
+        if 'BC' in varname:
             new = ksp_BC_0 + 0.1
-            d_BC = 0.05
-        elif varname in ['ksp_dust']:
+            d_BC /= 2
+        elif 'dust' in varname:
             new = ksp_dust_0 + 0.1
-            d_dust = 0.01
+            d_dust /= 2
     return new
 
 def get_outputs(out):

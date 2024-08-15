@@ -493,7 +493,7 @@ class Layers():
     
     def add_snow(self,snowfall,enbal,surface,args,timestamp):
         """
-        Adds snowfall to the layer scheme. If the existing top layer
+        Adds snowfall to the layers. If the existing top layer
         has a large enough difference in density (eg. firn or ice), 
         the fresh snow is a new layer, otherwise it is merged with
         the top snow layer.

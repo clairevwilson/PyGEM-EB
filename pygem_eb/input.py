@@ -57,7 +57,7 @@ glac_props = {'01.00570':{'name':'Gulkana',
 
 if glac_no == ['01.00570']:
     # Gulkana runs have specific sites with associated elevation / shading
-    site = 'B'
+    site = 'AB'
     site_fp = os.path.join(os.getcwd(),'pygem_eb/sample_data/gulkana/site_constants.csv')
     site_df = pd.read_csv(site_fp,index_col='site')
     bin_elev = [site_df.loc[site]['elevation']]
@@ -132,8 +132,8 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2009-05-10 00:30') 
-    enddate = pd.to_datetime('2009-08-31 23:30')
+    startdate = pd.to_datetime('2023-07-08 00:30') 
+    enddate = pd.to_datetime('2023-08-20 23:30')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
     # startdate = pd.to_datetime('2008-05-04 18:30')    # South dates
