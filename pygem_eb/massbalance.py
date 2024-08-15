@@ -77,6 +77,7 @@ class massBalance():
                 surface.daily_updates(layers,enbal.tempC,surface.stemp,time)
                 self.days_since_snowfall = surface.days_since_snowfall
                 layers.lnewsnow = np.zeros(layers.nlayers)
+
             if time.hour in eb_prms.albedo_TOD:
                 surface.get_albedo(layers,time)
 
@@ -366,6 +367,9 @@ class massBalance():
             layers.lwater[snow_firn_idx] = lw
             layers.ldrymass[snow_firn_idx] = ldm
             runoff = q_out*dt + np.sum(layermelt[layers.ice_idx])
+            if np.any(layers.lnewsnow > layers.ldrymass):
+                where = np.where(layers.lnewsnow > layers.ldrymass)[0]
+                layers.lnewsnow[where] = 0
 
             # Diffuse LAPs 
             if self.args.switch_LAPs == 1:
@@ -417,7 +421,7 @@ class massBalance():
         mdust = layers.ldust[snow_firn_idx]
 
         # get wet deposition into top layer if it's raining
-        if rain_bool:
+        if rain_bool and eb_prms.switch_LAPs == 1: # Switch runs have no BC
             mBC[0] += enbal.bcwet * dt * DEP_FACTOR
             mdust[0] += enbal.dustwet * eb_prms.ratio_DU3_DUtot * dt
 

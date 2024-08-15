@@ -131,7 +131,7 @@ def simple_plot(ds,bin,time,vars,res='d',t='',cumMB=True,
             else:
                 axis.plot(ds_mean.coords['time'],var_to_plot,color=c,label=var)
                 axis.set_ylabel(varprops[var]['label'])
-
+        axis.tick_params(length=5)
         axis.legend(bbox_to_anchor=(1.01,1),loc='upper left')
     date_form = mpl.dates.DateFormatter('%d %b')
     axis.xaxis.set_major_formatter(date_form)
@@ -203,6 +203,7 @@ def dh_vs_stake(stake_df,ds_list,time,labels=['Model'],bin=0,t='Surface Height C
         days = pd.date_range(start,end,freq='d')
 
     stake_df = stake_df.loc[days-pd.Timedelta(minutes=30)]
+    stake_df['CMB'] -= stake_df['CMB'].iloc[0]
     for i,ds in enumerate(ds_list):
         c = plt.cm.Dark2(i)
         ds = ds.sel(time=time,bin=bin).resample(time='d').sum()
@@ -398,15 +399,20 @@ def compare_runs(ds_list,time,labels,var,res='d',t=''):
     start = pd.to_datetime(time[0])
     end = pd.to_datetime(time[1])
     if len(time) == 2 and res != 'd':
-        time = pd.date_range(start,end,freq=res)
+        start += pd.Timedelta(minutes=30)
+        end -= pd.Timedelta(minutes=30)
+        time = pd.date_range(start,end,freq=res).date
+        # time = pd.to_datetime(time,format='%Y-%m-%d')
+        res = time[1] - time[0]
+        res = str(int(res.total_seconds() / 3600))+'h'
     else:
         time = pd.date_range(start,end,normalize=True)
     for i,ds in enumerate(ds_list):
         c = plt.cm.Dark2(i)
         if res != 'h':
             if var in ['melt','runoff','refreeze','accum','MB','dh']:
-                ds_resampled = ds.resample(time=res).sum()
-                to_plot = ds_resampled[var].sel(time=time).cumsum()
+                ds_resampled = ds[var].resample(time=res).sum()
+                to_plot = ds_resampled.sel(time=time).cumsum()
             elif 'layer' in var:
                 ds_resampled = ds.resample(time=res).mean()
                 to_plot = ds_resampled[var].sel(time=time,layer=0)
@@ -420,7 +426,7 @@ def compare_runs(ds_list,time,labels,var,res='d',t=''):
                 to_plot = ds[var].sel(time=time,layer=0)
             else:
                 to_plot = ds[var].sel(time=time)
-        ax.plot(time,to_plot,label=labels[i],color=c,alpha=0.6,linewidth=0.8)
+        ax.plot(to_plot.time,to_plot,label=labels[i],color=c,alpha=0.6,linewidth=0.8)
     date_form = mpl.dates.DateFormatter('%d %b')
     ax.xaxis.set_major_formatter(date_form)
     ax.set_ylabel(var)
@@ -973,19 +979,21 @@ def compare_AWS(df_list,vars,time,labels=None,t='',res='d',y=''):
     fig.suptitle(t)
     plt.show()
 
-def plot_avg_layers(file,bin,nyr):
+def plot_avg_layers(ds,bin,nyr=False,res='365d'):
     """
     Plots layer temperature, density, water content and layer height averaged first across all layers,
     then averaged between years. 
     """
-    ds = xr.open_dataset(file)
-    fig,axes = plt.subplots(2,2,sharex=True,figsize=(8,6)) #,sharex=True,sharey='row',figsize=(12,5)
-    idxs = [[0,0],[0,1],[1,0],[1,1]]
+    # ds = xr.open_dataset(file)
+    fig,axes = plt.subplots(2,3,sharex=True,figsize=(8,8)) #,sharex=True,sharey='row',figsize=(12,5)
+    axes = axes.flatten()
     days =  np.arange(365)
-    for ax,var in enumerate(['layertemp','layerdensity','layerwater','snowdepth']):
+    for j,var in enumerate(['layertemp','layerdensity','layerwater','snowdepth','layergrainsize','layerBC']):
+        ax = axes[j]
+        ax.set_title(var+'   '+ds[var].attrs['units'])
         snow = ds[var].sel(bin=bin).to_pandas()
         loop = True
-        i=19
+        i=29
         while loop:
             if np.isnan(snow.iloc[i]).all and var not in ['snowdepth']:
                 snow.drop(i,axis=1)
@@ -993,20 +1001,27 @@ def plot_avg_layers(file,bin,nyr):
             if i == 0:
                 break
 
-        if var in ['layertemp','layerdensity']:
+        if var in ['layertemp','layerdensity','layergrainsize']:
             snow = snow.mean(axis=1)
         elif var in ['snowdepth']:
             pass
         else:
             snow = snow.sum(axis=1)
+
         if var in ['layerwater']:
             snow = snow/1000 # to m w.e.
-        snowdaily = snow.resample('d').mean()
-        snowdaily = np.mean(snow[:nyr*365].values.reshape((nyr,365)),axis=0)
+        
+        if nyr:
+            snowdaily = snow.resample('d').mean()
+            snowdaily = np.mean(snow[:nyr*365].values.reshape((nyr,365)),axis=0)
 
-        idx = idxs[ax]
-        axes[idx[0],idx[1]].plot(days,snowdaily,label=var)
-        axes[idx[0],idx[1]].set_title(var+'   '+ds[var].attrs['units'])
+            ax.plot(days,snowdaily,label=var)
+        else:
+            time = pd.date_range('2000-07-01 12:30','2020-07-01 12:30',freq=res)
+            snow = snow.loc[time]
+            ax.plot(time,snow)
+            
+
     # axes[1,0].set_title('water content    m w .e')
     plt.gcf().autofmt_xdate()
     # plt.savefig('/home/claire/research/Output/EB/subsurfplot.png')
@@ -1070,7 +1085,7 @@ def visualize_layers(ds,bin,dates,vars,force_layers=False,
         if var in ['layerBC']:
             bounds = [-2,30]
         if var in ['layerdust']:
-            bounds = [-5,50]
+            bounds = [-5,30]
         elif var in ['layerdensity']:
             bounds = [50,800] if plot_firn else [0,500]
         elif var in ['layerwater']:

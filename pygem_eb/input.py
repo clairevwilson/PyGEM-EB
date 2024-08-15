@@ -26,6 +26,10 @@ glac_props = {'01.00570':{'name':'Gulkana',
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
             '01.00709':{'name':'Mendenhall',
                             'site_elev':1316},
+            '01.01390':{'name':'Taku',
+                            'site_elev':1166},
+            '01.00704':{'name':'Gilkey',
+                            'site_elev':1459},
             '01.16195':{'name':'South',
                             'site_elev':2280,
                             'AWS_fn':'Preprocessed/south/south2280_2008.csv'},
@@ -53,7 +57,7 @@ glac_props = {'01.00570':{'name':'Gulkana',
 
 if glac_no == ['01.00570']:
     # Gulkana runs have specific sites with associated elevation / shading
-    site = 'B'
+    site = 'AB'
     site_fp = os.path.join(os.getcwd(),'pygem_eb/sample_data/gulkana/site_constants.csv')
     site_df = pd.read_csv(site_fp,index_col='site')
     bin_elev = [site_df.loc[site]['elevation']]
@@ -99,6 +103,7 @@ glac_no_str = str(glac_no[0]).replace('.','_')
 grainsize_fp = main_directory + '/pygem_eb/sample_data/grainsize/drygrainsize(SSAin=60).nc'
 initial_temp_fp = main_directory + '/pygem_eb/sample_data/gulkanaBtemp.csv'
 initial_density_fp = main_directory + '/pygem_eb/sample_data/gulkanaBdensity.csv'
+initial_LAP_fp = main_directory + f'/../Data/Nagorski/May_Mend-2_BC.csv'
 snicar_input_fp = main_directory + '/biosnicar-py/biosnicar/inputs.yaml'
 shading_fp = main_directory + f'/shading/out/{glac_name}{site}_shade.csv'
 temp_bias_fp = main_directory + '/pygem_eb/sample_data/gulkana/Gulkana_MERRA2_temp_bias.csv'
@@ -127,23 +132,25 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    # startdate = pd.to_datetime('2000-05-01 00:30') 
-    # enddate = pd.to_datetime('2002-07-31 23:30')
-    startdate = pd.to_datetime('2020-04-20 00:30')    # Gulkana AWS dates
-    enddate = pd.to_datetime('2020-08-10 00:30')
+    startdate = pd.to_datetime('2023-07-08 00:30') 
+    enddate = pd.to_datetime('2023-08-20 23:30')
+    # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
+    # enddate = pd.to_datetime('2023-08-10 00:30')
     # startdate = pd.to_datetime('2008-05-04 18:30')    # South dates
     # enddate = pd.to_datetime('2008-09-14 00:30')
     # startdate = pd.to_datetime('2016-05-11 00:30') # JIF sample dates
     # enddate = pd.to_datetime('2016-07-18 00:30')
     
 n_months = np.round((enddate-startdate)/pd.Timedelta(days=30))
-print(f'Running {n_bins} bin(s) at {bin_elev} m a.s.l. for {n_months} months starting in {startdate.month_name()}, {startdate.year}')
+if debug:
+    (f'Running {n_bins} bin(s) at {bin_elev} m a.s.l. for {n_months} months starting in {startdate.month_name()}, {startdate.year}')
 
 #  ========== MODEL OPTIONS ========== 
 # INITIALIATION
 initialize_water = 'zero_w0'        # 'zero_w0' or 'initial_w0'
 initialize_temp = 'interp'          # 'piecewise', 'interp' or 'ripe' (all temps=0)
 initialize_dens = 'interp'          # 'piecewise' or 'interp'
+initialize_LAPs = 'interp'          # 'fresh' or 'interp'
 surftemp_guess =  -10               # guess for surface temperature of first timestep
 if 6 < startdate.month < 9:         # initialize without snow
     initial_snowdepth = np.array([0]*n_bins).ravel()
@@ -167,10 +174,10 @@ method_conductivity = 'OstinAndersson'  # 'OstinAndersson', 'VanDusen','Sturm','
 # method_grainsizetable = 'interpolate' # unused
 
 # CONSTANT SWITCHES
-constant_snowfall_density = False       # False or density in kg m-3
-constant_conductivity = k_ice = 2.33       # False or conductivity in W K-1 m-1
+constant_snowfall_density = False        # False or density in kg m-3
+constant_conductivity = k_ice = 1        # False or conductivity in W K-1 m-1
 constant_freshgrainsize = False          # False or grain size in um (54.5 is standard)
-constant_drdry = 1e-4                  # False or dry metamorphism grain size growth rate [um s-1] (1e-4 seems reasonable)
+constant_drdry = False                   # False or dry metamorphism grain size growth rate [um s-1] (1e-4 seems reasonable)
 
 # ALBEDO SWITCHES
 switch_snow = 1             # 0 to turn off fresh snow feedback; 1 to include it
@@ -203,12 +210,12 @@ layer_growth = 0.4          # Rate of exponential growth of bin size (smaller la
 precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 roughness_ice = 1.7         # surface roughness length for ice [mm] (Moelg et al. 2012, TC)
-ksp_BC = 0.5                  # 0.1-0.2 meltwater scavenging efficiency of BC (from CLM5)
-ksp_dust = 0.015            # 0.015 meltwater scavenging efficiency of dust (from CLM5)
+ksp_BC = 1                  # 0.1-0.2 meltwater scavenging efficiency of BC (from CLM5)
+ksp_dust = 0.2              # 0.015 meltwater scavenging efficiency of dust (from CLM5)
 roughness_aging_rate = 0.1  # effect of aging on roughness length: 60 days from 0.24 to 4.0 => 0.06267
 albedo_TOD = [12]           # List of time(s) of day to calculate albedo [hr] 
 initSSA = 80                # initial estimate of Specific Surface Area of fresh snowfall (interpolation tables)
-dep_factor = 0.5            # multiplicative factor to adjust MERRA-2 deposition
+dep_factor = 1              # multiplicative factor to adjust MERRA-2 deposition
 BC_freshsnow = 9e-7         # concentration of BC in fresh snow [kg m-3]
 dust_freshsnow = 6e-4       # concentration of dust in fresh snow [kg m-3]
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
