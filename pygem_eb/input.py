@@ -13,7 +13,7 @@ new_file=True        # Write to scratch file?
 # ========== USER OPTIONS ========== 
 glac_no = ['01.00570']  # List of RGI glacier IDs
 parallel = False        # Run parallel processing?
-n_bins = 1              # Number of elevation bins
+n_bins = 3              # Number of elevation bins
 timezone = pd.Timedelta(hours=-8)   # local GMT time zone
 use_AWS = False          # Use AWS data? (or just reanalysis)
 
@@ -56,22 +56,28 @@ glac_props = {'01.00570':{'name':'Gulkana',
 # bin_ice_depth = np.ones(len(bin_elev)) * 200
 
 if glac_no == ['01.00570']:
-    # Gulkana runs have specific sites with associated elevation / shading
-    site = 'AB'
-    site_fp = os.path.join(os.getcwd(),'pygem_eb/sample_data/gulkana/site_constants.csv')
-    site_df = pd.read_csv(site_fp,index_col='site')
-    bin_elev = [site_df.loc[site]['elevation']]
-    kp = site_df.loc[site]['kp']
-    slope = site_df.loc[site]['slope']
-    aspect = site_df.loc[site]['aspect']
-    sky_view = site_df.loc[site]['sky_view']
-    initial_snowdepth = [site_df.loc[site]['snowdepth']]
-    initial_firndepth = [site_df.loc[site]['firndepth']]
+    sites = ['AB','B','D'][:n_bins]
+    initial_snowdepth = []
+    initial_firndepth = []
+    kp = []
+    sky_view = []
+    bin_elev = []
+    for site in sites:
+        # Gulkana runs have specific sites with associated elevation / shading
+        site_fp = os.path.join(os.getcwd(),'pygem_eb/sample_data/gulkana/site_constants.csv')
+        site_df = pd.read_csv(site_fp,index_col='site')
+        bin_elev.append(site_df.loc[site]['elevation'])
+        kp.append(site_df.loc[site]['kp'])
+        # slope = site_df.loc[site]['slope']
+        # aspect = site_df.loc[site]['aspect']
+        sky_view.append(site_df.loc[site]['sky_view'])
+        initial_snowdepth.append(site_df.loc[site]['snowdepth'])
+        initial_firndepth.append(site_df.loc[site]['firndepth'])
 else:
     # Manually specify for other glaciers
-    sky_view = 0.936
+    sky_view = [0.936]
     bin_elev = [2280]
-    kp = 1
+    kp = [1]
     site = 'AWS'
     initial_snowdepth = [2.18]*n_bins   # initial depth of snow; array of length n_bins
     initial_firndepth = [0]*n_bins      # initial depth of firn; array of length n_bins
@@ -132,8 +138,9 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2000-07-10 01:00:00') 
-    enddate = pd.to_datetime('2019-04-25 23:00')
+    startdate = pd.to_datetime('2000-04-10 00:00:00') 
+    enddate = pd.to_datetime('2023-08-20 23:00:00')
+    # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
     # startdate = pd.to_datetime('2008-05-04 18:30')    # South dates
@@ -175,7 +182,7 @@ method_conductivity = 'OstinAndersson'  # 'OstinAndersson', 'VanDusen','Sturm','
 
 # CONSTANT SWITCHES
 constant_snowfall_density = False        # False or density in kg m-3
-constant_conductivity = k_ice = 1        # False or conductivity in W K-1 m-1
+constant_conductivity = 1                # False or conductivity in W K-1 m-1
 constant_freshgrainsize = False          # False or grain size in um (54.5 is standard)
 constant_drdry = False                   # False or dry metamorphism grain size growth rate [um s-1] (1e-4 seems reasonable)
 
@@ -268,6 +275,8 @@ ratio_DU_bin4 = 0.203775    # " SNICAR Bin 4 (2.5-5um)
 ratio_DU_bin5 = 0.034       # " SNICAR Bin 5 (5-50um)
 diffuse_cloud_limit = 0.6   # Threshold to consider cloudy vs clear-sky in SNICAR
 mb_threshold = 1e-3         # Threshold to consider not conserving mass
+if not constant_conductivity:
+    k_ice_ground = 1        # thermal conductivity used in ground heat flux
 
 # ========== OTHER PYGEM INPUTS ========== 
 rgi_regionsO1 = [1]

@@ -656,7 +656,7 @@ class massBalance():
             rain = 0
             snow = enbal.tp*DENSITY_WATER
             if 4 < self.time.month < 10: # kp adjusts only winter snowfall
-                snow /= eb_prms.kp
+                snow /= eb_prms.kp[self.bin_idx]
         elif SNOW_THRESHOLD_LOW < enbal.tempC < SNOW_THRESHOLD_HIGH:
             # mix of rain and snow
             fraction_rain = np.interp(enbal.tempC,temp_scale,rain_scale)
@@ -709,7 +709,7 @@ class massBalance():
 
         # get conductivity 
         if eb_prms.constant_conductivity:
-            lcond = np.ones(nl)*eb_prms.k_ice
+            lcond = np.ones(nl)*eb_prms.constant_conductivity
         elif eb_prms.method_conductivity in ['VanDusen']:
             lcond = 0.21e-01 + 0.42e-03*lp + 0.22e-08*lp**3
         elif eb_prms.method_conductivity in ['Sturm']:

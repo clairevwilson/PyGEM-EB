@@ -376,7 +376,7 @@ def plot_stake_accumulation(stake_df,ds_list,time,labels,bin=0,t=''):
     ax.set_ylabel('Accumulation (m w.e.)')
     fig.suptitle(t)
         
-def compare_runs(ds_list,time,labels,var,res='d',t=''):
+def compare_runs(ds_list,bin,time,labels,var,res='d',t=''):
     """
     Returns a comparison of different model runs
 
@@ -408,6 +408,7 @@ def compare_runs(ds_list,time,labels,var,res='d',t=''):
     else:
         time = pd.date_range(start,end,normalize=True)
     for i,ds in enumerate(ds_list):
+        ds = ds.sel(bin=bin)
         c = plt.cm.Dark2(i)
         if res != 'h':
             if var in ['melt','runoff','refreeze','accum','MB','dh']:
@@ -702,6 +703,51 @@ def panel_temp_compare(ds_list,time,labels,temp_df,rows=2,t=''):
     fig.suptitle(t)
     plt.show()
     return
+
+def plot_multiyear_mb(ds_list,mb_df,years,site):
+    fig,ax = plt.subplots(figsize=(9,3),sharex=True,layout='constrained')
+    mb_df = mb_df.loc[mb_df['site_name'] == site]
+    mb_df.index = mb_df['Year']
+
+    # plot mass balance data
+    winter_mb_data = mb_df['bw'].loc[mb_df['Year'].isin(years)]
+    summer_mb_data = mb_df['ba'].loc[mb_df['Year'].isin(years)] - mb_df['bw'].loc[mb_df['Year'].isin(years)]
+    ax.plot(years,winter_mb_data,label='MB Data',color='black',linestyle='--')
+    ax.plot(years,summer_mb_data,color='black',linestyle='--')
+
+    for k,ds in enumerate(ds_list):
+        mb_mod = {'bw':[],'bs':[]}
+        for year in years:
+            # spring_date = mb_df['spring_date'].loc[year]
+            # fall_date = mb_df['fall_date'].loc[year]
+            # next_spring_date = mb_df
+            spring_date = str(year)+'-04-20 00:00'
+            fall_date = str(year)+'-08-20 00:00'
+            next_spring_date = str(year)+'-04-20 00:00'
+            last_fall_date = str(year-1)+'-08-20 00:00'
+            melt_dates = pd.date_range(spring_date,fall_date,freq='h')
+            acc_dates = pd.date_range(last_fall_date,spring_date,freq='h')
+            if pd.to_datetime(ds.time.values[0]).minute == 30:
+                melt_dates = melt_dates + pd.Timedelta(minutes=30)
+                acc_dates = acc_dates + pd.Timedelta(minutes=30)
+            # sum mass balance
+            wds = ds.sel(time=acc_dates).sum()
+            sds = ds.sel(time=melt_dates).sum()
+            winter_mb = wds.accum + wds.refreeze # - wds.melt
+            summer_mb = sds.accum + sds.refreeze - sds.melt - wds.melt
+            mb_mod['bw'].append(winter_mb.to_numpy())
+            mb_mod['bs'].append(summer_mb.to_numpy())
+        ax.plot(years,mb_mod['bw'],label='Winter MB Modeled'+str(k))
+        ax.plot(years,mb_mod['bs'],label='Summer MB Modeled'+str(k))
+    ax.legend()
+    ax.axhline(0,color='white')
+    ax.set_ylabel('Seasonal Mass Balance (m w.e.)')
+    ax.set_xlim(years[0],years[-1])
+    ax.set_xticks(np.arange(years[0],years[-1],2))
+    fig.suptitle('Gulkana Mass Balance Comparison')
+    # plt.show()
+    # plt.savefig('20yrfig.png',dpi=200)
+    return fig, ax
 
 def build_RMSEs(ds_list,stake_df,time,labels,save='sensitivity.npy'):
     """

@@ -171,8 +171,8 @@ class Layers():
             Arrays containing layer temperature [C], density [kg m-3]
             and water content [kg m-2]
         """
-        snow_idx =  self.snow_idx
-        ice_idx =  self.ice_idx
+        snow_idx = self.snow_idx
+        ice_idx = self.ice_idx
 
         # Read in temp and density data from csv
         temp_data = pd.read_csv(eb_prms.initial_temp_fp)[['depth','temp']].to_numpy()

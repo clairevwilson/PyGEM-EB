@@ -32,6 +32,8 @@ class energyBalance():
         dt : float
             Resolution for the time loop [s]
         """
+        self.bin = bin_idx
+
         # Unpack climate variables
         climateds_now = climate.cds.sel(time=time)
         # Bin-dependent variables indexed by bin_idx
@@ -145,7 +147,7 @@ class energyBalance():
         surface
             class object from surface.py
         """
-        SKY_VIEW = eb_prms.sky_view
+        SKY_VIEW = eb_prms.sky_view[self.bin]
         albedo = surface.albedo
         spectral_weights = surface.spectral_weights
         assert np.abs(1-np.sum(spectral_weights)) < 1e-5, 'Solar weights dont sum to 1'
@@ -249,8 +251,13 @@ class energyBalance():
         surftemp : float
             Surface temperature of snowpack/ice [C]
         """
+        if eb_prms.constant_conductivity:
+            cond_ice = eb_prms.constant_conductivity
+        else:
+            cond_ice = eb_prms.k_ice_ground
+
         if eb_prms.method_ground in ['MolgHardy']:
-            Qg = -eb_prms.k_ice * (surftemp - eb_prms.temp_temp) / eb_prms.temp_depth
+            Qg = -cond_ice * (surftemp - eb_prms.temp_temp) / eb_prms.temp_depth
         else:
             assert 1==0, 'Ground flux method not accepted; choose from [\'MolgHardy\']'
         return Qg
