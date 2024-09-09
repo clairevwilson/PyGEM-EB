@@ -73,7 +73,7 @@ class massBalance():
             enbal.get_dry_deposition(layers)
 
             # Update daily properties
-            if time.hour == 0: 
+            if time.hour == 0:
                 surface.daily_updates(layers,enbal.tempC,surface.stemp,time)
                 self.days_since_snowfall = surface.days_since_snowfall
                 layers.lnewsnow = np.zeros(layers.nlayers)
@@ -316,6 +316,8 @@ class massBalance():
         lh = layers.lheight.copy()[snow_firn_idx]
         layermelt_sf = layermelt[snow_firn_idx]
         initial_mass = np.sum(layers.ldrymass + layers.lwater)
+        if self.time == pd.to_datetime('2001-09-25 15:30:00'):
+            print('initial',layers.ldrymass,layers.lwater)
         rain_bool = rainfall > 0
 
         # Get completely melted layers
@@ -378,13 +380,18 @@ class massBalance():
         else:
             # No percolation, but need to move melt to runoff
             layers.ldrymass -= layermelt
-            layers.lheight -= layermelt / DENSITY_ICE
+            layers.lheight -= layermelt / layers.ldensity
             runoff = water_in + np.sum(layermelt)
+            if self.time in [ pd.to_datetime('2001-09-25 15:30:00'),pd.to_datetime('2001-09-25 14:30:00')]:
+                print('came into else')
 
         # CHECK MASS CONSERVATION
         ins = water_in
         outs = runoff
         change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
+        if np.abs(change - (ins-outs)) >= eb_prms.mb_threshold:
+            print(layers.ldrymass,layers.lwater,initial_mass,layers.ltype)
+            print(self.time,change,ins,outs)
         assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, 'percolation fails mass conservation'
 
         return runoff

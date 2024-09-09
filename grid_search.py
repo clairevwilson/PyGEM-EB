@@ -33,7 +33,7 @@ eb_prms.store_data = True
 # model parameters
 params = {
     'albedo_ice':[0.1,0.3],
-    'k_ice':[1,4]
+    'k_ice':[0.5,2]
 }
 
 # read command line args
@@ -49,7 +49,8 @@ for albedo_ice in params['albedo_ice']:
         print('Starting a_ice = ',albedo_ice,'and k_ice = ',thermal_cond)
 
         if run_model and not os.path.exists(eb_prms.output_name+'.nc'):
-            with HiddenPrints():
+            # with HiddenPrints():
+            if True:
                 # initialize the model
                 climate = sim.initialize_model(args.glac_no[0],args)
 

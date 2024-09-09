@@ -57,6 +57,7 @@ glac_props = {'01.00570':{'name':'Gulkana',
 
 if glac_no == ['01.00570']:
     sites = ['AB','B','D'][:n_bins]
+    # sites = ['D']
     initial_snowdepth = []
     initial_firndepth = []
     kp = []
@@ -86,7 +87,7 @@ bin_ice_depth = np.ones(len(bin_elev)) * 200
 assert len(bin_elev) == n_bins, 'Check n_bins in input'
 
 # ========== DIRECTORIES AND FILEPATHS ========== 
-machine = 'Campfire'
+machine = 'Torch'
 main_directory = os.getcwd()
 output_filepath = main_directory + '/../Output/'
 output_sim_fp = output_filepath + 'simulations/'
@@ -138,8 +139,8 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2000-04-10 00:00:00') 
-    enddate = pd.to_datetime('2023-08-20 23:00:00')
+    startdate = pd.to_datetime('2000-04-21 00:00:00') 
+    enddate = pd.to_datetime('2001-09-30 23:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
@@ -182,7 +183,7 @@ method_conductivity = 'OstinAndersson'  # 'OstinAndersson', 'VanDusen','Sturm','
 
 # CONSTANT SWITCHES
 constant_snowfall_density = False        # False or density in kg m-3
-constant_conductivity = 1                # False or conductivity in W K-1 m-1
+constant_conductivity = 0.5                # False or conductivity in W K-1 m-1
 constant_freshgrainsize = False          # False or grain size in um (54.5 is standard)
 constant_drdry = False                   # False or dry metamorphism grain size growth rate [um s-1] (1e-4 seems reasonable)
 
@@ -210,7 +211,7 @@ grainsize_ds = xr.open_dataset(grainsize_fp)
 # play with
 Boone_c1 = 2.7e-6           # s-1 (2.7e-6) --> 2.7e-4
 Boone_c5 = 0.018            # m3 kg-1 (0.018) --> 0.07
-albedo_ice = 0.2            # albedo of ice [-] 
+albedo_ice = 0.1            # albedo of ice [-] 
 dz_toplayer = 0.05          # Thickness of the uppermost bin [m]
 layer_growth = 0.4          # Rate of exponential growth of bin size (smaller layer growth = more layers) recommend 0.3-.6
 # leave
@@ -263,7 +264,7 @@ temp_temp = 0               # temperature of temperate ice [C]
 temp_depth = 100            # depth of temperate ice [m]
 albedo_fresh_snow = 0.9     # Albedo of fresh snow [-] (Moelg et al. 2012, TC - 0.85)
 albedo_firn = 0.55          # Albedo of firn [-]
-albedo_ground = 0.3         # Albedo of ground [-]
+albedo_ground = 0.1         # Albedo of ground [-]
 roughness_fresh_snow = 0.24 # surface roughness length for fresh snow [mm] (Moelg et al. 2012, TC)
 roughness_firn = 4          # surface roughness length for firn [mm] (Moelg et al. 2012, TC)
 ratio_BC2_BCtot = 2.08      # Ratio to transform BC bin 2 deposition to total BC

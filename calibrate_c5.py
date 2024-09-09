@@ -44,8 +44,7 @@ stake_df = stake_df.loc[dates_index]
 stake_df['CMB'] -= stake_df['CMB'].iloc[0]
 
 # objective function
-def objective(model,data):
-    return np.mean(np.abs(model - data))
+objective = lambda model,data: np.mean(np.abs(model - data))
 
 low = 3e-6
 high = 3e-4
