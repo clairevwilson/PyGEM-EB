@@ -28,6 +28,8 @@ def get_args():
                         help='pass str like datetime of model run end')
     parser.add_argument('-use_AWS', action='store_true',
                         default=eb_prms.use_AWS,help='use AWS or just reanalysis?')
+    parser.add_argument('-use_threads', action='store_true',
+                        help='use threading to import climate data?')
     parser.add_argument('-store_data', action='store_true', 
                         default=eb_prms.store_data, help='')
     parser.add_argument('-new_file', action='store_true',
@@ -126,6 +128,8 @@ def run_model(climate,args,store_attrs=None):
 args = get_args()
 for gn in args.glac_no:
     climate = initialize_model(gn,args)
+    time_elapsed = time.time()-start_time
+    print(f'Got climate in {time_elapsed:.1f} s')
     out = run_model(climate,args)
     if out:
         # Get final mass balance

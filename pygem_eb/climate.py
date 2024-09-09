@@ -120,14 +120,14 @@ class Climate():
     
     def get_reanalysis(self,vars):
         """
-        Utilizes threading to efficiently fetch reanalysis climate
-        data variables.
+        Fetches reanalysis climate data variables.
         """
         dates = self.dates_UTC
         lat = self.lat
         lon = self.lon
         self.need_vars = vars
-
+        use_threads = self.args.use_threads
+        
         interpolate = dates[0].minute != 30 and eb_prms.reanalysis == 'MERRA2'
         
         # get reanalysis data geopotential
@@ -171,6 +171,8 @@ class Climate():
             # store result
             result_dict[var] = data
             ds.close()
+            if not use_threads:
+                return result_dict
         
         # initiate variables
         all_data = {}
@@ -179,19 +181,25 @@ class Climate():
         for var in vars:
             if var == 'wind':
                 fn = self.reanalysis_fp + self.var_dict['uwind']['fn']
-                thread = threading.Thread(target=access_cell,
-                                        args=(fn, 'uwind', all_data))
-                thread.start()
-                threads.append(thread)
+                if use_threads:
+                    thread = threading.Thread(target=access_cell,
+                                            args=(fn, 'uwind', all_data))
+                    thread.start()
+                    threads.append(thread)
+                else:
+                    all_data = access_cell(fn, 'uwind', all_data)
                 var = 'vwind'
             fn = self.reanalysis_fp + self.var_dict[var]['fn']
-            thread = threading.Thread(target=access_cell,
-                                    args=(fn, var, all_data))
-            thread.start()
-            threads.append(thread)
-        # join threads
-        for thread in threads:
-            thread.join()
+            if use_threads:
+                thread = threading.Thread(target=access_cell,
+                                        args=(fn, var, all_data))
+                thread.start()
+                threads.append(thread)
+            else: all_data = access_cell(fn,var,all_data)
+        if use_threads:
+            # join threads
+            for thread in threads:
+                thread.join()
 
         # store data
         for var in vars:
