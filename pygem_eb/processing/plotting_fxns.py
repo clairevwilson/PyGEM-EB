@@ -3,7 +3,8 @@ import xarray as xr
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from sklearn.metrics import mean_squared_error
+
+mean_squared_error = lambda model,data: np.mean(np.square(model - data))
 
 mpl.style.use('seaborn-v0_8-white')
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color'] 
