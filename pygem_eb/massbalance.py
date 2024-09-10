@@ -1,3 +1,9 @@
+"""
+Mass balance class and main functions for PyGEM Energy Balance
+
+@author: clairevwilson
+"""
+
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -125,6 +131,9 @@ class massBalance():
             # Debugging: print current state and monthly melt at the end of each month
             if time.is_month_start and time.hour == 0 and eb_prms.debug:
                 self.current_state(time,enbal.tempC)
+            
+            if layers.ltype[0] == 'ice' and layers.ltype[1] != 'ice':
+                print('WHAAAA HOWD WE GOT ICE ON SNOW',self.time)
 
             # Advance timestep
             pass
@@ -315,12 +324,13 @@ class massBalance():
         lw = layers.lwater.copy()[snow_firn_idx]
         lh = layers.lheight.copy()[snow_firn_idx]
         layermelt_sf = layermelt[snow_firn_idx]
-        initial_mass = np.sum(layers.ldrymass + layers.lwater)
-        if self.time == pd.to_datetime('2001-09-25 15:30:00'):
-            print('initial',layers.ldrymass,layers.lwater)
-        rain_bool = rainfall > 0
 
-        # Get completely melted layers
+        # Initialize variables
+        initial_mass = np.sum(layers.ldrymass + layers.lwater)
+        rain_bool = rainfall > 0
+        runoff = 0
+
+        # Get completsely melted layers
         if self.melted_layers != 0:
             water_in = rainfall + np.sum(self.melted_layers.mass)
         else:
@@ -331,6 +341,7 @@ class massBalance():
             theta_liq = lw / (lh*DENSITY_WATER)
             theta_ice = ldm / (lh*DENSITY_ICE)
             porosity = 1 - theta_ice
+            theta_liq[theta_liq > porosity] = porosity[theta_liq > porosity]
 
             # Account for melt in dry and wet mass
             ldm -= layermelt_sf
@@ -353,13 +364,15 @@ class massBalance():
                 if layer < len(porosity) - 1 and theta_liq[layer] <= 0.3:
                     next = layer+1
                     lim = DENSITY_WATER*lh[next]/dt * (1-theta_ice[next]-theta_liq[next])
-                    lim = max(0,lim)
                 else: # no limit on bottom layer (1e6 sufficiently high)
                     lim = 1e6
+                # check limit based on water in the current layer
+                lim = min(q_in + lw[layer],lim)
                 q_out = min(qi,lim)
 
                 # layer mass balance
                 lw[layer] += (q_in - q_out)*dt
+
                 lh[layer] -= melt / layers.ldensity[layer]
                 q_in_store.append(q_in)
                 q_out_store.append(q_out)
@@ -368,7 +381,7 @@ class massBalance():
             layers.lheight[snow_firn_idx] = lh
             layers.lwater[snow_firn_idx] = lw
             layers.ldrymass[snow_firn_idx] = ldm
-            runoff = q_out*dt + np.sum(layermelt[layers.ice_idx])
+            runoff += q_out*dt + np.sum(layermelt[layers.ice_idx])
             if np.any(layers.lnewsnow > layers.ldrymass):
                 where = np.where(layers.lnewsnow > layers.ldrymass)[0]
                 layers.lnewsnow[where] = 0
@@ -381,9 +394,7 @@ class massBalance():
             # No percolation, but need to move melt to runoff
             layers.ldrymass -= layermelt
             layers.lheight -= layermelt / layers.ldensity
-            runoff = water_in + np.sum(layermelt)
-            if self.time in [ pd.to_datetime('2001-09-25 15:30:00'),pd.to_datetime('2001-09-25 14:30:00')]:
-                print('came into else')
+            runoff += water_in + np.sum(layermelt)
 
         # CHECK MASS CONSERVATION
         ins = water_in

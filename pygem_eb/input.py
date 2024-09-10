@@ -13,7 +13,7 @@ new_file=True        # Write to scratch file?
 # ========== USER OPTIONS ========== 
 glac_no = ['01.00570']  # List of RGI glacier IDs
 parallel = False        # Run parallel processing?
-n_bins = 3              # Number of elevation bins
+n_bins = 1              # Number of elevation bins
 timezone = pd.Timedelta(hours=-8)   # local GMT time zone
 use_AWS = False          # Use AWS data? (or just reanalysis)
 
@@ -56,8 +56,8 @@ glac_props = {'01.00570':{'name':'Gulkana',
 # bin_ice_depth = np.ones(len(bin_elev)) * 200
 
 if glac_no == ['01.00570']:
-    sites = ['AB','B','D'][:n_bins]
-    # sites = ['D']
+    # sites = ['AB','B','D'][:n_bins]
+    sites = ['B']
     initial_snowdepth = []
     initial_firndepth = []
     kp = []
@@ -140,7 +140,7 @@ if dates_from_data:
         enddate -= pd.Timedelta(minutes=30)
 else:
     startdate = pd.to_datetime('2000-04-21 00:00:00') 
-    enddate = pd.to_datetime('2001-09-30 23:00:00')
+    enddate = pd.to_datetime('2023-09-30 23:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
@@ -150,8 +150,7 @@ else:
     # enddate = pd.to_datetime('2016-07-18 00:30')
     
 n_months = np.round((enddate-startdate)/pd.Timedelta(days=30))
-if debug:
-    (f'Running {n_bins} bin(s) at {bin_elev} m a.s.l. for {n_months} months starting in {startdate.month_name()}, {startdate.year}')
+print(f'Running {n_bins} bin(s) at {bin_elev} m a.s.l. for {n_months} months starting in {startdate.month_name()}, {startdate.year}')
 
 #  ========== MODEL OPTIONS ========== 
 # INITIALIATION
@@ -261,7 +260,7 @@ Sr = 0.033                  # for irreducible water content flow method
 rainBC = BC_freshsnow       # concentration of BC in rain
 raindust = dust_freshsnow   # concentration of dust in rain
 temp_temp = 0               # temperature of temperate ice [C]
-temp_depth = 100            # depth of temperate ice [m]
+temp_depth = 25             # depth of temperate ice [m]
 albedo_fresh_snow = 0.9     # Albedo of fresh snow [-] (Moelg et al. 2012, TC - 0.85)
 albedo_firn = 0.55          # Albedo of firn [-]
 albedo_ground = 0.1         # Albedo of ground [-]

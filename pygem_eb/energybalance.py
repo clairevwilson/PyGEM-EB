@@ -1,7 +1,7 @@
 """
 Energy balance class for PyGEM Energy Balance
 
-@author: cvwilson
+@author: clairevwilson
 """
 import pandas as pd
 import numpy as np

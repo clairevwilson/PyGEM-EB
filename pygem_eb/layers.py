@@ -1,7 +1,7 @@
 """
 Layers class for PyGEM Energy Balance
 
-@author: cvwilson
+@author: clairevwilson
 """
 
 import numpy as np

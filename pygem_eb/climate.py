@@ -1,3 +1,8 @@
+"""
+Climate class for PyGEM Energy Balance
+
+@author: clairevwilson
+"""
 import numpy as np
 import xarray as xr
 import pandas as pd

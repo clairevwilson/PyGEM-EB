@@ -38,7 +38,7 @@ params = {
 
 # read command line args
 args = sim.get_args()
-args.enddate = pd.to_datetime('2002-08-21 00:30')
+args.enddate = pd.to_datetime('2023-08-21 00:30')
 
 ds_list = []
 for albedo_ice in params['albedo_ice']:
@@ -46,7 +46,7 @@ for albedo_ice in params['albedo_ice']:
         eb_prms.output_name = f'{eb_prms.output_filepath}EB/a_{albedo_ice}_k_{thermal_cond}'
         eb_prms.constant_conductivity = thermal_cond
         eb_prms.albedo_ice = albedo_ice
-        print('Starting a_ice = ',albedo_ice,'and k_ice = ',thermal_cond)
+        print('Starting model run with a_ice = ',albedo_ice,'and k_ice = ',thermal_cond)
 
         if run_model and not os.path.exists(eb_prms.output_name+'.nc'):
             # with HiddenPrints():
