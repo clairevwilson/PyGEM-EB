@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 import sys, os
-# sys.path.append('/home/claire/research/PyGEM-EB/biosnicar-py/')
 sys.path.append(os.getcwd()+'/biosnicar-py/')
 import yaml
 import suncalc
@@ -19,7 +18,7 @@ class Surface():
     Surface scheme that tracks the accumulation of LAPs and calculates 
     albedo based on several switches.
     """ 
-    def __init__(self,layers,time,args,climate):
+    def __init__(self,layers,time,args,climate,bin_idx):
         # Add args and climate to surface class
         self.args = args
         self.climate = climate
@@ -47,6 +46,12 @@ class Surface():
         if eb_prms.store_bands:
             bands = np.arange(0,480).astype(str)
             self.albedo_df = pd.DataFrame(np.zeros((0,480)),columns=bands)
+
+        # Parallel needs separate input files to access
+        if eb_prms.parallel:
+            self.snicar_fn = os.getcwd() + f'/biosnicar-py/biosnicar/inputs_{bin_idx}.yaml'
+        else:
+            self.snicar_fn = eb_prms.snicar_input_fp
         return
     
     def daily_updates(self,layers,airtemp,surftemp,time):
@@ -263,6 +268,7 @@ class Surface():
         """
         with HiddenPrints():
             from biosnicar import get_albedo
+        get_albedo.input_fp = self.snicar_fn
 
         # CONSTANTS
         AVG_GRAINSIZE = eb_prms.average_grainsize
@@ -318,8 +324,12 @@ class Surface():
             ldust5 = ldust1.copy()
 
         # Open and edit yaml input file for SNICAR
-        with open(eb_prms.snicar_input_fp) as f:
-            list_doc = yaml.safe_load(f)
+        try:
+            with open(self.snicar_fn) as f:
+                list_doc = yaml.safe_load(f)
+        except:
+            with open(eb_prms.snicar_input_fp) as f:
+                list_doc = yaml.safe_load(f)
 
         # Update changing layer variables
         list_doc['IMPURITIES']['BC']['CONC'] = lBC
@@ -349,7 +359,7 @@ class Surface():
         list_doc['RTM']['DIRECT'] = 0 if self.tcc > DIFFUSE_CLOUD_LIMIT else 1
 
         # Save SNICAR input file
-        with open(eb_prms.snicar_input_fp, 'w') as f:
+        with open(self.snicar_fn, 'w') as f:
             yaml.dump(list_doc,f)
         
         # Get albedo from biosnicar

@@ -3,7 +3,7 @@ Mass balance class and main functions for PyGEM Energy Balance
 
 @author: clairevwilson
 """
-
+import os
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -41,7 +41,7 @@ class massBalance():
         self.args = args
         self.climate = climate
         self.layers = eb_layers.Layers(bin_idx,climate)
-        self.surface = eb_surface.Surface(self.layers,self.time_list,args,climate)
+        self.surface = eb_surface.Surface(self.layers,self.time_list,args,climate,bin_idx)
 
         # Initialize output class
         self.output = Output(self.time_list,bin_idx,args)
@@ -131,16 +131,13 @@ class massBalance():
             # Debugging: print current state and monthly melt at the end of each month
             if time.is_month_start and time.hour == 0 and eb_prms.debug:
                 self.current_state(time,enbal.tempC)
-            
-            if layers.ltype[0] == 'ice' and layers.ltype[1] != 'ice':
-                print('WHAAAA HOWD WE GOT ICE ON SNOW',self.time)
 
             # Advance timestep
             pass
 
         # Completed bin: store data
         if self.args.store_data:
-            self.output.store_data(self.bin_idx)
+            self.output.store_data()
 
         if eb_prms.store_bands:
             surface.albedo_df.to_csv(eb_prms.albedo_out_fp.replace('.csv',f'_{self.elev}.csv'))
@@ -343,15 +340,16 @@ class massBalance():
             porosity = 1 - theta_ice
             theta_liq[theta_liq > porosity] = porosity[theta_liq > porosity]
 
-            # Account for melt in dry and wet mass
+            # Remove / move melt to layer water
             ldm -= layermelt_sf
+            lh -= layermelt_sf / layers.ldensity[snow_firn_idx]
             lw += layermelt_sf
 
             # initialize flow into the top layer
             q_out = water_in / dt
             q_in_store = []
             q_out_store = []
-            for layer,melt in enumerate(layermelt_sf):
+            for layer in snow_firn_idx:
                 # set flow in equal to flow out of the previous layer
                 q_in = q_out
 
@@ -372,8 +370,6 @@ class massBalance():
 
                 # layer mass balance
                 lw[layer] += (q_in - q_out)*dt
-
-                lh[layer] -= melt / layers.ldensity[layer]
                 q_in_store.append(q_in)
                 q_out_store.append(q_out)
 
@@ -498,20 +494,21 @@ class massBalance():
         LH_RF = eb_prms.Lh_rf
 
         # LAYERS IN
-        lT = layers.ltemp.copy()
-        lw = layers.lwater.copy()
-        ldm = layers.ldrymass.copy()
-        lh = layers.lheight.copy()
+        snow_firn_idx = np.concatenate([layers.snow_idx,layers.firn_idx])
+        lT = layers.ltemp.copy()[snow_firn_idx]
+        lw = layers.lwater.copy()[snow_firn_idx]
+        ldm = layers.ldrymass.copy()[snow_firn_idx]
+        lh = layers.lheight.copy()[snow_firn_idx]
 
         initial_mass = np.sum(layers.ldrymass + layers.lwater)
-        refreeze = np.zeros(layers.nlayers)
+        refreeze = np.zeros(len(snow_firn_idx))
         for layer, T in enumerate(lT):
             if T < 0. and lw[layer] > 0:
                 # calculate potential for refreeze [J m-2]
                 E_cold = np.abs(T)*ldm[layer]*HEAT_CAPACITY_ICE  # cold content available 
                 E_water = lw[layer]*LH_RF  # amount of water to freeze
                 E_pore = (DENSITY_ICE*lh[layer]-ldm[layer])*LH_RF # pore space available
-
+                
                 # calculate amount of refreeze in kg m-2
                 dm_ref = np.min([abs(E_cold),abs(E_water),abs(E_pore)])/LH_RF
 
@@ -523,22 +520,22 @@ class massBalance():
                 # update layer temperature from latent heat
                 lT[layer] = min(0,-(E_cold-dm_ref*LH_RF)/(HEAT_CAPACITY_ICE*ldm[layer]))
                 # update water content
-                lw[layer] = max(0,layers.lwater[layer]-dm_ref)
+                lw[layer] = max(0,lw[layer]-dm_ref)
         
         # Update refreeze with new refreeze content
-        layers.lrefreeze += refreeze
+        layers.lrefreeze[snow_firn_idx] += refreeze
 
         # LAYERS OUT
-        layers.ltemp = lT
-        layers.lwater = lw
-        layers.ldrymass = ldm
-        layers.lheight = lh
+        layers.ltemp[snow_firn_idx] = lT
+        layers.lwater[snow_firn_idx] = lw
+        layers.ldrymass[snow_firn_idx] = ldm
+        layers.lheight[snow_firn_idx] = lh
         layers.update_layer_props()
 
         # CHECK MASS CONSERVATION
         change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
         assert np.abs(change) < eb_prms.mb_threshold, 'refreezing fails mass conservation'
-
+        
         return np.sum(refreeze)
     
     def densification(self,layers):
@@ -774,6 +771,7 @@ class massBalance():
         return 
 
     def current_state(self,time,airtemp):
+        # gather variables to print out
         layers = self.layers
         surftemp = self.surface.stemp
         albedo = self.surface.bba
@@ -781,6 +779,7 @@ class massBalance():
         melt = np.sum(self.output.melt_output[-720:])
         accum = np.sum(self.output.accum_output[-720:])
         ended_month = (time - pd.Timedelta(days=1)).month_name()
+        year = time.year if ended_month != 'December' else time.year - 1
 
         layers.update_layer_props()
         snowdepth = np.sum(layers.lheight[layers.snow_idx])
@@ -788,7 +787,7 @@ class massBalance():
         icedepth = np.sum(layers.lheight[layers.ice_idx])
 
         # Begin prints
-        print(f'MONTH COMPLETED: {ended_month} {time.year} with +{accum:.2f} and -{melt:.2f} m w.e.')
+        print(f'MONTH COMPLETED: {ended_month} {year} with +{accum:.2f} and -{melt:.2f} m w.e.')
         print(f'Currently {airtemp:.2f} C with {melte:.0f} W m-2 melt energy')
         print(f'----------surface albedo: {albedo:.3f} -----------')
         print(f'-----------surface temp: {surftemp:.2f} C-----------')
@@ -840,11 +839,25 @@ class Output():
         Parameters
         ----------
         """
-        n_bins = eb_prms.n_bins
-        bin_idxs = range(n_bins)
+        # For parallel processing of multiple bins, save separate files
+        self.out_fn = eb_prms.output_name
+        if args.n_bins == 1 or not eb_prms.parallel:
+            self.n_bins = args.n_bins
+            self.out_fn += '.nc'
+            self.bin_idx = bin_idx
+        else:
+            self.n_bins = 1
+            self.out_fn = self.out_fn[:-1]
+            i = 0
+            while os.path.exists(self.out_fn+f'{i}_bin{bin_idx}.nc'):
+                i += 1
+            self.out_fn += f'{i}_bin{bin_idx}.nc'
+            self.bin_idx = 0
+
+        # Info needed to create the output file
+        bin_idxs = range(self.n_bins)
         self.n_timesteps = len(time)
-        self.n_bins = n_bins
-        zeros = np.zeros([self.n_timesteps,n_bins,eb_prms.max_nlayers])
+        zeros = np.zeros([self.n_timesteps,self.n_bins,eb_prms.max_nlayers])
 
         # Create variable name dict
         vn_dict = {'EB':['SWin','SWout','LWin','LWout','rain','ground',
@@ -893,9 +906,11 @@ class Output():
         vars_list = vn_dict[eb_prms.store_vars[0]]
         for var in eb_prms.store_vars[1:]:
             vars_list.extend(vn_dict[var])
+        
         # If on the first bin, create the netcdf file to store output
-        if bin_idx == 0 and str(args.store_data) == 'True':
-            all_variables[vars_list].to_netcdf(eb_prms.output_name+'.nc')
+        if str(args.store_data) == 'True':
+            if self.bin_idx == 0:
+                all_variables[vars_list].to_netcdf(self.out_fn)
 
         # Initialize energy balance outputs
         self.SWin_output = []       # incoming shortwave [W m-2]
@@ -960,8 +975,9 @@ class Output():
         self.layerdust_output[step] = layers.ldust / layers.lheight * 1e3
         self.layergrainsize_output[step] = layers.grainsize
 
-    def store_data(self,bin):    
-        with xr.open_dataset(eb_prms.output_name+'.nc') as dataset:
+    def store_data(self):
+        bin = self.bin_idx
+        with xr.open_dataset(self.out_fn) as dataset:
             ds = dataset.load()
             if 'EB' in eb_prms.store_vars:
                 ds['SWin'].loc[:,bin] = self.SWin_output
@@ -1013,7 +1029,7 @@ class Output():
                 ds['layerBC'].loc[:,bin,:] = layerBC_output
                 ds['layerdust'].loc[:,bin,:] = layerdust_output
                 ds['layergrainsize'].loc[:,bin,:] = layergrainsize_output
-        ds.to_netcdf(eb_prms.output_name+'.nc')
+        ds.to_netcdf(self.out_fn)
         return ds
     
     def add_vars(self):
@@ -1025,7 +1041,7 @@ class Output():
         LWnet: net longwave radiation flux [W m-2]
         NetRad: net radiation flux (SW and LW) [W m-2]
         """
-        with xr.open_dataset(eb_prms.output_name+'.nc') as dataset:
+        with xr.open_dataset(self.out_fn) as dataset:
             ds = dataset.load()
 
             # add surface height change
@@ -1046,10 +1062,10 @@ class Output():
             ds['SWnet'] = (['time','bin'],SWnet.values,{'units':'W m-2'})
             ds['LWnet'] = (['time','bin'],LWnet.values,{'units':'W m-2'})
             ds['NetRad'] = (['time','bin'],NetRad.values,{'units':'W m-2'})
-        ds.to_netcdf(eb_prms.output_name+'.nc')
+        ds.to_netcdf(self.out_fn)
         return
     
-    def add_basic_attrs(self,args,time_elapsed,climate):
+    def add_basic_attrs(self,args,time_elapsed,climate,bin_idx=0):
         """
         Adds informational attributes to the output dataset.
 
@@ -1062,6 +1078,8 @@ class Output():
         """
         time_elapsed = str(time_elapsed) + ' s'
         bin_elev = ', '.join([str(z) for z in eb_prms.bin_elev])
+        if eb_prms.parallel:
+            bin_elev = str(eb_prms.bin_elev[bin_idx])
 
         # get information on variable sources
         re_str = eb_prms.reanalysis+': '
@@ -1076,7 +1094,7 @@ class Output():
             re_str += 'all'
             AWS_str = 'none'
         
-        with xr.open_dataset(eb_prms.output_name+'.nc') as dataset:
+        with xr.open_dataset(self.out_fn) as dataset:
             ds = dataset.load()
             ds = ds.assign_attrs(from_AWS=AWS_str,
                                  from_reanalysis=re_str,
@@ -1095,17 +1113,21 @@ class Output():
                 ds = ds.assign_attrs(glacier=f'{len(args.glac_no)} glaciers in region {reg}')
             else:
                 ds = ds.assign_attrs(glacier=eb_prms.glac_name)
-        ds.to_netcdf(eb_prms.output_name+'.nc')
+        ds.to_netcdf(self.out_fn)
         return
     
     def add_attrs(self,new_attrs):
         """
         Adds new attributes as a dict to the output dataset
         """
-        with xr.open_dataset(eb_prms.output_name+'.nc') as dataset:
+        with xr.open_dataset(self.out_fn) as dataset:
             ds = dataset.load()
             if not new_attrs:
                 return ds
             ds = ds.assign_attrs(new_attrs)
-        ds.to_netcdf(eb_prms.output_name+'.nc')
-        return ds
+        ds.to_netcdf(self.out_fn)
+        print('Success: saving to '+self.out_fn)
+        return
+    
+    def get_output(self):
+        return xr.open_dataset(self.out_fn)

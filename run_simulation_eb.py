@@ -48,6 +48,13 @@ def get_args():
     args = parser.parse_args()
     return args
 
+def run_mass_balance(bin,args,climate,attrs):
+    massbal = mb.massBalance(bin,args,climate)
+    massbal.main()
+    massbal.output.add_vars()
+    massbal.output.add_basic_attrs(args,time_elapsed,climate,bin)
+    massbal.output.add_attrs(attrs)
+
 def initialize_model(glac_no,args,debug=True):
     """
     Loads glacier table and climate dataset for one glacier to initialize
@@ -90,35 +97,39 @@ def run_model(climate,args,store_attrs=None):
         Class object with climate data from initialize_model
     args
         Command line arguments from get_args
-    add_attrs : dict
+    store_attrs : dict
         Dictionary of additional metadata to store in the .nc
     """
     # ===== RUN ENERGY BALANCE =====
-    if eb_prms.parallel:
-        def run_mass_balance(bin):
+    if eb_prms.parallel and args.n_bins > 1:
+        if __name__ == '__main__':
+            with Pool(args.n_bins) as processes_pool:
+                starmap_arg = [(i, args, climate, store_attrs) for i in range(args.n_bins)]
+                processes_pool.starmap(run_mass_balance,starmap_arg)
+    else:
+        for bin in np.arange(args.n_bins):
             massbal = mb.massBalance(bin,args,climate)
             massbal.main()
-        processes_pool = Pool(args.n_bins)
-        processes_pool.map(run_mass_balance,range(args.n_bins))
-    for bin in np.arange(args.n_bins):
-        massbal = mb.massBalance(bin,args,climate)
-        massbal.main()
-        
-        if bin<args.n_bins-1:
-            print('Success: moving onto bin',bin+1)
+            
+            if bin<args.n_bins-1:
+                print('Success: moving onto bin',bin+1)
 
     # ===== END ENERGY BALANCE =====
     # Get final model run time
     end_time = time.time()
     time_elapsed = end_time-start_time
+    print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
     print(f'Total Time Elapsed: {time_elapsed:.1f} s')
 
     # Store metadata in netcdf and save result
     if args.store_data:
-        massbal.output.add_vars()
-        massbal.output.add_basic_attrs(args,time_elapsed,climate)
-        ds_out = massbal.output.add_attrs(store_attrs)
-        print('Success: saving to',eb_prms.output_name+'.nc')
+        if not eb_prms.parallel:
+            massbal.output.add_vars()
+            massbal.output.add_basic_attrs(args,time_elapsed,climate)
+            massbal.output.add_attrs(store_attrs)
+            ds_out = massbal.output.get_output()
+        else:
+            ds_out = 'Parallel run: open output .nc for dataset'
     else:
         print('Success: data was not saved')
         ds_out = None
@@ -131,6 +142,6 @@ for gn in args.glac_no:
     time_elapsed = time.time()-start_time
     print(f'Got climate in {time_elapsed:.1f} s')
     out = run_model(climate,args)
-    if out:
+    if isinstance(out, xr.Dataset):
         # Get final mass balance
         print(f'Total Mass Loss: {out.melt.sum():.3f} m w.e.')

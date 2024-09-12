@@ -12,15 +12,15 @@ new_file=True        # Write to scratch file?
 
 # ========== USER OPTIONS ========== 
 glac_no = ['01.00570']  # List of RGI glacier IDs
-parallel = False        # Run parallel processing?
-n_bins = 1              # Number of elevation bins
+parallel = True         # Run parallel processing?
+n_bins = 3              # Number of elevation bins
 timezone = pd.Timedelta(hours=-8)   # local GMT time zone
 use_AWS = False          # Use AWS data? (or just reanalysis)
 
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/Gulkana2011:.csv'}, 
+                            'AWS_fn':'Preprocessed/gulkana_20yrs.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -56,8 +56,8 @@ glac_props = {'01.00570':{'name':'Gulkana',
 # bin_ice_depth = np.ones(len(bin_elev)) * 200
 
 if glac_no == ['01.00570']:
-    # sites = ['AB','B','D'][:n_bins]
-    sites = ['B']
+    sites = ['AB','B','D'][:n_bins]
+    # sites = ['B']
     initial_snowdepth = []
     initial_firndepth = []
     kp = []
@@ -87,7 +87,11 @@ bin_ice_depth = np.ones(len(bin_elev)) * 200
 assert len(bin_elev) == n_bins, 'Check n_bins in input'
 
 # ========== DIRECTORIES AND FILEPATHS ========== 
-machine = 'Torch'
+try:
+    import socket
+    machine = socket.gethostname()
+except:
+    machine = 'Torch'
 main_directory = os.getcwd()
 output_filepath = main_directory + '/../Output/'
 output_sim_fp = output_filepath + 'simulations/'
@@ -140,7 +144,7 @@ if dates_from_data:
         enddate -= pd.Timedelta(minutes=30)
 else:
     startdate = pd.to_datetime('2000-04-21 00:00:00') 
-    enddate = pd.to_datetime('2023-09-30 23:00:00')
+    enddate = pd.to_datetime('2000-04-24 19:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
@@ -182,7 +186,7 @@ method_conductivity = 'OstinAndersson'  # 'OstinAndersson', 'VanDusen','Sturm','
 
 # CONSTANT SWITCHES
 constant_snowfall_density = False        # False or density in kg m-3
-constant_conductivity = 0.5                # False or conductivity in W K-1 m-1
+constant_conductivity = 2                # False or conductivity in W K-1 m-1
 constant_freshgrainsize = False          # False or grain size in um (54.5 is standard)
 constant_drdry = False                   # False or dry metamorphism grain size growth rate [um s-1] (1e-4 seems reasonable)
 
@@ -208,9 +212,9 @@ grainsize_ds = xr.open_dataset(grainsize_fp)
 
 # ========== PARAMETERS ==========
 # play with
+albedo_ice = 0.2            # albedo of ice [-] 
 Boone_c1 = 2.7e-6           # s-1 (2.7e-6) --> 2.7e-4
 Boone_c5 = 0.018            # m3 kg-1 (0.018) --> 0.07
-albedo_ice = 0.1            # albedo of ice [-] 
 dz_toplayer = 0.05          # Thickness of the uppermost bin [m]
 layer_growth = 0.4          # Rate of exponential growth of bin size (smaller layer growth = more layers) recommend 0.3-.6
 # leave

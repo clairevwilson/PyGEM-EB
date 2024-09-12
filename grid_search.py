@@ -3,7 +3,7 @@ import numpy as np
 import xarray as xr
 import os, sys
 import matplotlib.pyplot as plt
-from pygem_eb.processing.plotting_fxns import plot_multiyear_mb
+from objectives import seasonal_mass_balance
 
 run_model = True
 
@@ -29,6 +29,7 @@ eb_prms.debug = False
 with HiddenPrints():
     import run_simulation_eb as sim
 eb_prms.store_data = True
+mb_fp = os.getcwd()+'/../MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
 
 # model parameters
 params = {
@@ -38,7 +39,7 @@ params = {
 
 # read command line args
 args = sim.get_args()
-args.enddate = pd.to_datetime('2023-08-21 00:30')
+args.enddate = pd.to_datetime('2023-09-30 00:30')
 
 ds_list = []
 for albedo_ice in params['albedo_ice']:
@@ -63,17 +64,18 @@ for albedo_ice in params['albedo_ice']:
             ds = ds.assign_coords(time=ds.time.values + pd.Timedelta(days=365*10))
             ds_list.append(ds)
         
-        print('Finished')
+        print('Finished: making plot')
+        seasonal_mass_balance(mb_fp,ds_list[0],0,'B')
+        print('Moving to next model run')
 
-mb_fp = os.getcwd()+'/../MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
-end_year = args.enddate.year if args.enddate.month > 7 else args.enddate.year-1
-years_model = np.arange(args.startdate.year+1,end_year+1)
-mb_df = pd.read_csv(mb_fp)
-for site in ['AB','B','D']:
-    years_site = np.unique(mb_df.loc[mb_df['site_name']==site]['Year'])
-    years = list(set(years_site)&set(years_model))
-    years = np.sort(np.array(years))
-    years = [2011]
-    print(site,years)
-    fig,ax = plot_multiyear_mb(ds_list,mb_df,years,site)
-    plt.savefig(f'multiyear_run_{site}.png',dpi=200)
+# end_year = args.enddate.year if args.enddate.month > 7 else args.enddate.year-1
+# years_model = np.arange(args.startdate.year+1,end_year+1)
+# mb_df = pd.read_csv(mb_fp)
+# for site in ['AB','B','D']:
+#     years_site = np.unique(mb_df.loc[mb_df['site_name']==site]['Year'])
+#     years = list(set(years_site)&set(years_model))
+#     years = np.sort(np.array(years))
+#     years = [2011]
+#     print(site,years)
+#     fig,ax = plot_multiyear_mb(ds_list,mb_df,years,site)
+#     plt.savefig(f'multiyear_run_{site}.png',dpi=200)

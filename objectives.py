@@ -111,6 +111,7 @@ def seasonal_mass_balance(fp,ds,bin=0,site='B',method='RMSE',plot=False):
         ax.set_xlim(years[0],years[-1])
         ax.set_ylabel('Seasonal mass balance (m w.e.)',fontsize=14)
         ax.set_title(f'Summer {method} = {summer_error:.3e}\nWinter {method} = {winter_error:.3e}')
+        plt.savefig('/home/claire/research/figure.png')
     return winter_error, summer_error
 
 # ========== 2. CUMULATIVE MASS BALANCE ==========

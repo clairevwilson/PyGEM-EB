@@ -1128,6 +1128,8 @@ def visualize_layers(ds,bin,dates,vars,force_layers=False,
         return c
 
     fig,axes = plt.subplots(len(vars),figsize=(5,1.7*len(vars)),sharex=True,layout='constrained')
+    if len(vars) == 1:
+        axes = [axes]
     for i,var in enumerate(vars):
         if var in ['layerBC']:
             bounds = [-2,30]
