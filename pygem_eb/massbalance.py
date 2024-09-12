@@ -839,20 +839,32 @@ class Output():
         Parameters
         ----------
         """
-        # For parallel processing of multiple bins, save separate files
+        # Get unique filename (or scratch filename)
         self.out_fn = eb_prms.output_name
-        if args.n_bins == 1 or not eb_prms.parallel:
+        if eb_prms.new_file and not args.parallel:
+            i = 0
+            while os.path.exists(self.out_fn+f'{i}.nc'):
+                i += 1
+            if bin_idx != 0:
+                i -= 1
+            self.out_fn += str(i)
+        elif args.parallel:
+            i = 0
+            while os.path.exists(self.out_fn+f'{i}_bin0.nc'):
+                i += 1
+            self.out_fn += str(i) + '_bin#'
+        else:
+            self.out_fn = self.out_fn+'scratch'
+
+        # For parallel processing of multiple bins, save separate files
+        if args.n_bins == 1 or not args.parallel:
             self.n_bins = args.n_bins
-            self.out_fn += '.nc'
             self.bin_idx = bin_idx
         else:
             self.n_bins = 1
-            self.out_fn = self.out_fn[:-1]
-            i = 0
-            while os.path.exists(self.out_fn+f'{i}_bin{bin_idx}.nc'):
-                i += 1
-            self.out_fn += f'{i}_bin{bin_idx}.nc'
+            self.out_fn = self.out_fn.replace('#',str(bin_idx))
             self.bin_idx = 0
+        self.out_fn += '.nc'
 
         # Info needed to create the output file
         bin_idxs = range(self.n_bins)
@@ -908,7 +920,7 @@ class Output():
             vars_list.extend(vn_dict[var])
         
         # If on the first bin, create the netcdf file to store output
-        if str(args.store_data) == 'True':
+        if args.store_data:
             if self.bin_idx == 0:
                 all_variables[vars_list].to_netcdf(self.out_fn)
 
@@ -1078,7 +1090,7 @@ class Output():
         """
         time_elapsed = str(time_elapsed) + ' s'
         bin_elev = ', '.join([str(z) for z in eb_prms.bin_elev])
-        if eb_prms.parallel:
+        if args.parallel:
             bin_elev = str(eb_prms.bin_elev[bin_idx])
 
         # get information on variable sources
@@ -1114,6 +1126,7 @@ class Output():
             else:
                 ds = ds.assign_attrs(glacier=eb_prms.glac_name)
         ds.to_netcdf(self.out_fn)
+        print('Success: saved to '+self.out_fn)
         return
     
     def add_attrs(self,new_attrs):
@@ -1126,7 +1139,6 @@ class Output():
                 return ds
             ds = ds.assign_attrs(new_attrs)
         ds.to_netcdf(self.out_fn)
-        print('Success: saving to '+self.out_fn)
         return
     
     def get_output(self):

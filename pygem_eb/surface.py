@@ -48,7 +48,7 @@ class Surface():
             self.albedo_df = pd.DataFrame(np.zeros((0,480)),columns=bands)
 
         # Parallel needs separate input files to access
-        if eb_prms.parallel:
+        if args.parallel:
             self.snicar_fn = os.getcwd() + f'/biosnicar-py/biosnicar/inputs_{bin_idx}.yaml'
         else:
             self.snicar_fn = eb_prms.snicar_input_fp

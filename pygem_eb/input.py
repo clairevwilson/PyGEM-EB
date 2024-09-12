@@ -12,7 +12,6 @@ new_file=True        # Write to scratch file?
 
 # ========== USER OPTIONS ========== 
 glac_no = ['01.00570']  # List of RGI glacier IDs
-parallel = True         # Run parallel processing?
 n_bins = 3              # Number of elevation bins
 timezone = pd.Timedelta(hours=-8)   # local GMT time zone
 use_AWS = False          # Use AWS data? (or just reanalysis)
@@ -100,13 +99,6 @@ glac_name = glac_props[glac_no[0]]['name']
 
 # Find new filepath 
 output_name = f'{output_filepath}EB/{glac_name}_{model_run_date}_'
-if new_file:
-    i = '0'
-    while os.path.exists(output_name+str(i)+'.nc'):
-        i = int(i) + 1
-    output_name = output_name + str(i)
-else:
-    output_name = output_name+'scratch'
 # output_name = f'{output_filepath}EB/{glac_name}_{model_run_date}_BCred4'
 
 # Define input filepaths
