@@ -329,6 +329,8 @@ class energyBalance():
                 Ql = density_air*Lv*csQ*self.wind*(qz-q0)
 
                 # recalculate L
+                if np.abs(Qs) < 1e-5:
+                    Qs = 1e-5 # prevent overflow errors
                 L = fric_vel**3*(self.tempK)*density_air*CP_AIR/(KARMAN*GRAVITY*Qs)
                 L = max(L,0.3) # DEBAM uses this limit to prevent over-stabilization
 

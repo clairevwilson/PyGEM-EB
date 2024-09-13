@@ -18,7 +18,7 @@ All functions use the following notation for the arguments:
     method : str, default 'RMSE'
         Choose between 'RMSE','MAE'
     plot : Bool, default False
-        Plot the result?
+        Plot the result
 
 @author: clairevwilson
 """
@@ -81,8 +81,15 @@ def seasonal_mass_balance(fp,ds,bin=0,site='B',method='RMSE',plot=False):
             melt_dates = melt_dates + pd.Timedelta(minutes=30)
             acc_dates = acc_dates + pd.Timedelta(minutes=30)
         # sum mass balance
-        wds = ds.sel(time=acc_dates).sum()
-        sds = ds.sel(time=melt_dates).sum()
+        try:
+            wds = ds.sel(time=acc_dates).sum()
+            sds = ds.sel(time=melt_dates).sum()
+        except:
+            if year == years[-1]:
+                years = years[:-1]
+                winter_data = winter_data[:-1]
+                summer_data = summer_data[:-1]
+                break
         winter_mb = wds.accum + wds.refreeze - wds.melt
         summer_mb = sds.accum + sds.refreeze - sds.melt
         mb_dict['bw'].append(winter_mb.values)
@@ -90,7 +97,7 @@ def seasonal_mass_balance(fp,ds,bin=0,site='B',method='RMSE',plot=False):
     
     # Clean up arrays
     winter_model = np.array(mb_dict['bw'])
-    summer_model = np.array(mb_dict['bw'])
+    summer_model = np.array(mb_dict['bs'])
     assert winter_model.shape == winter_data.shape
     assert summer_model.shape == summer_data.shape    
 
@@ -101,8 +108,8 @@ def seasonal_mass_balance(fp,ds,bin=0,site='B',method='RMSE',plot=False):
     # Plot
     if plot:
         fig,ax = plt.subplots()
-        ax.plot(years,mb_dict['bw'],label='Winter MB Modeled')
-        ax.plot(years,mb_dict['bs'],label='Summer MB Modeled')
+        ax.plot(years,winter_model,label='Winter MB Modeled')
+        ax.plot(years,summer_model,label='Summer MB Modeled')
         ax.plot(years,winter_data,label='MB Data',color='black',linestyle='--')
         ax.plot(years,summer_data,color='black',linestyle='--')
         ax.legend(fontsize=12)
@@ -110,9 +117,11 @@ def seasonal_mass_balance(fp,ds,bin=0,site='B',method='RMSE',plot=False):
         ax.tick_params(labelsize=12,length=5,width=1)
         ax.set_xlim(years[0],years[-1])
         ax.set_ylabel('Seasonal mass balance (m w.e.)',fontsize=14)
-        ax.set_title(f'Summer {method} = {summer_error:.3e}\nWinter {method} = {winter_error:.3e}')
+        ax.set_title(f'Summer {method} = {summer_error:.3e}   Winter {method} = {winter_error:.3e}')
         plt.savefig('/home/claire/research/figure.png')
-    return winter_error, summer_error
+        return fig,ax
+    else:
+        return winter_error, summer_error
 
 # ========== 2. CUMULATIVE MASS BALANCE ==========
 def cumulative_mass_balance(fp,ds,bin=0,method='RMSE',plot=False):

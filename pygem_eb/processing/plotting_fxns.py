@@ -429,10 +429,13 @@ def compare_runs(ds_list,bin,time,labels,var,res='d',t=''):
             else:
                 to_plot = ds[var].sel(time=time)
         ax.plot(to_plot.time,to_plot,label=labels[i],color=c,alpha=0.6,linewidth=0.8)
+        ax.set_ylim(np.min(to_plot),np.max(to_plot)+0.01*np.max(to_plot))
     date_form = mpl.dates.DateFormatter('%d %b')
     ax.xaxis.set_major_formatter(date_form)
     ax.set_ylabel(var)
     ax.legend()
+    ax.tick_params(length=5)
+    ax.set_xlim(time[0],time[-1])
     fig.suptitle(t)
     return
 

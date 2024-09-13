@@ -472,14 +472,17 @@ class Layers():
         layer = 0
         while layer < self.nlayers:
             dens = self.ldensity[layer]
-            # New FIRN layer
+            # New FIRN
             if dens >= DENSITY_FIRN and self.ltype[layer] == 'snow':
-                self.ltype[layer] = 'firn'
-                # Merge layers if there is firn under the new firn layer
-                if self.ltype[layer+1] in ['firn']: 
-                    self.merge_layers(layer)
-                    print('new firn!')
-            # New ICE layer
+                # Don't want superimposed firn/ice, treat as snow
+                if self.ltype[layer+1] != 'snow':
+                    self.ltype[layer] = 'firn'
+                    
+                    # Merge layers if there is firn under the new firn layer
+                    if self.ltype[layer+1] in ['firn']: 
+                        self.merge_layers(layer)
+                        print('new firn!')
+            # New ICE
             elif dens >= DENSITY_ICE and self.ltype[layer] == 'firn':
                 self.ltype[layer] = 'ice'
                 self.ldensity[layer] = DENSITY_ICE
@@ -489,6 +492,10 @@ class Layers():
                     print('new ice!')
             else:
                 layer += 1
+
+            # Ensure density of superimposed ice stays within bounds
+            if dens > DENSITY_ICE and self.ltype[layer] == 'snow':
+                self.ldensity[layer] = DENSITY_ICE
         return
     
     def add_snow(self,snowfall,enbal,surface,args,timestamp):
