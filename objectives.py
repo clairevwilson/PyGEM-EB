@@ -117,7 +117,7 @@ def seasonal_mass_balance(fp,ds,bin=0,site='B',method='RMSE',plot=False):
         ax.tick_params(labelsize=12,length=5,width=1)
         ax.set_xlim(years[0],years[-1])
         ax.set_ylabel('Seasonal mass balance (m w.e.)',fontsize=14)
-        ax.set_title(f'Summer {method} = {summer_error:.3e}   Winter {method} = {winter_error:.3e}')
+        ax.set_title(f'Summer {method} = {summer_error:.3f}   Winter {method} = {winter_error:.3f}')
         plt.savefig('/home/claire/research/figure.png')
         return fig,ax
     else:

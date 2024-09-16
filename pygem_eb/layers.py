@@ -30,9 +30,10 @@ class Layers():
         self.climate = climate 
 
         # Load in initial depths of snow, firn and ice
-        snow_depth = eb_prms.initial_snowdepth[bin_no]
-        firn_depth = eb_prms.initial_firndepth[bin_no]
-        ice_depth = eb_prms.bin_ice_depth[bin_no]
+        idx = bin_no if len(eb_prms.initial_snow_depth) > bin_no else 0
+        snow_depth = eb_prms.initial_snow_depth[idx]
+        firn_depth = eb_prms.initial_firn_depth[idx]
+        ice_depth = eb_prms.initial_ice_depth[idx]
         initial_sfi = np.array([snow_depth,firn_depth,ice_depth])
 
         # Calculate the layer depths based on initial snow, firn and ice depths
@@ -60,7 +61,7 @@ class Layers():
 
         # Grain size initial timestep can copy density
         self.grainsize = self.ldensity.copy()   # LAYER GRAIN SIZE [um]
-        self.grainsize[0:3] = np.array([54.5,60,70]) # ***** HARD CODED GRAIN SIZES
+        self.grainsize[0:3] = np.array([50,60,70]) # ***** HARD CODED GRAIN SIZES
         self.grainsize[np.where(self.grainsize>300)[0]] = 300
         self.grainsize[np.where(self.ltype == 'firn')[0]] = 1000
         self.grainsize[np.where(self.ltype == 'ice')[0]] = 1800
@@ -482,6 +483,8 @@ class Layers():
                     if self.ltype[layer+1] in ['firn']: 
                         self.merge_layers(layer)
                         print('new firn!')
+                else:
+                    layer += 1
             # New ICE
             elif dens >= DENSITY_ICE and self.ltype[layer] == 'firn':
                 self.ltype[layer] = 'ice'
@@ -493,9 +496,8 @@ class Layers():
             else:
                 layer += 1
 
-            # Ensure density of superimposed ice stays within bounds
-            if dens > DENSITY_ICE and self.ltype[layer] == 'snow':
-                self.ldensity[layer] = DENSITY_ICE
+        # Bound density of superimposed ice (fake snow)
+        self.ldensity[self.snow_idx][self.ldensity[self.snow_idx] > DENSITY_ICE] = DENSITY_ICE
         return
     
     def add_snow(self,snowfall,enbal,surface,args,timestamp):

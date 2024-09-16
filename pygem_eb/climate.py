@@ -27,7 +27,7 @@ class Climate():
         self.dates_UTC = self.dates - eb_prms.timezone
         n_time = len(self.dates)
         n_bins = args.n_bins
-        bin_idx = np.arange(0,n_bins)
+        bins = np.arange(0,n_bins)
 
         # glacier cenlat and lon
         if eb_prms.glac_no == ['01.00570']:
@@ -69,7 +69,7 @@ class Climate():
                 bin_sp = (['bin','time'],bin_nans,{'units':'Pa'})
                 ),
                 coords = dict(
-                    bin=(['bin'],bin_idx),
+                    bin=(['bin'],bins),
                     time=(['time'],self.dates)
                     ))
     

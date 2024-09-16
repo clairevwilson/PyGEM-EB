@@ -65,6 +65,8 @@ class massBalance():
         for time in self.time_list:
             # BEGIN MASS BALANCE
             self.time = time
+            if self.time.is_month_start and self.time.month == 1 and self.time.hour == 0 and self.time.year % 5 == 0:
+                print(f'Bin {self.bin_idx} starting {self.time.year}')
 
             # Initiate the energy balance to unpack climate data
             enbal = eb.energyBalance(self.climate,time,self.bin_idx,dt)
@@ -142,6 +144,50 @@ class massBalance():
         if eb_prms.store_bands:
             surface.albedo_df.to_csv(eb_prms.albedo_out_fp.replace('.csv',f'_{self.elev}.csv'))
         return
+    
+    def get_precip(self,enbal):
+        """
+        Determines whether rain or snowfall occurred and outputs amounts.
+
+        Parameters:
+        -----------
+        enbal
+            class object from pygem_eb.energybalance
+        surface
+            class object from pygem_eb.surface
+        time : pd.Datetime
+            Current timestep
+            
+        Returns:
+        --------
+        rain, snowfall : float
+            Specific mass of liquid and solid precipitation [kg m-2]
+        """
+        # CONSTANTS
+        SNOW_THRESHOLD_LOW = eb_prms.snow_threshold_low
+        SNOW_THRESHOLD_HIGH = eb_prms.snow_threshold_high
+        DENSITY_WATER = eb_prms.density_water
+
+        # Define rain vs snow scaling 
+        rain_scale = np.arange(0,1,20)
+        temp_scale = np.arange(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
+        
+        if enbal.tempC <= SNOW_THRESHOLD_LOW: 
+            # precip falls as snow
+            rain = 0
+            snow = enbal.tp*DENSITY_WATER
+            if 4 < self.time.month < 10: # kp adjusts only winter snowfall
+                snow /= eb_prms.kp[self.bin_idx]
+        elif SNOW_THRESHOLD_LOW < enbal.tempC < SNOW_THRESHOLD_HIGH:
+            # mix of rain and snow
+            fraction_rain = np.interp(enbal.tempC,temp_scale,rain_scale)
+            rain = enbal.tp*fraction_rain*DENSITY_WATER
+            snow = enbal.tp*(1-fraction_rain)*DENSITY_WATER
+        else:
+            # precip falls as rain
+            rain = enbal.tp*DENSITY_WATER
+            snow = 0
+        return rain,snow  # kg m-2
 
     def penetrating_SW(self,layers,surface_SW):
         """
@@ -282,7 +328,7 @@ class massBalance():
         change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
         if len(fully_melted) > 0:
             change += np.sum(self.melted_layers.mass)
-        assert np.abs(change) < eb_prms.mb_threshold, 'melt_layers fails mass conservation'
+        assert np.abs(change) < eb_prms.mb_threshold, 'melt_layers failed mass conservation'
         
         return layermelt
         
@@ -317,6 +363,9 @@ class massBalance():
         
         # LAYERS IN
         snow_firn_idx = np.concatenate([layers.snow_idx,layers.firn_idx])
+        # **** BYPASS SUPERIMPOSED ICE
+        if len(snow_firn_idx) > 0 and snow_firn_idx[0] != 0:
+            snow_firn_idx = np.arange(0,snow_firn_idx[-1]+1)
         ldm = layers.ldrymass.copy()[snow_firn_idx]
         lw = layers.lwater.copy()[snow_firn_idx]
         lh = layers.lheight.copy()[snow_firn_idx]
@@ -399,7 +448,7 @@ class massBalance():
         if np.abs(change - (ins-outs)) >= eb_prms.mb_threshold:
             print(layers.ldrymass,layers.lwater,initial_mass,layers.ltype)
             print(self.time,change,ins,outs)
-        assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, 'percolation fails mass conservation'
+        assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, 'percolation failed mass conservation'
 
         return runoff
         
@@ -534,7 +583,7 @@ class massBalance():
 
         # CHECK MASS CONSERVATION
         change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
-        assert np.abs(change) < eb_prms.mb_threshold, 'refreezing fails mass conservation'
+        assert np.abs(change) < eb_prms.mb_threshold, 'refreezing failed mass conservation'
         
         return np.sum(refreeze)
     
@@ -636,52 +685,8 @@ class massBalance():
 
         # CHECK MASS CONSERVATION
         change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
-        assert np.abs(change) < eb_prms.mb_threshold, 'densification fails mass conservation'
+        assert np.abs(change) < eb_prms.mb_threshold, 'densification failed mass conservation'
         return
-    
-    def get_precip(self,enbal):
-        """
-        Determines whether rain or snowfall occurred and outputs amounts.
-
-        Parameters:
-        -----------
-        enbal
-            class object from pygem_eb.energybalance
-        surface
-            class object from pygem_eb.surface
-        time : pd.Datetime
-            Current timestep
-            
-        Returns:
-        --------
-        rain, snowfall : float
-            Specific mass of liquid and solid precipitation [kg m-2]
-        """
-        # CONSTANTS
-        SNOW_THRESHOLD_LOW = eb_prms.snow_threshold_low
-        SNOW_THRESHOLD_HIGH = eb_prms.snow_threshold_high
-        DENSITY_WATER = eb_prms.density_water
-
-        # Define rain vs snow scaling 
-        rain_scale = np.arange(0,1,20)
-        temp_scale = np.arange(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
-        
-        if enbal.tempC <= SNOW_THRESHOLD_LOW: 
-            # precip falls as snow
-            rain = 0
-            snow = enbal.tp*DENSITY_WATER
-            if 4 < self.time.month < 10: # kp adjusts only winter snowfall
-                snow /= eb_prms.kp[self.bin_idx]
-        elif SNOW_THRESHOLD_LOW < enbal.tempC < SNOW_THRESHOLD_HIGH:
-            # mix of rain and snow
-            fraction_rain = np.interp(enbal.tempC,temp_scale,rain_scale)
-            rain = enbal.tp*fraction_rain*DENSITY_WATER
-            snow = enbal.tp*(1-fraction_rain)*DENSITY_WATER
-        else:
-            # precip falls as rain
-            rain = enbal.tp*DENSITY_WATER
-            snow = 0
-        return rain,snow  # kg m-2
       
     def solve_heat_eq(self,layers,surftemp,dt_heat=eb_prms.dt_heateq):
         """
@@ -713,7 +718,8 @@ class massBalance():
         # set temperate ice and heat-diffusing layer indices
         temperate_idx = np.where(layers.ldepth > TEMP_DEPTH)[0]
         diffusing_idx = np.arange(temperate_idx[0])
-        layers.ltemp[temperate_idx] = TEMP_TEMP
+        if len(temperate_idx) > 0:
+            layers.ltemp[temperate_idx] = TEMP_TEMP
 
         # LAYERS IN
         nl = len(diffusing_idx)
@@ -771,6 +777,7 @@ class massBalance():
         return 
 
     def current_state(self,time,airtemp):
+        """Prints some useful information to keep track of a model run"""
         # gather variables to print out
         layers = self.layers
         surftemp = self.surface.stemp

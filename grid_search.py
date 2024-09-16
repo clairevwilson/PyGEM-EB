@@ -3,7 +3,6 @@ import numpy as np
 import xarray as xr
 import os, sys
 import matplotlib.pyplot as plt
-from objectives import seasonal_mass_balance
 
 run_model = True
 
@@ -29,8 +28,8 @@ import run_simulation_eb as sim
 
 # model parameters
 params = {
-    'albedo_ice':[0.2,0.3,0.4],
-    'k_ice': [0.5,1,2]
+    'albedo_ice':[0.4,0.5],
+    'k_ice': [2,3]
 }
 
 # read command line args
@@ -52,9 +51,10 @@ for albedo_ice in params['albedo_ice']:
         print()
         print('Starting model run with a_ice = ',albedo_ice,'and k_ice = ',thermal_cond)
 
-        # initialize the model
-        climate = sim.initialize_model(args.glac_no[0],args)
+        if not os.path.exists(eb_prms.output_name+'0_bin0.nc'):
+            # initialize the model
+            climate = sim.initialize_model(args.glac_no[0],args)
 
-        # run the model
-        sim.run_model(climate,args,{'a_ice':str(albedo_ice),
-                                        'k_ice':str(thermal_cond)})
+            # run the model
+            sim.run_model(climate,args,{'a_ice':str(albedo_ice),
+                                            'k_ice':str(thermal_cond)})

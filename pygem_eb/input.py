@@ -55,10 +55,10 @@ glac_props = {'01.00570':{'name':'Gulkana',
 # bin_ice_depth = np.ones(len(bin_elev)) * 200
 
 if glac_no == ['01.00570']:
-    sites = ['AB','B','D'][:n_bins]
+    sites = ['AB','B','D']
     # sites = ['B']
-    initial_snowdepth = []
-    initial_firndepth = []
+    initial_snow_depth = []
+    initial_firn_depth = []
     kp = []
     sky_view = []
     bin_elev = []
@@ -71,19 +71,17 @@ if glac_no == ['01.00570']:
         # slope = site_df.loc[site]['slope']
         # aspect = site_df.loc[site]['aspect']
         sky_view.append(site_df.loc[site]['sky_view'])
-        initial_snowdepth.append(site_df.loc[site]['snowdepth'])
-        initial_firndepth.append(site_df.loc[site]['firndepth'])
+        initial_snow_depth.append(site_df.loc[site]['snowdepth'])
+        initial_firn_depth.append(site_df.loc[site]['firndepth'])
 else:
     # Manually specify for other glaciers
-    sky_view = [0.936]
+    sky_view = [0.936]      # lists in this section should be length n_bins
     bin_elev = [2280]
     kp = [1]
     site = 'AWS'
-    initial_snowdepth = [2.18]*n_bins   # initial depth of snow; array of length n_bins
-    initial_firndepth = [0]*n_bins      # initial depth of firn; array of length n_bins
-bin_ice_depth = np.ones(len(bin_elev)) * 200
-
-assert len(bin_elev) == n_bins, 'Check n_bins in input'
+    initial_snow_depth = [2.18]
+    initial_firn_depth = [0]
+initial_ice_depth = np.ones(len(bin_elev)) * 200
 
 # ========== DIRECTORIES AND FILEPATHS ========== 
 try:
