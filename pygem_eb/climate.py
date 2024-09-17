@@ -26,16 +26,15 @@ class Climate():
         self.dates = pd.date_range(args.startdate,args.enddate,freq='h')
         self.dates_UTC = self.dates - eb_prms.timezone
         n_time = len(self.dates)
-        n_bins = args.n_bins
-        bins = np.arange(0,n_bins)
+        self.elev = args.elev
 
         # glacier cenlat and lon
-        if eb_prms.glac_no == ['01.00570']:
-            self.lat = eb_prms.site_df.loc[eb_prms.site]['lat']
-            self.lon = eb_prms.site_df.loc[eb_prms.site]['lon']
-        else:
-            self.lat = glacier_table['CenLat'].values
-            self.lon = glacier_table['CenLon'].values
+        # if eb_prms.glac_no == ['01.00570']:
+        #     self.lat = args.site_df.loc[args.site]['lat']
+        #     self.lon = eb_prms.site_df.loc[args.site]['lon']
+        # else:
+        self.lat = glacier_table['CenLat'].values
+        self.lon = glacier_table['CenLon'].values
 
         # define reanalysis variables
         self.get_vardict()
@@ -46,9 +45,7 @@ class Climate():
 
         # create empty dataset
         nans = np.ones(n_time)*np.nan
-        bin_nans = np.array([nans]*n_bins).reshape(n_bins,n_time)
         self.cds = xr.Dataset(data_vars = dict(
-                bin_elev = (['bin'],eb_prms.bin_elev,{'units':'m a.s.l.'}),
                 SWin = (['time'],nans,{'units':'J m-2'}),
                 SWout = (['time'],nans,{'units':'J m-2'}),
                 LWin = (['time'],nans,{'units':'J m-2'}),
@@ -64,17 +61,12 @@ class Climate():
                 bcwet = (['time'],nans,{'units':'kg m-2 s-1'}),
                 dustdry = (['time'],nans,{'units':'kg m-2 s-1'}),
                 dustwet = (['time'],nans,{'units':'kg m-2 s-1'}),
-                bin_temp = (['bin','time'],bin_nans,{'units':'C'}),
-                bin_tp = (['bin','time'],bin_nans,{'units':'m'}),
-                bin_sp = (['bin','time'],bin_nans,{'units':'Pa'})
+                temp = (['time'],nans,{'units':'C'}),
+                tp = (['time'],nans,{'units':'m'}),
+                sp = (['time'],nans,{'units':'Pa'})
                 ),
-                coords = dict(
-                    bin=(['bin'],bins),
-                    time=(['time'],self.dates)
-                    ))
-    
+                coords = dict(time=(['time'],self.dates)))
         self.n_time = n_time
-        self.n_bins = n_bins
         return
     
     def get_AWS(self,fp):
@@ -111,8 +103,8 @@ class Climate():
             data = df[var]
             # adjust elevation-dependent variables
             if var in ['temp','tp','sp']:
-                data = self.bin_adjust(data, var, self.AWS_elev)
-                varname = 'bin_' + var
+                data = self.elev_adjust(data, var, self.AWS_elev)
+                varname = var
             else:
                 varname = var
             self.cds[varname].values = data.astype(float)
@@ -170,7 +162,7 @@ class Climate():
             data = ds.values
             # adjust elevation-dependent variables
             if var in ['temp','tp','sp']:
-                data = self.bin_adjust(data.ravel(), var, self.reanalysis_elev)
+                data = self.elev_adjust(data.ravel(), var, self.reanalysis_elev)
             else:
                 data = data.ravel()
             # store result
@@ -200,7 +192,8 @@ class Climate():
                                         args=(fn, var, all_data))
                 thread.start()
                 threads.append(thread)
-            else: all_data = access_cell(fn,var,all_data)
+            else:
+                all_data = access_cell(fn,var,all_data)
         if use_threads:
             # join threads
             for thread in threads:
@@ -208,19 +201,17 @@ class Climate():
 
         # store data
         for var in vars:
-            if var in ['temp','tp','sp']:
-                varname = 'bin_'+var
-            elif var == 'wind':
+            if var == 'wind':
                 varname = 'uwind'
                 self.cds[varname].values = all_data[varname]
                 varname = 'vwind'
                 var = 'vwind'
             else:
                 varname = var
-            self.cds[varname].values = all_data[var]
+            self.cds[varname].values = all_data[var].flatten()
         return
 
-    def bin_adjust(self, data, var, elev_data):
+    def elev_adjust(self, data, var, elev_data):
         """
         Adjusts elevation-dependent climate variables (temperature, precip,
         surface pressure).
@@ -228,28 +219,21 @@ class Climate():
         Parameters
         =========
         """
-        out = np.zeros((self.n_bins,self.n_time))
-        
-        #Loop through each elevation bin and adjust climate variables
-        for idx,z in enumerate(eb_prms.bin_elev):
-            # TEMPERATURE: correct according to lapserate
-            if var == 'temp':
-                out[idx,:] = data + eb_prms.lapserate*(z-elev_data)
+        # TEMPERATURE: correct according to lapserate
+        if var == 'temp':
+            out = data + eb_prms.lapserate*(self.elev-elev_data)
 
-            # PRECIP: correct according to lapserate, precipitation factor
-            elif var == 'tp':
-                if '__iter__' in dir(eb_prms.kp):
-                    out[idx,:] = data*(1+eb_prms.precgrad*(z-elev_data))*eb_prms.kp[idx]
-                else:
-                    out[idx,:] = data*(1+eb_prms.precgrad*(z-elev_data))*eb_prms.kp
+        # PRECIP: correct according to lapserate, precipitation factor
+        elif var == 'tp':
+            out = data*(1+eb_prms.precgrad*(self.elev-elev_data))*eb_prms.kp
 
-            # SURFACE PRESSURE: correct according to barometric law
-            elif var == 'sp':
-                out[idx,:] = data
-                # **** FIGURE THIS OUT TO ACTUALLY ADJUST BY ELEVATION
-                # temp_data = self.cds.sel(bin=idx)['bin_temp']
-                # out[idx,:] = data*np.power((data + eb_prms.lapserate*(z-elev_data)+273.15)/(temp_data+273.15),
-                #                 -eb_prms.gravity*eb_prms.molarmass_air/(eb_prms.R_gas*eb_prms.lapserate))
+        # SURFACE PRESSURE: correct according to barometric law
+        elif var == 'sp':
+            out = data
+            # **** FIGURE THIS OUT TO ACTUALLY ADJUST BY ELEVATION
+            # temp_data = self.cds['temp']
+            # out[idx,:] = data*np.power((data + eb_prms.lapserate*(z-elev_data)+273.15)/(temp_data+273.15),
+            #                 -eb_prms.gravity*eb_prms.molarmass_air/(eb_prms.R_gas*eb_prms.lapserate))
         return out
     
     def check_ds(self):
@@ -271,8 +255,7 @@ class Climate():
         # check all variables are there
         failed = []
         for var in self.all_vars:
-            varname = 'bin_'+var if var in ['temp','tp','sp'] else var
-            data = self.cds[varname].values
+            data = self.cds[var].values
             if np.all(np.isnan(data)):
                 failed.append(var)
         if 'LWin' in failed and 'NR' in self.measured_vars:
@@ -325,7 +308,7 @@ class Climate():
         for month in bias_df.index:
             bias = bias_df.loc[month]['bias']
             idx = np.where(self.cds.coords['time'].dt.month.values == month)[0]
-            self.cds['bin_temp'][{'time':idx}] = self.cds['bin_temp'][{'time':idx}] + bias
+            self.cds['temp'][{'time':idx}] = self.cds['temp'][{'time':idx}] + bias
         return
 
     def getVaporPressure(self,tempC):

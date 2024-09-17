@@ -1,5 +1,6 @@
 import argparse
 import time
+import os
 # External libraries
 import numpy as np
 import xarray as xr
@@ -15,11 +16,15 @@ import pygem_eb.climate as climutils
 start_time = time.time()
 
 # ===== INITIALIZE UTILITIES =====
-def get_args():
+def get_args(parse=True):
     parser = argparse.ArgumentParser(description='pygem-eb model runs')
     # add arguments
     parser.add_argument('-glac_no', action='store', default=eb_prms.glac_no,
                         help='',nargs='+')
+    parser.add_argument('-elev',action='store',default=eb_prms.elev,type=float,
+                        help='Elevation in m a.s.l.')
+    parser.add_argument('-site',action='store',default=eb_prms.site,type=str,
+                        help='Site name')
     parser.add_argument('-start','--startdate', action='store', type=str, 
                         default=eb_prms.startdate,
                         help='pass str like datetime of model run start')
@@ -30,33 +35,32 @@ def get_args():
                         default=eb_prms.use_AWS,help='use AWS or just reanalysis?')
     parser.add_argument('-use_threads', action='store_true',
                         help='use threading to import climate data?')
-    parser.add_argument('-parallel',action='store_true',
-                        help='use parallel processing?')
     parser.add_argument('-store_data', action='store_true', 
                         help='store the model output?')
     parser.add_argument('-new_file', action='store_true',
                         default=eb_prms.new_file, help='')
     parser.add_argument('-debug', action='store_true', 
                         default=eb_prms.debug, help='')
-    parser.add_argument('-n_bins',action='store',type=int,
-                        default=eb_prms.n_bins, help='number of elevation bins')
     parser.add_argument('-switch_LAPs',action='store', type=int,
                         default=eb_prms.switch_LAPs, help='')
     parser.add_argument('-switch_melt',action='store', type=int, 
                         default=eb_prms.switch_melt, help='')
     parser.add_argument('-switch_snow',action='store', type=int,
                         default=eb_prms.switch_snow, help='')
-    parser.add_argument('-f', '--fff', help='dummy arg to fool ipython', default='1')
-    args = parser.parse_args()
-    return args
-
-def run_mass_balance(bin,args,climate,attrs):
-    time_elapsed = time.time()-start_time
-    massbal = mb.massBalance(bin,args,climate)
-    massbal.main()
-    massbal.output.add_vars()
-    massbal.output.add_basic_attrs(args,time_elapsed,climate,bin)
-    massbal.output.add_attrs(attrs)
+    parser.add_argument('-k_ice',default=eb_prms.kcond_ice,action='store',type=float,
+                        help='Thermal conductivity of ice')
+    parser.add_argument('-k_snow',default=eb_prms.kcond_snow,action='store',type=float,
+                        help='Thermal conductivity of snow')
+    parser.add_argument('-a_ice',default=eb_prms.albedo_ice,action='store',type=float,
+                        help='Broadband albedo of ice')
+    parser.add_argument('-task_id',default=-1,type=int,
+                        help='Task ID if submitted as batch job')
+    parser.add_argument('-f', '--fff', help='Dummy arg to fool ipython', default='1')
+    if parse:
+        args = parser.parse_args()
+        return args
+    else:
+        return parser
 
 def initialize_model(glac_no,args):
     """
@@ -73,6 +77,23 @@ def initialize_model(glac_no,args):
     climate
         Class object from climate.py
     """
+    # check for known glacier properties
+    data_fp = os.getcwd()+'/pygem_eb/sample_data/'
+    if eb_prms.glac_name in os.listdir(data_fp):
+        site = args.site if args.site != 'AWS' else 'B'
+        site_fp = os.path.join(data_fp,eb_prms.glac_name+'/site_constants.csv')
+        site_df = pd.read_csv(site_fp,index_col='site')
+        args.elev = site_df.loc[site]['elevation']
+        eb_prms.kp = site_df.loc[site]['kp']
+        eb_prms.slope = site_df.loc[site]['slope']
+        eb_prms.aspect = site_df.loc[site]['aspect']
+        eb_prms.sky_view = site_df.loc[site]['sky_view']
+        eb_prms.initial_snow_depth = site_df.loc[site]['snowdepth']
+        eb_prms.initial_firn_depth = site_df.loc[site]['firndepth']
+        eb_prms.shading_fp = os.getcwd() + f'/shading/out/{eb_prms.glac_name}{site}_shade.csv'
+        if site not in eb_prms.output_name:
+            eb_prms.output_name += f'_{site}'
+
     # ===== GET GLACIER CLIMATE =====
     # get glacier properties and initialize the climate class
     glacier_table = modelsetup.selectglaciersrgitable(np.array([glac_no]),
@@ -86,6 +107,12 @@ def initialize_model(glac_no,args):
     else:
         climate.get_reanalysis(climate.all_vars)
     climate.check_ds()
+
+    start = pd.to_datetime(args.startdate)
+    end = pd.to_datetime(args.enddate)
+    n_months = np.round((end-start)/pd.Timedelta(days=30))
+    start_fmtd = start.month_name()+', '+str(start.year)
+    print(f'Running {eb_prms.glac_name} Glacier at {args.elev} m a.s.l. for {n_months} months starting in {start_fmtd}')
 
     return climate
 
@@ -104,17 +131,8 @@ def run_model(climate,args,store_attrs=None):
         Dictionary of additional metadata to store in the .nc
     """
     # ===== RUN ENERGY BALANCE =====
-    if args.parallel and args.n_bins > 1:
-        with Pool(args.n_bins) as processes_pool:
-            starmap_arg = [(i, args, climate, store_attrs) for i in range(args.n_bins)]
-            processes_pool.starmap(run_mass_balance,starmap_arg)
-    else:
-        for bin in np.arange(args.n_bins):
-            massbal = mb.massBalance(bin,args,climate)
-            massbal.main()
-            
-            if bin<args.n_bins-1:
-                print('Success: moving onto bin',bin+1)
+    massbal = mb.massBalance(args,climate)
+    massbal.main()
 
     # ===== END ENERGY BALANCE =====
     # Get final model run time
@@ -125,13 +143,10 @@ def run_model(climate,args,store_attrs=None):
 
     # Store metadata in netcdf and save result
     if args.store_data:
-        if not args.parallel:
-            massbal.output.add_vars()
-            massbal.output.add_basic_attrs(args,time_elapsed,climate)
-            massbal.output.add_attrs(store_attrs)
-            out = massbal.output.get_output()
-        else:
-            out = 'Parallel run: open output .nc for dataset'
+        massbal.output.add_vars()
+        massbal.output.add_basic_attrs(args,time_elapsed,climate)
+        massbal.output.add_attrs(store_attrs)
+        out = massbal.output.get_output()
     else:
         print('Success: data was not saved')
         out = None

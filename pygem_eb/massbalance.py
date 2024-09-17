@@ -14,37 +14,34 @@ import pygem_eb.surface as eb_surface
 
 class massBalance():
     """
-    Mass balance scheme which calculates layer and bin mass balance 
+    Mass balance scheme which calculates layer and mass balance 
     from melt, refreeze and accumulation. main() executes the core 
     of the model.
     """
-    def __init__(self,bin_idx,args,climate):
+    def __init__(self,args,climate):
         """
         Initializes the layers and surface classes and model 
         time for the mass balance scheme.
 
         Parameters
         ----------
-        bin_idx : int
-            Index value of the elevation bin
         dates : array-like (pd.datetime)
             List of local time dates
         """
-        # Set up model time and bin
+        # Set up model time
         self.dt = eb_prms.dt
         self.days_since_snowfall = 0
         self.time_list = climate.dates
-        self.bin_idx = bin_idx
-        self.elev = eb_prms.bin_elev[bin_idx]
+        self.elev = eb_prms.elev
 
         # Initialize climate, layers and surface classes
         self.args = args
         self.climate = climate
-        self.layers = eb_layers.Layers(bin_idx,climate)
-        self.surface = eb_surface.Surface(self.layers,self.time_list,args,climate,bin_idx)
+        self.layers = eb_layers.Layers(climate,args)
+        self.surface = eb_surface.Surface(self.layers,self.time_list,args,climate)
 
         # Initialize output class
-        self.output = Output(self.time_list,bin_idx,args)
+        self.output = Output(self.time_list,args)
 
         # Initialize mass balance check variables
         self.initial_mass = np.sum(self.layers.ldrymass)
@@ -65,17 +62,15 @@ class massBalance():
         for time in self.time_list:
             # BEGIN MASS BALANCE
             self.time = time
-            if self.time.is_month_start and self.time.month == 1 and self.time.hour == 0 and self.time.year % 5 == 0:
-                print(f'Bin {self.bin_idx} starting {self.time.year}')
 
             # Initiate the energy balance to unpack climate data
-            enbal = eb.energyBalance(self.climate,time,self.bin_idx,dt)
+            enbal = eb.energyBalance(self.climate,time,dt)
 
             # Get rain and snowfall amounts [kg m-2]
             rain,snowfall = self.get_precip(enbal)
 
             # Add fresh snow to layers
-            layers.add_snow(snowfall,enbal,surface,self.args,time)
+            layers.add_snow(snowfall,enbal,surface,time)
 
             # Add dry deposited BC and dust to layers
             enbal.get_dry_deposition(layers)
@@ -137,7 +132,7 @@ class massBalance():
             # Advance timestep
             pass
 
-        # Completed bin: store data
+        # Completed run: store data
         if self.args.store_data:
             self.output.store_data()
 
@@ -177,7 +172,7 @@ class massBalance():
             rain = 0
             snow = enbal.tp*DENSITY_WATER
             if 4 < self.time.month < 10: # kp adjusts only winter snowfall
-                snow /= eb_prms.kp[self.bin_idx]
+                snow /= eb_prms.kp
         elif SNOW_THRESHOLD_LOW < enbal.tempC < SNOW_THRESHOLD_HIGH:
             # mix of rain and snow
             fraction_rain = np.interp(enbal.tempC,temp_scale,rain_scale)
@@ -250,7 +245,7 @@ class massBalance():
 
     def melt_layers(self,layers,subsurf_melt):
         """
-        For cases when bins are melting. Can melt multiple surface bins
+        For cases when layers are melting. Can melt multiple surface layers
         at once if Qm is sufficiently high. Otherwise, adds the surface
         layer melt to the array containing subsurface melt to return the
         total layer melt. (This function does NOT REMOVE MELTED MASS from 
@@ -729,18 +724,23 @@ class massBalance():
         lT = layers.ltemp[diffusing_idx]
 
         # get conductivity 
-        if eb_prms.constant_conductivity:
-            lcond = np.ones(nl)*eb_prms.constant_conductivity
-        elif eb_prms.method_conductivity in ['VanDusen']:
+        ice_idx = layers.ice_idx
+        if type(self.args.k_snow) == float:
+            lcond = self.args.k_snow*np.ones_like(lp)
+        elif self.args.k_snow in ['VanDusen']:
             lcond = 0.21e-01 + 0.42e-03*lp + 0.22e-08*lp**3
-        elif eb_prms.method_conductivity in ['Sturm']:
+        elif self.args.k_snow in ['Sturm']:
             lcond = 0.0138 - 1.01e-3*lp + 3.233e-6*lp**2
-        elif eb_prms.method_conductivity in ['Douville']:
+        elif self.args.k_snow in ['Douville']:
             lcond = 2.2*np.power(lp/DENSITY_ICE,1.88)
-        elif eb_prms.method_conductivity in ['Jansson']:
+        elif self.args.k_snow in ['Jansson']:
             lcond = 0.02093 + 0.7953e-3*lp + 1.512e-12*lp**4
-        elif eb_prms.method_conductivity in ['OstinAndersson']:
+        elif self.args.k_snow in ['OstinAndersson']:
             lcond = -8.71e-3 + 0.439e-3*lp + 1.05e-6*lp**2
+        # ice has constant conductivity
+        diffusing_ice_idx = list(set(ice_idx)&set(diffusing_idx))
+        if len(diffusing_ice_idx) > 0:
+            lcond[diffusing_ice_idx] = self.args.k_ice
 
         if nl > 2:
             # heights of imaginary average bins between layers
@@ -839,7 +839,7 @@ class massBalance():
         return
 
 class Output():
-    def __init__(self,time,bin_idx,args):
+    def __init__(self,time,args):
         """
         Creates netcdf file where the model output will be saved.
 
@@ -848,35 +848,18 @@ class Output():
         """
         # Get unique filename (or scratch filename)
         self.out_fn = eb_prms.output_name
-        if eb_prms.new_file and not args.parallel:
+        if eb_prms.new_file:
             i = 0
             while os.path.exists(self.out_fn+f'{i}.nc'):
                 i += 1
-            if bin_idx != 0:
-                i -= 1
             self.out_fn += str(i)
-        elif args.parallel:
-            i = 0
-            while os.path.exists(self.out_fn+f'{i}_bin0.nc'):
-                i += 1
-            self.out_fn += str(i) + '_bin#'
         else:
             self.out_fn = self.out_fn+'scratch'
-
-        # For parallel processing of multiple bins, save separate files
-        if args.n_bins == 1 or not args.parallel:
-            self.n_bins = args.n_bins
-            self.bin_idx = bin_idx
-        else:
-            self.n_bins = 1
-            self.out_fn = self.out_fn.replace('#',str(bin_idx))
-            self.bin_idx = 0
         self.out_fn += '.nc'
 
         # Info needed to create the output file
-        bin_idxs = range(self.n_bins)
         self.n_timesteps = len(time)
-        zeros = np.zeros([self.n_timesteps,self.n_bins,eb_prms.max_nlayers])
+        zeros = np.zeros([self.n_timesteps,eb_prms.max_nlayers])
 
         # Create variable name dict
         vn_dict = {'EB':['SWin','SWout','LWin','LWout','rain','ground',
@@ -889,36 +872,35 @@ class Output():
 
         # Create file to store outputs
         all_variables = xr.Dataset(data_vars = dict(
-                SWin = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-                SWout = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-                SWin_sky = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-                SWin_terr = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-                LWin = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-                LWout = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-                rain = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-                ground = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-                sensible = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-                latent = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-                meltenergy = (['time','bin'],zeros[:,:,0],{'units':'W m-2'}),
-                albedo = (['time','bin'],zeros[:,:,0],{'units':'0-1'}),
-                melt = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
-                refreeze = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
-                runoff = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
-                accum = (['time','bin'],zeros[:,:,0],{'units':'m w.e.'}),
-                airtemp = (['time','bin'],zeros[:,:,0],{'units':'C'}),
-                surftemp = (['time','bin'],zeros[:,:,0],{'units':'C'}),
-                layertemp = (['time','bin','layer'],zeros,{'units':'C'}),
-                layerwater = (['time','bin','layer'],zeros,{'units':'kg m-2'}),
-                layerheight = (['time','bin','layer'],zeros,{'units':'m'}),
-                layerdensity = (['time','bin','layer'],zeros,{'units':'kg m-3'}),
-                layerBC = (['time','bin','layer'],zeros,{'units':'ppb'}),
-                layerdust = (['time','bin','layer'],zeros,{'units':'ppm'}),
-                layergrainsize = (['time','bin','layer'],zeros,{'units':'um'}),
-                snowdepth = (['time','bin'],zeros[:,:,0],{'units':'m'})
+                SWin = (['time'],zeros[:,0],{'units':'W m-2'}),
+                SWout = (['time'],zeros[:,0],{'units':'W m-2'}),
+                SWin_sky = (['time'],zeros[:,0],{'units':'W m-2'}),
+                SWin_terr = (['time'],zeros[:,0],{'units':'W m-2'}),
+                LWin = (['time'],zeros[:,0],{'units':'W m-2'}),
+                LWout = (['time'],zeros[:,0],{'units':'W m-2'}),
+                rain = (['time'],zeros[:,0],{'units':'W m-2'}),
+                ground = (['time'],zeros[:,0],{'units':'W m-2'}),
+                sensible = (['time'],zeros[:,0],{'units':'W m-2'}),
+                latent = (['time'],zeros[:,0],{'units':'W m-2'}),
+                meltenergy = (['time'],zeros[:,0],{'units':'W m-2'}),
+                albedo = (['time'],zeros[:,0],{'units':'0-1'}),
+                melt = (['time'],zeros[:,0],{'units':'m w.e.'}),
+                refreeze = (['time'],zeros[:,0],{'units':'m w.e.'}),
+                runoff = (['time'],zeros[:,0],{'units':'m w.e.'}),
+                accum = (['time'],zeros[:,0],{'units':'m w.e.'}),
+                airtemp = (['time'],zeros[:,0],{'units':'C'}),
+                surftemp = (['time'],zeros[:,0],{'units':'C'}),
+                layertemp = (['time','layer'],zeros,{'units':'C'}),
+                layerwater = (['time','layer'],zeros,{'units':'kg m-2'}),
+                layerheight = (['time','layer'],zeros,{'units':'m'}),
+                layerdensity = (['time','layer'],zeros,{'units':'kg m-3'}),
+                layerBC = (['time','layer'],zeros,{'units':'ppb'}),
+                layerdust = (['time','layer'],zeros,{'units':'ppm'}),
+                layergrainsize = (['time','layer'],zeros,{'units':'um'}),
+                snowdepth = (['time'],zeros[:,0],{'units':'m'})
                 ),
                 coords=dict(
                     time=(['time'],time),
-                    bin = (['bin'],bin_idxs),
                     layer=(['layer'],np.arange(eb_prms.max_nlayers))
                     ))
         # Select variables from the specified input
@@ -926,10 +908,9 @@ class Output():
         for var in eb_prms.store_vars[1:]:
             vars_list.extend(vn_dict[var])
         
-        # If on the first bin, create the netcdf file to store output
+        # Create the netcdf file to store output
         if args.store_data:
-            if self.bin_idx == 0:
-                all_variables[vars_list].to_netcdf(self.out_fn)
+            all_variables[vars_list].to_netcdf(self.out_fn)
 
         # Initialize energy balance outputs
         self.SWin_output = []       # incoming shortwave [W m-2]
@@ -995,31 +976,30 @@ class Output():
         self.layergrainsize_output[step] = layers.grainsize
 
     def store_data(self):
-        bin = self.bin_idx
         with xr.open_dataset(self.out_fn) as dataset:
             ds = dataset.load()
             if 'EB' in eb_prms.store_vars:
-                ds['SWin'].loc[:,bin] = self.SWin_output
-                ds['SWout'].loc[:,bin] = self.SWout_output
-                ds['LWin'].loc[:,bin] = self.LWin_output
-                ds['LWout'].loc[:,bin] = self.LWout_output
-                ds['SWin_sky'].loc[:,bin] = self.SWin_sky_output
-                ds['SWin_terr'].loc[:,bin] = self.SWin_terr_output
-                ds['rain'].loc[:,bin] = self.rain_output
-                ds['ground'].loc[:,bin] = self.ground_output
-                ds['sensible'].loc[:,bin] = self.sensible_output
-                ds['latent'].loc[:,bin] = self.latent_output
-                ds['meltenergy'].loc[:,bin] = self.meltenergy_output
-                ds['albedo'].loc[:,bin] = self.albedo_output
+                ds['SWin'].values = self.SWin_output
+                ds['SWout'].values = self.SWout_output
+                ds['LWin'].values = self.LWin_output
+                ds['LWout'].values = self.LWout_output
+                ds['SWin_sky'].values = self.SWin_sky_output
+                ds['SWin_terr'].values = self.SWin_terr_output
+                ds['rain'].values = self.rain_output
+                ds['ground'].values = self.ground_output
+                ds['sensible'].values = self.sensible_output
+                ds['latent'].values = self.latent_output
+                ds['meltenergy'].values = self.meltenergy_output
+                ds['albedo'].values = self.albedo_output
             if 'MB' in eb_prms.store_vars:
-                ds['melt'].loc[:,bin] = self.melt_output
-                ds['refreeze'].loc[:,bin] = self.refreeze_output
-                ds['runoff'].loc[:,bin] = self.runoff_output
-                ds['accum'].loc[:,bin] = self.accum_output
-                ds['snowdepth'].loc[:,bin] = self.snowdepth_output
+                ds['melt'].values = self.melt_output
+                ds['refreeze'].values = self.refreeze_output
+                ds['runoff'].values = self.runoff_output
+                ds['accum'].values = self.accum_output
+                ds['snowdepth'].values = self.snowdepth_output
             if 'Temp' in eb_prms.store_vars:
-                ds['airtemp'].loc[:,bin] = self.airtemp_output
-                ds['surftemp'].loc[:,bin] = self.surftemp_output
+                ds['airtemp'].values = self.airtemp_output
+                ds['surftemp'].values = self.surftemp_output
             if 'Layers' in eb_prms.store_vars:
                 layertemp_output = pd.DataFrame.from_dict(self.layertemp_output,orient='index')
                 layerdensity_output = pd.DataFrame.from_dict(self.layerdensity_output,orient='index')
@@ -1041,13 +1021,13 @@ class Output():
                         layerdust_output[str(i)] = nans
                         layergrainsize_output[str(i)] = nans
 
-                ds['layertemp'].loc[:,bin,:] = layertemp_output
-                ds['layerheight'].loc[:,bin,:] = layerheight_output
-                ds['layerdensity'].loc[:,bin,:] = layerdensity_output
-                ds['layerwater'].loc[:,bin,:] = layerwater_output
-                ds['layerBC'].loc[:,bin,:] = layerBC_output
-                ds['layerdust'].loc[:,bin,:] = layerdust_output
-                ds['layergrainsize'].loc[:,bin,:] = layergrainsize_output
+                ds['layertemp'].values = layertemp_output
+                ds['layerheight'].values = layerheight_output
+                ds['layerdensity'].values = layerdensity_output
+                ds['layerwater'].values = layerwater_output
+                ds['layerBC'].values = layerBC_output
+                ds['layerdust'].values = layerdust_output
+                ds['layergrainsize'].values = layergrainsize_output
         ds.to_netcdf(self.out_fn)
         return ds
     
@@ -1066,39 +1046,32 @@ class Output():
             # add surface height change
             height = ds.layerheight.sum(dim='layer')
             diff = height.diff(dim='time')
-            initial = np.array([0]*self.n_bins).reshape(-1,1)
-            dh = np.append(initial,diff.values.T,axis=1)
-            if dh.shape == (len(ds.time),):
-                dh = np.array([dh]).reshape(-1,1)
-            elif dh.shape[0] == self.n_bins:
-                dh = dh.T
-            ds['dh'] = (['time','bin'],dh,{'units':'m'})
+            dh = np.append(np.array([0]),diff.values.T)
+            ds['dh'] = (['time'],dh,{'units':'m'})
 
             # add summed radiation terms
             SWnet = ds['SWin'] + ds['SWout']
             LWnet = ds['LWin'] + ds['LWout']
             NetRad = SWnet + LWnet
-            ds['SWnet'] = (['time','bin'],SWnet.values,{'units':'W m-2'})
-            ds['LWnet'] = (['time','bin'],LWnet.values,{'units':'W m-2'})
-            ds['NetRad'] = (['time','bin'],NetRad.values,{'units':'W m-2'})
+            ds['SWnet'] = (['time'],SWnet.values,{'units':'W m-2'})
+            ds['LWnet'] = (['time'],LWnet.values,{'units':'W m-2'})
+            ds['NetRad'] = (['time'],NetRad.values,{'units':'W m-2'})
         ds.to_netcdf(self.out_fn)
         return
     
-    def add_basic_attrs(self,args,time_elapsed,climate,bin_idx=0):
+    def add_basic_attrs(self,args,time_elapsed,climate):
         """
         Adds informational attributes to the output dataset.
 
         time_elapsed
         run_start and run_end
         from_AWS and from_reanalysis list of variables
-        n_bins and bin_elev
+        elev
         model_run_date
         switch_melt, switch_LAPs, switch_snow
         """
         time_elapsed = str(time_elapsed) + ' s'
-        bin_elev = ', '.join([str(z) for z in eb_prms.bin_elev])
-        if args.parallel:
-            bin_elev = str(eb_prms.bin_elev[bin_idx])
+        elev = str(args.elev)+' m a.s.l.'
 
         # get information on variable sources
         re_str = eb_prms.reanalysis+': '
@@ -1119,8 +1092,7 @@ class Output():
                                  from_reanalysis=re_str,
                                  run_start=str(args.startdate),
                                  run_end=str(args.enddate),
-                                 n_bins=str(args.n_bins),
-                                 bin_elev=bin_elev,
+                                 elev=elev,
                                  model_run_date=str(pd.Timestamp.today()),
                                  switch_melt=str(args.switch_melt),
                                  switch_snow=str(args.switch_snow),
@@ -1132,6 +1104,9 @@ class Output():
                 ds = ds.assign_attrs(glacier=f'{len(args.glac_no)} glaciers in region {reg}')
             else:
                 ds = ds.assign_attrs(glacier=eb_prms.glac_name)
+
+            if args.task_id != -1:
+                ds.assign_attrs(task_id=str(args.task_id))
         ds.to_netcdf(self.out_fn)
         print('Success: saved to '+self.out_fn)
         return

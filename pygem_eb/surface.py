@@ -18,7 +18,7 @@ class Surface():
     Surface scheme that tracks the accumulation of LAPs and calculates 
     albedo based on several switches.
     """ 
-    def __init__(self,layers,time,args,climate,bin_idx):
+    def __init__(self,layers,time,args,climate):
         # Add args and climate to surface class
         self.args = args
         self.climate = climate
@@ -47,9 +47,14 @@ class Surface():
             bands = np.arange(0,480).astype(str)
             self.albedo_df = pd.DataFrame(np.zeros((0,480)),columns=bands)
 
-        # Parallel needs separate input files to access
-        if args.parallel:
-            self.snicar_fn = os.getcwd() + f'/biosnicar-py/biosnicar/inputs_{bin_idx}.yaml'
+        # Parallel runs need separate input files to access
+        if args.task_id != -1:
+            self.snicar_fn = os.getcwd() + f'/biosnicar-py/biosnicar/inputs_{args.task_id}.yaml'
+            if not os.path.exists(self.snicar_fn):
+                with open(eb_prms.snicar_input_fp, 'rb') as src_file:
+                    file_contents = src_file.read()
+                with open(self.snicar_fn, 'wb') as dest_file:
+                    dest_file.write(file_contents)
         else:
             self.snicar_fn = eb_prms.snicar_input_fp
         return

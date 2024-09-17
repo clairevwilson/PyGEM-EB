@@ -16,7 +16,7 @@ class energyBalance():
     MassBalance every timestep, so it stores the current climate data and 
     surface fluxes.
     """ 
-    def __init__(self,climate,time,bin_idx,dt):
+    def __init__(self,climate,time,dt):
         """
         Loads in the climate data at a given timestep to use in the surface energy balance.
 
@@ -27,32 +27,26 @@ class energyBalance():
             shortwave radiation, and total cloud cover.
         local_time : datetime
             Time to index the climate dataset.
-        bin_idx : int
-            Index number of the bin being run
         dt : float
             Resolution for the time loop [s]
         """
-        self.bin = bin_idx
-
         # Unpack climate variables
         climateds_now = climate.cds.sel(time=time)
-        # Bin-dependent variables indexed by bin_idx
-        self.tempC = climateds_now['bin_temp'].to_numpy()[bin_idx]
-        self.tp = climateds_now['bin_tp'].to_numpy()[bin_idx]
-        self.sp = climateds_now['bin_sp'].to_numpy()[bin_idx]
-        # Elevation-invariant variables
-        self.rH = climateds_now['rh'].to_numpy()
-        self.wind = climateds_now['wind'].to_numpy()
-        self.tcc = climateds_now['tcc'].to_numpy()
-        self.SWin_ds = climateds_now['SWin'].to_numpy()
-        self.SWout_ds = climateds_now['SWout'].to_numpy()
-        self.LWin_ds = climateds_now['LWin'].to_numpy()
-        self.LWout_ds = climateds_now['LWout'].to_numpy()
-        self.NR_ds = climateds_now['NR'].to_numpy()
-        self.bcdry = climateds_now['bcdry'].to_numpy()
-        self.bcwet = climateds_now['bcwet'].to_numpy()
-        self.dustdry = climateds_now['dustdry'].to_numpy()
-        self.dustwet = climateds_now['dustwet'].to_numpy()
+        self.tempC = climateds_now['temp'].values
+        self.tp = climateds_now['tp'].values
+        self.sp = climateds_now['sp'].values
+        self.rH = climateds_now['rh'].values
+        self.wind = climateds_now['wind'].values
+        self.tcc = climateds_now['tcc'].values
+        self.SWin_ds = climateds_now['SWin'].values
+        self.SWout_ds = climateds_now['SWout'].values
+        self.LWin_ds = climateds_now['LWin'].values
+        self.LWout_ds = climateds_now['LWout'].values
+        self.NR_ds = climateds_now['NR'].values
+        self.bcdry = climateds_now['bcdry'].values
+        self.bcwet = climateds_now['bcwet'].values
+        self.dustdry = climateds_now['dustdry'].values
+        self.dustwet = climateds_now['dustwet'].values
 
         # Define additional useful values
         self.tempK = self.tempC + 273.15
@@ -68,6 +62,9 @@ class energyBalance():
         self.nanSWout = True if np.isnan(self.SWout_ds) else False
         self.nanLWout = True if np.isnan(self.LWout_ds) else False
         self.nanNR = True if np.isnan(self.NR_ds) else False
+
+        # Find thermal conductivity from args (ground flux)
+        self.kcond_ice = climate.args.k_ice
         return
 
     def surface_EB(self,surftemp,layers,albedo,days_since_snowfall,mode='sum'):
@@ -147,7 +144,7 @@ class energyBalance():
         surface
             class object from surface.py
         """
-        SKY_VIEW = eb_prms.sky_view[self.bin]
+        SKY_VIEW = eb_prms.sky_view
         albedo = surface.albedo
         spectral_weights = surface.spectral_weights
         assert np.abs(1-np.sum(spectral_weights)) < 1e-5, 'Solar weights dont sum to 1'
@@ -251,13 +248,9 @@ class energyBalance():
         surftemp : float
             Surface temperature of snowpack/ice [C]
         """
-        if eb_prms.constant_conductivity:
-            cond_ice = eb_prms.constant_conductivity
-        else:
-            cond_ice = eb_prms.k_ice_ground
-
+        k_ice = self.kcond_ice
         if eb_prms.method_ground in ['MolgHardy']:
-            Qg = -cond_ice * (surftemp - eb_prms.temp_temp) / eb_prms.temp_depth
+            Qg = -k_ice * (surftemp - eb_prms.temp_temp) / eb_prms.temp_depth
         else:
             assert 1==0, 'Ground flux method not accepted; choose from [\'MolgHardy\']'
         return Qg

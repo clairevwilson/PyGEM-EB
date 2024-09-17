@@ -1,62 +1,64 @@
+# Built-in libraries
+import os, sys
+import time
+# External libraries
 import pandas as pd
 import numpy as np
 import xarray as xr
-import os, sys
 import matplotlib.pyplot as plt
-
-run_model = True
-
-class HiddenPrints:
-    """
-    Class to hide prints when running SNICAR
-    """
-    def __enter__(self):
-        self._original_stdout = sys.stdout
-        sys.stdout = open(os.devnull, 'w')
-
-    def __exit__(self,exc_type, exc_val, exc_tb):
-        sys.stdout.close()
-        sys.stdout = self._original_stdout
-        return
-    
-# import model
+# Internal libraries
 import pygem_eb.input as eb_prms
-eb_prms.startdate = pd.to_datetime('2000-04-20 00:00')
-eb_prms.enddate = eb_prms.startdate + pd.Timedelta(hours=2)
-eb_prms.debug = False
 import run_simulation_eb as sim
+import pygem_eb.massbalance as mb
 
-# model parameters
-params = {
-    'albedo_ice':[0.4,0.5,0.6],
-    'k_ice': [2,3,4]
-}
+# Start timer
+start_time = time.time()
 
-# read command line args
-args = sim.get_args()
-args.enddate = pd.to_datetime('2022-05-21 12:00:00')
+# Read command line args
+parser = sim.get_args(parse=False)
+args = parser.parse_args()
 
-# force some args
+# Force some args
 args.store_data = True
-args.parallel = True
+args.parallel = False
 args.use_AWS = True
+args.debug = False
+args.startdate = pd.to_datetime('2000-04-20 00:00:00')
+args.enddate = pd.to_datetime('2000-05-21 12:00:00')
+print('CHANGE THE DATE BACK FROM 2000')
 
-ds_list = []
-for albedo_ice in params['albedo_ice']:
-    for thermal_cond in params['k_ice']:
-        eb_prms.output_name = f'{eb_prms.output_filepath}EB/a_{albedo_ice}_k_{thermal_cond}_'
-        eb_prms.constant_conductivity = thermal_cond
-        eb_prms.albedo_ice = albedo_ice
+# Get parameters
+k_ice = args.k_ice
+k_snow = args.k_snow
+a_ice = args.a_ice
+site = args.site
+assert site != 'AWS', 'add flag for site'
 
-        print()
-        print('Starting model run with a_ice = ',albedo_ice,'and k_ice = ',thermal_cond)
+path_out = os.getcwd() + '/../Output'
+eb_prms.output_name = f'{path_out}/EB/kice{k_ice}_ksnow{k_snow}_aice{a_ice}_site{site}_'
 
-        if not os.path.exists(eb_prms.output_name+'0_bin0.nc'):
-            # initialize the model
-            climate = sim.initialize_model(args.glac_no[0],args)
+if not os.path.exists(f'{eb_prms.output_name}_0.nc'):
+    # initialize the model
+    climate = sim.initialize_model(args.glac_no[0],args)
 
-            # run the model
-            sim.run_model(climate,args,{'a_ice':str(albedo_ice),
-                                            'k_ice':str(thermal_cond)})
-        else:
-            print('      already exists; skipping')
+    # specify attributes for output file
+    store_attrs = {'k_ice':str(k_ice),'k_snow':str(k_snow),
+                    'a_ice':str(a_ice)}
+    
+    # run the model
+    print(f'Beginning run for site {site} with:')
+    print(f'       kice: {k_ice}    ksnow: {k_snow}    aice: {a_ice}')
+    massbal = mb.massBalance(args,climate)
+    massbal.main()
+
+    # completed model run: end timer
+    time_elapsed = time.time() - start_time
+    print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+    print(f'Total Time Elapsed: {time_elapsed:.1f} s')
+
+    # store output
+    massbal.output.add_vars()
+    massbal.output.add_basic_attrs(args,time_elapsed,climate)
+    massbal.output.add_attrs(store_attrs)
+else:
+    print('      already exists; skipping')
