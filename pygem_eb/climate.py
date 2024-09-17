@@ -89,8 +89,8 @@ class Climate():
         # check dates of data match input dates
         data_start = pd.to_datetime(df.index.to_numpy()[0])
         data_end = pd.to_datetime(df.index.to_numpy()[-1])
-        assert self.dates[0] >= data_start, 'Check input dates: start date before range of AWS data'
-        assert self.dates[len(self.dates)-1] <= data_end, 'Check input dates: end date after range of AWS data'
+        assert self.dates[0] >= data_start, f'Check input dates: start date before range of AWS data ({data_start})'
+        assert self.dates[len(self.dates)-1] <= data_end, f'Check input dates: end date after range of AWS data ({data_end})'
         
         # reindex in case of MERRA-2 half-hour timesteps
         new_index = pd.DatetimeIndex(self.dates)

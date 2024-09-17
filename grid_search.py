@@ -28,13 +28,13 @@ import run_simulation_eb as sim
 
 # model parameters
 params = {
-    'albedo_ice':[0.4,0.5],
-    'k_ice': [2,3]
+    'albedo_ice':[0.4,0.5,0.6],
+    'k_ice': [2,3,4]
 }
 
 # read command line args
 args = sim.get_args()
-args.enddate = pd.to_datetime('2019-04-26 16:00:00')
+args.enddate = pd.to_datetime('2022-05-21 12:00:00')
 
 # force some args
 args.store_data = True
@@ -58,3 +58,5 @@ for albedo_ice in params['albedo_ice']:
             # run the model
             sim.run_model(climate,args,{'a_ice':str(albedo_ice),
                                             'k_ice':str(thermal_cond)})
+        else:
+            print('      already exists; skipping')

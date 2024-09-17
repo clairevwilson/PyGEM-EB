@@ -619,6 +619,8 @@ class Layers():
             refreeze = self.lrefreeze[bins]
             new_snow = self.lnewsnow[bins]
             old_snow = self.ldrymass[bins] - refreeze - new_snow
+            if np.any(old_snow) < 0:
+                print('overloaded new mass',refreeze,new_snow,self.ldrymass[bins])
             f_old = old_snow / self.ldrymass[bins]
             f_new = new_snow / self.ldrymass[bins]
             f_rfz = refreeze / self.ldrymass[bins]

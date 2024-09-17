@@ -64,13 +64,8 @@ def seasonal_mass_balance(fp,ds,bin=0,site='B',method='RMSE',plot=False):
     years_measure = np.unique(mb_df.index)
     years = np.sort(list(set(years_model) & set(years_measure)))[1:]
 
-    # Index mass balance data
-    mb_df = mb_df.loc[years]
-    winter_data = mb_df['bw']
-    summer_data = mb_df['ba'] - mb_df['bw']
-
     # Retrieve the model data
-    mb_dict = {'bw':[],'bs':[]}
+    mb_dict = {'bw':[],'bs':[],'w-':[],'s+':[]}
     for year in years:
         spring_date = str(year)+'-04-20 00:00'
         fall_date = str(year)+'-08-20 00:00'
@@ -87,14 +82,21 @@ def seasonal_mass_balance(fp,ds,bin=0,site='B',method='RMSE',plot=False):
         except:
             if year == years[-1]:
                 years = years[:-1]
-                winter_data = winter_data[:-1]
-                summer_data = summer_data[:-1]
                 break
         winter_mb = wds.accum + wds.refreeze - wds.melt
         summer_mb = sds.accum + sds.refreeze - sds.melt
         mb_dict['bw'].append(winter_mb.values)
         mb_dict['bs'].append(summer_mb.values)
-    
+        mb_dict['w-'].append(wds.melt.values*-1)
+        mb_dict['s+'].append(sds.accum.values)
+
+    # Index mass balance data
+    mb_df = mb_df.loc[years]
+    winter_data = mb_df['bw']
+    summer_data = mb_df['ba'] - mb_df['bw']
+    wabl_data = mb_df['winter_ablation']
+    sacc_data = mb_df['summer_accumulation']
+
     # Clean up arrays
     winter_model = np.array(mb_dict['bw'])
     summer_model = np.array(mb_dict['bs'])
@@ -107,18 +109,33 @@ def seasonal_mass_balance(fp,ds,bin=0,site='B',method='RMSE',plot=False):
 
     # Plot
     if plot:
-        fig,ax = plt.subplots()
-        ax.plot(years,winter_model,label='Winter MB Modeled')
-        ax.plot(years,summer_model,label='Summer MB Modeled')
-        ax.plot(years,winter_data,label='MB Data',color='black',linestyle='--')
-        ax.plot(years,summer_data,color='black',linestyle='--')
-        ax.legend(fontsize=12)
-        ax.set_xticks(np.arange(years[0],years[-1],4))
+        if plot == 'w-s+':
+            fig,ax = plt.subplots()
+            ax.plot(years,mb_dict['w-'],label='Winter Melt',color='turquoise')
+            ax.plot(years,mb_dict['s+'],label='Summer Acc.',color='orange')
+            ax.plot(years,wabl_data,color='turquoise',linestyle='--')
+            ax.plot(years,sacc_data,color='orange',linestyle='--')
+            ax.set_ylabel('Partitioned seasonal mass balance (m w.e.)',fontsize=14)
+            ax.set_title(f'Summer accumulation and winter ablation at site {site}')
+        else:
+            fig,ax = plt.subplots()
+            ax.plot(years,winter_model,label='Winter',color='turquoise')
+            ax.plot(years,summer_model,label='Summer',color='orange')
+            ax.plot(years,winter_data,color='turquoise',linestyle='--')
+            ax.plot(years,summer_data,color='orange',linestyle='--')
+            ax.axhline(0,color='grey',linewidth=0.5)
+            min_all = np.min(np.array([winter_model,summer_model,winter_data,summer_data]))
+            max_all = np.max(np.array([winter_model,summer_model,winter_data,summer_data]))
+            ax.set_xticks(np.arange(years[0],years[-1],4))
+            ax.set_yticks(np.arange(np.round(min_all,0),np.round(max_all,0)+1,1))
+            ax.set_ylabel('Seasonal mass balance (m w.e.)',fontsize=14)
+            ax.set_title(f'Summer {method} = {summer_error:.3f}   Winter {method} = {winter_error:.3f}')
+        ax.plot(np.nan,np.nan,linestyle='--',color='grey',label='Data')
+        ax.plot(np.nan,np.nan,color='grey',label='Modeled')
+        ax.legend(fontsize=12,ncols=2)
         ax.tick_params(labelsize=12,length=5,width=1)
         ax.set_xlim(years[0],years[-1])
-        ax.set_ylabel('Seasonal mass balance (m w.e.)',fontsize=14)
-        ax.set_title(f'Summer {method} = {summer_error:.3f}   Winter {method} = {winter_error:.3f}')
-        plt.savefig('/home/claire/research/figure.png')
+        ax.set_xticks(np.arange(years[0],years[-1],4))
         return fig,ax
     else:
         return winter_error, summer_error
