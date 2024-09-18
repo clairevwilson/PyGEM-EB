@@ -15,17 +15,17 @@ import pygem_eb.massbalance as mb
 start_time = time.time()
 
 # Read command line args
-parser = sim.get_args(parse=False)
-args = parser.parse_args()
+args = sim.get_args()
 
 # Force some args
-args.store_data = True
-args.parallel = False
-args.use_AWS = True
-args.debug = False
+args.store_data = True              # Ensures output is stored
+args.use_AWS = True                 # Use available AWS data
+args.debug = False                  # Don't need debug prints
+eb_prms.store_vars = ['MB','EB']    # Only store mass and energy balance results
+
+# Date range
 args.startdate = pd.to_datetime('2000-04-20 00:00:00')
-args.enddate = pd.to_datetime('2000-05-21 12:00:00')
-print('CHANGE THE DATE BACK FROM 2000')
+args.enddate = pd.to_datetime('2022-05-21 12:00:00')
 
 # Get parameters
 k_ice = args.k_ice
@@ -37,7 +37,7 @@ assert site != 'AWS', 'add flag for site'
 path_out = os.getcwd() + '/../Output'
 eb_prms.output_name = f'{path_out}/EB/kice{k_ice}_ksnow{k_snow}_aice{a_ice}_site{site}_'
 
-if not os.path.exists(f'{eb_prms.output_name}_0.nc'):
+if not os.path.exists(f'{eb_prms.output_name}0.nc'):
     # initialize the model
     climate = sim.initialize_model(args.glac_no[0],args)
 
@@ -62,3 +62,5 @@ if not os.path.exists(f'{eb_prms.output_name}_0.nc'):
     massbal.output.add_attrs(store_attrs)
 else:
     print('      already exists; skipping')
+
+print('finished job',args.task_id)

@@ -126,7 +126,7 @@ class massBalance():
             self.output.store_timestep(self,enbal,surface,layers,time)   
 
             # Debugging: print current state and monthly melt at the end of each month
-            if time.is_month_start and time.hour == 0 and eb_prms.debug:
+            if time.is_month_start and time.hour == 0 and self.args.debug:
                 self.current_state(time,enbal.tempC)
 
             # Advance timestep
@@ -865,7 +865,7 @@ class Output():
         vn_dict = {'EB':['SWin','SWout','LWin','LWout','rain','ground',
                          'sensible','latent','meltenergy','albedo',
                          'SWin_sky','SWin_terr'],
-                   'MB':['melt','refreeze','runoff','accum','snowdepth'],
+                   'MB':['melt','refreeze','runoff','accum','snowdepth','dh'],
                    'Temp':['airtemp','surftemp'],
                    'Layers':['layertemp','layerdensity','layerwater','layerheight',
                              'layerBC','layerdust','layergrainsize']}
@@ -897,7 +897,8 @@ class Output():
                 layerBC = (['time','layer'],zeros,{'units':'ppb'}),
                 layerdust = (['time','layer'],zeros,{'units':'ppm'}),
                 layergrainsize = (['time','layer'],zeros,{'units':'um'}),
-                snowdepth = (['time'],zeros[:,0],{'units':'m'})
+                snowdepth = (['time'],zeros[:,0],{'units':'m'}),
+                dh = (['time'],zeros[:,0],{'units':'m'})
                 ),
                 coords=dict(
                     time=(['time'],time),
@@ -907,6 +908,7 @@ class Output():
         vars_list = vn_dict[eb_prms.store_vars[0]]
         for var in eb_prms.store_vars[1:]:
             vars_list.extend(vn_dict[var])
+        self.vars_list = vars_list
         
         # Create the netcdf file to store output
         if args.store_data:
@@ -932,6 +934,7 @@ class Output():
         self.refreeze_output = []   # refreeze by timestep [m w.e.]
         self.accum_output = []      # accumulation by timestep [m w.e.]
         self.runoff_output = []     # runoff by timestep [m w.e.]
+        self.dh_output = []         # surface height change by timestep [m]
         self.airtemp_output = []    # downscaled air temperature [C]
         self.surftemp_output = []   # surface temperature [C]
 
@@ -943,6 +946,7 @@ class Output():
         self.layerBC_output = dict()        # layer black carbon content [ppb]
         self.layerdust_output = dict()      # layer dust content [ppm]
         self.layergrainsize_output = dict() # layer grain size [um]
+        self.last_height = eb_prms.initial_ice_depth+eb_prms.initial_firn_depth+eb_prms.initial_snow_depth
         return
     
     def store_timestep(self,massbal,enbal,surface,layers,step):
@@ -959,13 +963,17 @@ class Output():
         self.latent_output.append(float(enbal.lat))
         self.meltenergy_output.append(float(surface.Qm))
         self.albedo_output.append(float(surface.bba))
+
         self.melt_output.append(float(massbal.melt))
         self.refreeze_output.append(float(massbal.refreeze))
         self.runoff_output.append(float(massbal.runoff))
         self.accum_output.append(float(massbal.accum))
+        self.snowdepth_output.append(np.sum(layers.lheight[layers.snow_idx]))
+        self.dh_output.append(np.sum(layers.lheight)-self.last_height)
+        self.last_height = np.sum(layers.lheight)
+
         self.airtemp_output.append(float(enbal.tempC))
         self.surftemp_output.append(float(surface.stemp))
-        self.snowdepth_output.append(np.sum(layers.lheight[layers.snow_idx]))
 
         self.layertemp_output[step] = layers.ltemp
         self.layerwater_output[step] = layers.lwater
@@ -997,6 +1005,7 @@ class Output():
                 ds['runoff'].values = self.runoff_output
                 ds['accum'].values = self.accum_output
                 ds['snowdepth'].values = self.snowdepth_output
+                ds['dh'].values = self.dh_output
             if 'Temp' in eb_prms.store_vars:
                 ds['airtemp'].values = self.airtemp_output
                 ds['surftemp'].values = self.surftemp_output
@@ -1028,6 +1037,7 @@ class Output():
                 ds['layerBC'].values = layerBC_output
                 ds['layerdust'].values = layerdust_output
                 ds['layergrainsize'].values = layergrainsize_output
+
         ds.to_netcdf(self.out_fn)
         return ds
     
@@ -1042,12 +1052,6 @@ class Output():
         """
         with xr.open_dataset(self.out_fn) as dataset:
             ds = dataset.load()
-
-            # add surface height change
-            height = ds.layerheight.sum(dim='layer')
-            diff = height.diff(dim='time')
-            dh = np.append(np.array([0]),diff.values.T)
-            ds['dh'] = (['time'],dh,{'units':'m'})
 
             # add summed radiation terms
             SWnet = ds['SWin'] + ds['SWout']

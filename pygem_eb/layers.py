@@ -140,6 +140,7 @@ class Layers():
         
         # Get depth of layers (distance from surface to midpoint of layer) [m]
         nlayers = len(lheight)
+        assert nlayers <= eb_prms.max_nlayers, f'Need >= {nlayers} in eb_prms.max_nlayers'
         ldepth = [np.sum(lheight[:i+1])-(lheight[i]/2) for i in range(nlayers)]
 
         # Arrays

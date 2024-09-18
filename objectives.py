@@ -13,8 +13,6 @@ All functions use the following notation for the arguments:
         Filepath to the field data
     ds : xarray.Dataset
         Output dataset from PyGEM-EB
-    bin : int, default 0
-        Index of the bin in the output dataset
     method : str, default 'RMSE'
         Choose between 'RMSE','MAE'
     plot : Bool, default False
@@ -39,10 +37,10 @@ def objective(model,data,method):
     elif method == 'RMSE':
         return np.sqrt(np.mean(np.square(model - data)))
     elif method == 'MAE':
-        return lambda model,data: np.mean(np.abs(model - data))
+        return np.mean(np.abs(model - data))
     
 # ========== 1. SEASONAL MASS BALANCE ==========
-def seasonal_mass_balance(fp,ds,bin=0,site='B',method='RMSE',plot=False):
+def seasonal_mass_balance(data_fp,ds,site='B',method='MAE',plot=False):
     """
     Compares seasonal mass balance measurements from
     USGS stake surveys to a model output.
@@ -54,10 +52,9 @@ def seasonal_mass_balance(fp,ds,bin=0,site='B',method='RMSE',plot=False):
     Name of the USGS site.
     """
     # Load dataset
-    mb_df = pd.read_csv(fp)
+    mb_df = pd.read_csv(data_fp)
     mb_df = mb_df.loc[mb_df['site_name'] == site]
     mb_df.index = mb_df['Year']
-    ds = ds.sel(bin=bin)
 
     # Get overlapping years
     years_model = np.unique(pd.to_datetime(ds.time.values).year)
@@ -111,16 +108,16 @@ def seasonal_mass_balance(fp,ds,bin=0,site='B',method='RMSE',plot=False):
     if plot:
         if plot == 'w-s+':
             fig,ax = plt.subplots()
-            ax.plot(years,mb_dict['w-'],label='Winter Melt',color='turquoise')
-            ax.plot(years,mb_dict['s+'],label='Summer Acc.',color='orange')
+            ax.plot(years,mb_dict['w-'],label='Winter Melt',color='turquoise',linewidth=2)
+            ax.plot(years,mb_dict['s+'],label='Summer Acc.',color='orange',linewidth=2)
             ax.plot(years,wabl_data,color='turquoise',linestyle='--')
             ax.plot(years,sacc_data,color='orange',linestyle='--')
             ax.set_ylabel('Partitioned seasonal mass balance (m w.e.)',fontsize=14)
             ax.set_title(f'Summer accumulation and winter ablation at site {site}')
         else:
             fig,ax = plt.subplots()
-            ax.plot(years,winter_model,label='Winter',color='turquoise')
-            ax.plot(years,summer_model,label='Summer',color='orange')
+            ax.plot(years,winter_model,label='Winter',color='turquoise',linewidth=2)
+            ax.plot(years,summer_model,label='Summer',color='orange',linewidth=2)
             ax.plot(years,winter_data,color='turquoise',linestyle='--')
             ax.plot(years,summer_data,color='orange',linestyle='--')
             ax.axhline(0,color='grey',linewidth=0.5)
@@ -141,7 +138,7 @@ def seasonal_mass_balance(fp,ds,bin=0,site='B',method='RMSE',plot=False):
         return winter_error, summer_error
 
 # ========== 2. CUMULATIVE MASS BALANCE ==========
-def cumulative_mass_balance(fp,ds,bin=0,method='RMSE',plot=False):
+def cumulative_mass_balance(data_fp,ds,method='RMSE',plot=False):
     """
     Compares cumulative mass balance measurements from
     a stake to a model output. 
@@ -151,7 +148,7 @@ def cumulative_mass_balance(fp,ds,bin=0,method='RMSE',plot=False):
     height change in meters.
     """
     # Load dataset
-    stake_df = pd.read_csv(fp)
+    stake_df = pd.read_csv(data_fp)
     stake_df.index = pd.to_datetime(stake_df['Date'])
 
     # Retrieve the dates and index stake data
@@ -166,7 +163,7 @@ def cumulative_mass_balance(fp,ds,bin=0,method='RMSE',plot=False):
         start += pd.Timedelta(minutes=30)
     if end.minute != pd.to_datetime(ds.time.values[0]).minute:
         end -= pd.Timedelta(minutes=30)
-    ds = ds.sel(time=pd.date_range(start,end,freq='h'),bin=bin)
+    ds = ds.sel(time=pd.date_range(start,end,freq='h'))
     ds = ds.dh.cumsum() - ds.dh.isel(time=0)
     ds = ds.sel(time=pd.date_range(start,end))
 
@@ -195,7 +192,7 @@ def cumulative_mass_balance(fp,ds,bin=0,method='RMSE',plot=False):
     return error
 
 # ========== 3. SNOW TEMPERATURES ==========
-def snow_temperature(fp,ds,bin=0,method='RMSE',plot=False,plot_heights=[0.5]):
+def snow_temperature(data_fp,ds,method='RMSE',plot=False,plot_heights=[0.5]):
     """
     Compares modeled snow temperatures to measurements from
     iButton temperature sensors.
@@ -212,11 +209,10 @@ def snow_temperature(fp,ds,bin=0,method='RMSE',plot=False,plot_heights=[0.5]):
     List of heights above the ice in meters to plot the timeseries.
     """
     # Load dataset
-    temp_df = pd.read_csv(fp,index_col=0)
+    temp_df = pd.read_csv(data_fp,index_col=0)
     temp_df.index = pd.to_datetime(temp_df.index)
     temp_df = temp_df.resample('30min').interpolate()
     h0 = np.array(temp_df.columns).astype(float)
-    ds = ds.sel(bin=bin)
 
     # Retrieve the dates and index stake data
     start = pd.to_datetime(temp_df.index[0])

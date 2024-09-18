@@ -111,7 +111,7 @@ if dates_from_data:
         enddate -= pd.Timedelta(minutes=30)
 else:
     startdate = pd.to_datetime('2000-04-21 00:00:00') 
-    enddate = pd.to_datetime('2022-05-01 00:00:00')
+    enddate = pd.to_datetime('2022-05-21 12:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
@@ -131,7 +131,7 @@ if 6 < startdate.month < 9:         # initialize without snow
     initial_snowdepth = 0
 
 # OUTPUT
-store_vars = ['MB','EB','Temp','Layers']  # Variables to store of the possible set: ['MB','EB','Temp','Layers']
+store_vars = ['MB','EB']  # Variables to store of the possible set: ['MB','EB','Temp','Layers']
 store_bands = False     # Store spectral albedo .csv
 store_climate = False    # Store climate dataset .nc
 
@@ -222,7 +222,7 @@ karman = 0.4                # von Karman's constant
 density_std = 1.225         # Air density at sea level [kg m-3]
 viscosity_snow = 3.7e7      # Viscosity of snow [Pa-s] 
 sigma_SB = 5.67037e-8       # Stefan-Boltzmann constant [W m-2 K-4]
-max_nlayers = 30            # Maximum number of vertical layers allowed
+max_nlayers = 50            # Maximum number of vertical layers allowed
 max_dz = 1                  # Max layer height
 albedo_deg_rate = 15        # Rate of exponential decay of albedo
 wet_snow_C = 4.22e-13       # Constant for wet snow metamorphosis [m3 s-1]
