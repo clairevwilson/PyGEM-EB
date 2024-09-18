@@ -174,7 +174,7 @@ for i in np.arange(0,480):
 grainsize_ds = xr.open_dataset(grainsize_fp)
 
 # ========== PARAMETERS ==========
-# site specific
+# site specific?
 sky_view = 0.936
 kp = 1
 # play with
@@ -183,6 +183,8 @@ kcond_ice = 1.5             # thermal conductivity of ice
 kcond_snow = 0.6            # thermal conductivity of snow
 Boone_c1 = 2.7e-6           # s-1 (2.7e-6) --> 2.7e-4
 Boone_c5 = 0.018            # m3 kg-1 (0.018) --> 0.07
+firn_grainsize = 2000       # firn grain size in um
+ice_grainsize = 5000        # ice grain size in um (placeholder)
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
 layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
 # leave
@@ -232,7 +234,7 @@ Sr = 0.033                  # for irreducible water content flow method
 rainBC = BC_freshsnow       # concentration of BC in rain
 raindust = dust_freshsnow   # concentration of dust in rain
 temp_temp = 0               # temperature of temperate ice [C]
-temp_depth = 25             # depth of temperate ice [m]
+temp_depth = 100             # depth of temperate ice [m]
 albedo_fresh_snow = 0.9     # Albedo of fresh snow [-] (Moelg et al. 2012, TC - 0.85)
 albedo_firn = 0.55          # Albedo of firn [-]
 albedo_ground = 0.1         # Albedo of ground [-]
@@ -246,7 +248,7 @@ ratio_DU_bin3 = 0.481675    # " SNICAR Bin 3 (1.25-2.5um)
 ratio_DU_bin4 = 0.203775    # " SNICAR Bin 4 (2.5-5um)
 ratio_DU_bin5 = 0.034       # " SNICAR Bin 5 (5-50um)
 diffuse_cloud_limit = 0.6   # Threshold to consider cloudy vs clear-sky in SNICAR
-mb_threshold = 1e-3         # Threshold to consider not conserving mass
+mb_threshold = 1e-3         # Threshold to consider not conserving mass (m w.e.)
 
 # ========== OTHER PYGEM INPUTS ========== 
 rgi_regionsO1 = [1]

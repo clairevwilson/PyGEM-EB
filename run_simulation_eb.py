@@ -90,7 +90,7 @@ def initialize_model(glac_no,args):
         eb_prms.initial_firn_depth = site_df.loc[site]['firndepth']
         eb_prms.shading_fp = os.getcwd() + f'/shading/out/{eb_prms.glac_name}{site}_shade.csv'
         if site not in eb_prms.output_name:
-            eb_prms.output_name += f'_{site}'
+            eb_prms.output_name += f'{site}_'
 
     # ===== GET GLACIER CLIMATE =====
     # get glacier properties and initialize the climate class

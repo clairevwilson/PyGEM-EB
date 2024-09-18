@@ -1,11 +1,8 @@
 # Built-in libraries
-import os, sys
+import os
 import time
 # External libraries
 import pandas as pd
-import numpy as np
-import xarray as xr
-import matplotlib.pyplot as plt
 # Internal libraries
 import pygem_eb.input as eb_prms
 import run_simulation_eb as sim
@@ -35,7 +32,7 @@ assert site != 'AWS', 'add flag for site'
 
 path_out = os.getcwd() + '/../Output'
 eb_prms.output_name = f'{path_out}/EB/ksnow{k_snow}_aice{a_ice}_site{site}_'
-print(f'{eb_prms.output_name}0.nc')
+print(f'Checking for: {eb_prms.output_name}0.nc...')
 
 if not os.path.exists(f'{eb_prms.output_name}0.nc'):
     # initialize the model
@@ -45,8 +42,8 @@ if not os.path.exists(f'{eb_prms.output_name}0.nc'):
     store_attrs = {'k_snow':str(k_snow),'a_ice':str(a_ice)}
     
     # run the model
-    print(f'Beginning run for site {site} with:')
-    print(f'     ksnow: {k_snow}    aice: {a_ice}')
+    print(f'File does not exist: beginning run for site {site} with')
+    print(f'     ksnow: {k_snow} W/m-K      aice: {a_ice}      {climate.elev} m a.s.l.')
     massbal = mb.massBalance(args,climate)
     massbal.main()
 
@@ -62,4 +59,4 @@ if not os.path.exists(f'{eb_prms.output_name}0.nc'):
 else:
     print('      already exists; skipping')
 
-print('finished job'+args.task_id)
+print(f'finished job {args.task_id}')

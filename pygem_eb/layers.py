@@ -24,6 +24,7 @@ class Layers():
         climate
             class object from pygem_eb.climate
         args
+            Command line arguments
         """
         # Add climate and args to layers class
         self.climate = climate 
@@ -59,7 +60,7 @@ class Layers():
 
         # Grain size initial timestep can copy density
         self.grainsize = self.ldensity.copy()   # LAYER GRAIN SIZE [um]
-        self.grainsize[0:3] = np.array([50,60,70]) # ***** HARD CODED GRAIN SIZES
+        self.grainsize[0:3] = np.array([50,60,70]) # ***** how to initialize grainsize?
         self.grainsize[np.where(self.grainsize>300)[0]] = 300
         self.grainsize[np.where(self.ltype == 'firn')[0]] = 1000
         self.grainsize[np.where(self.ltype == 'ice')[0]] = 1800
@@ -596,7 +597,8 @@ class Layers():
         WET_C = eb_prms.wet_snow_C
         PI = np.pi
         RFZ_GRAINSIZE = eb_prms.rfz_grainsize
-        FIRN_GRAINSIZE = 2000 # **** FIRN GRAIN SIZE?
+        FIRN_GRAINSIZE = eb_prms.firn_grainsize
+        ICE_GRAINSIZE = eb_prms.ice_grainsize
         dt = eb_prms.daily_dt
 
         if eb_prms.constant_freshgrainsize:
@@ -606,7 +608,6 @@ class Layers():
                                        [54.5,54.5+5*(airtemp+30),204.5])
             
         if len(self.snow_idx) > 0:
-            # idx is a list of indices to calculate grain size on
             idx = self.snow_idx
             n = len(idx)
             
@@ -696,11 +697,11 @@ class Layers():
             grainsize[np.where(grainsize > FIRN_GRAINSIZE)[0]] = FIRN_GRAINSIZE
             self.grainsize[idx] = grainsize
             self.grainsize[self.firn_idx] = FIRN_GRAINSIZE 
-            self.grainsize[self.ice_idx] = 3000
+            self.grainsize[self.ice_idx] = ICE_GRAINSIZE
         elif len(self.firn_idx) > 0: # no snow, but there is firn
             self.grainsize[self.firn_idx] = FIRN_GRAINSIZE
-            self.grainsize[self.ice_idx] = 3000
+            self.grainsize[self.ice_idx] = ICE_GRAINSIZE
         else: # no snow or firn, just ice
-            self.grainsize[self.ice_idx] = 3000
+            self.grainsize[self.ice_idx] = ICE_GRAINSIZE
         
         return 
