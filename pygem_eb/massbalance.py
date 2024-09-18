@@ -740,7 +740,7 @@ class massBalance():
         # ice has constant conductivity
         diffusing_ice_idx = list(set(ice_idx)&set(diffusing_idx))
         if len(diffusing_ice_idx) > 0:
-            lcond[diffusing_ice_idx] = self.args.k_ice
+            lcond[diffusing_ice_idx] = eb_prms.kcond_ice
 
         if nl > 2:
             # heights of imaginary average bins between layers

@@ -63,4 +63,4 @@ if not os.path.exists(f'{eb_prms.output_name}0.nc'):
 else:
     print('      already exists; skipping')
 
-print('finished job',args.task_id)
+print('finished job'+args.task_id)

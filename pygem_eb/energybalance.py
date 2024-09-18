@@ -62,9 +62,6 @@ class energyBalance():
         self.nanSWout = True if np.isnan(self.SWout_ds) else False
         self.nanLWout = True if np.isnan(self.LWout_ds) else False
         self.nanNR = True if np.isnan(self.NR_ds) else False
-
-        # Find thermal conductivity from args (ground flux)
-        self.kcond_ice = climate.args.k_ice
         return
 
     def surface_EB(self,surftemp,layers,albedo,days_since_snowfall,mode='sum'):
@@ -248,7 +245,7 @@ class energyBalance():
         surftemp : float
             Surface temperature of snowpack/ice [C]
         """
-        k_ice = self.kcond_ice
+        k_ice = eb_prms.kcond_ice
         if eb_prms.method_ground in ['MolgHardy']:
             Qg = -k_ice * (surftemp - eb_prms.temp_temp) / eb_prms.temp_depth
         else:

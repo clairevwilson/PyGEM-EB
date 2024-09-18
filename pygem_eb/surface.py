@@ -51,10 +51,7 @@ class Surface():
         if args.task_id != -1:
             self.snicar_fn = os.getcwd() + f'/biosnicar-py/biosnicar/inputs_{args.task_id}.yaml'
             if not os.path.exists(self.snicar_fn):
-                with open(eb_prms.snicar_input_fp, 'rb') as src_file:
-                    file_contents = src_file.read()
-                with open(self.snicar_fn, 'wb') as dest_file:
-                    dest_file.write(file_contents)
+                self.reset_snicar(self.snicar_fn)
         else:
             self.snicar_fn = eb_prms.snicar_input_fp
         return
@@ -297,8 +294,9 @@ class Surface():
         lgrainsize = layers.grainsize[idx].astype(int)
 
         # Grain size files are every 1um till 1500um, then every 500
-        idx_1500 = np.where(lgrainsize>1500)[0]
+        idx_1500 = lgrainsize>1500
         lgrainsize[idx_1500] = np.round(lgrainsize[idx_1500]/500) * 500
+        lgrainsize[lgrainsize < 30] = 30
         lgrainsize = lgrainsize.tolist()
 
         # Convert LAPs from mass to concentration in ppb
@@ -329,15 +327,17 @@ class Surface():
             ldust5 = ldust1.copy()
 
         # Open and edit yaml input file for SNICAR
-        try:
-            with open(self.snicar_fn) as f:
-                list_doc = yaml.safe_load(f)
-        except:
-            with open(eb_prms.snicar_input_fp) as f:
-                list_doc = yaml.safe_load(f)
+        with open(self.snicar_fn) as f:
+            list_doc = yaml.safe_load(f)
 
         # Update changing layer variables
-        list_doc['IMPURITIES']['BC']['CONC'] = lBC
+        try:
+            list_doc['IMPURITIES']['BC']['CONC'] = lBC
+        except:
+            self.reset_SNICAR(self.snicar_fn)
+            with open(self.snicar_fn) as f:
+                list_doc = yaml.safe_load(f)
+            list_doc['IMPURITIES']['BC']['CONC'] = lBC
         list_doc['IMPURITIES']['DUST1']['CONC'] = ldust1
         list_doc['IMPURITIES']['DUST2']['CONC'] = ldust2
         list_doc['IMPURITIES']['DUST3']['CONC'] = ldust3
@@ -378,6 +378,12 @@ class Surface():
         #     band_albedo.append(np.sum(solar[idx]*albedo[idx]) / np.sum(solar[idx]))
         self.bba = np.sum(albedo * spectral_weights) / np.sum(spectral_weights)
         return albedo,spectral_weights
+    
+    def reset_SNICAR(self,fp):
+        with open(eb_prms.snicar_input_fp, 'rb') as src_file:
+            file_contents = src_file.read()
+        with open(fp, 'wb') as dest_file:
+            dest_file.write(file_contents)
     
     def get_surr_albedo(self,layers,time):
         ALBEDO_GROUND = eb_prms.albedo_ground

@@ -47,9 +47,7 @@ def get_args(parse=True):
                         default=eb_prms.switch_melt, help='')
     parser.add_argument('-switch_snow',action='store', type=int,
                         default=eb_prms.switch_snow, help='')
-    parser.add_argument('-k_ice',default=eb_prms.kcond_ice,action='store',type=float,
-                        help='Thermal conductivity of ice')
-    parser.add_argument('-k_snow',default=eb_prms.kcond_snow,action='store',type=float,
+    parser.add_argument('-k_snow',default=eb_prms.kcond_snow,action='store',
                         help='Thermal conductivity of snow')
     parser.add_argument('-a_ice',default=eb_prms.albedo_ice,action='store',type=float,
                         help='Broadband albedo of ice')
