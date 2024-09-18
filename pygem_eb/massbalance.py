@@ -360,7 +360,8 @@ class massBalance():
         snow_firn_idx = np.concatenate([layers.snow_idx,layers.firn_idx])
         # **** BYPASS SUPERIMPOSED ICE
         if len(snow_firn_idx) > 0 and snow_firn_idx[0] != 0:
-            snow_firn_idx = np.arange(0,snow_firn_idx[-1]+1)
+            snow_firn_idx = np.arange(0,snow_firn_idx[-1]+2)
+            print('got superimposed ice',snow_firn_idx,layers.ltype,layers.ldensity)
         ldm = layers.ldrymass.copy()[snow_firn_idx]
         lw = layers.lwater.copy()[snow_firn_idx]
         lh = layers.lheight.copy()[snow_firn_idx]
@@ -369,7 +370,7 @@ class massBalance():
         # Initialize variables
         initial_mass = np.sum(layers.ldrymass + layers.lwater)
         rain_bool = rainfall > 0
-        runoff = 0
+        runoff = 0  # any flow that leaves the point laterally
 
         # Get completsely melted layers
         if self.melted_layers != 0:
@@ -408,7 +409,7 @@ class massBalance():
                     lim = DENSITY_WATER*lh[next]/dt * (1-theta_ice[next]-theta_liq[next])
                 else: # no limit on bottom layer (1e6 sufficiently high)
                     lim = 1e6
-                # check limit based on water in the current layer
+                # cannot have more flow out than flow in + existing water
                 lim = min(q_in + lw[layer],lim)
                 q_out = min(qi,lim)
 
@@ -416,6 +417,13 @@ class massBalance():
                 lw[layer] += (q_in - q_out)*dt
                 q_in_store.append(q_in)
                 q_out_store.append(q_out)
+
+                # layer cannot contain more water than there is pore space
+                layer_porosity = 1 - ldm[layer] / (lh[layer]*DENSITY_ICE)
+                water_lim = lh[layer]*layer_porosity*DENSITY_WATER
+                if lw[layer] > water_lim:
+                    runoff += lw[layer] - water_lim
+                    lw[layer] = water_lim
 
             # LAYERS OUT
             layers.lheight[snow_firn_idx] = lh

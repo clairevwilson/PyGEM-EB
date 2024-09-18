@@ -10,8 +10,8 @@ conda activate eb_env
 
 # Define the argument file and check if it has the right number of rows
 ARG_FILE="args.txt"
-EXPECTED_ROWS = 45 # should match SBATCH --array above
-if [[ -f "$ARG_FILE" ]]; then
+EXPECTED_ROWS=45 # should match SBATCH --array above
+if [[ -f $ARG_FILE ]]; then
     # Get the number of rows (lines) in the file
     ROW_COUNT=$(wc -l < "$ARG_FILE")
 
@@ -28,7 +28,7 @@ if [[ ! -f $ARG_FILE ]]; then
     for k_snow in "VanDusen" "Sturm" "Douville" "Jansson" "OstinAndersson"; do
         for a_ice in 0.4 0.5 0.6; do
             for site in "AB" "B" "D"; do
-                echo "-k_ice=$k_ice -k_snow=$k_snow -a_ice=$a_ice -site=$site" >> $ARG_FILE
+                echo "-k_snow=$k_snow -a_ice=$a_ice -site=$site" >> $ARG_FILE
             done
         done
     done

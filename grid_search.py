@@ -28,26 +28,25 @@ args.startdate = pd.to_datetime('2000-04-20 00:00:00')
 args.enddate = pd.to_datetime('2022-05-21 12:00:00')
 
 # Get parameters
-k_ice = args.k_ice
 k_snow = args.k_snow
 a_ice = args.a_ice
 site = args.site
 assert site != 'AWS', 'add flag for site'
 
 path_out = os.getcwd() + '/../Output'
-eb_prms.output_name = f'{path_out}/EB/kice{k_ice}_ksnow{k_snow}_aice{a_ice}_site{site}_'
+eb_prms.output_name = f'{path_out}/EB/ksnow{k_snow}_aice{a_ice}_site{site}_'
+print(f'{eb_prms.output_name}0.nc')
 
 if not os.path.exists(f'{eb_prms.output_name}0.nc'):
     # initialize the model
     climate = sim.initialize_model(args.glac_no[0],args)
 
     # specify attributes for output file
-    store_attrs = {'k_ice':str(k_ice),'k_snow':str(k_snow),
-                    'a_ice':str(a_ice)}
+    store_attrs = {'k_snow':str(k_snow),'a_ice':str(a_ice)}
     
     # run the model
     print(f'Beginning run for site {site} with:')
-    print(f'       kice: {k_ice}    ksnow: {k_snow}    aice: {a_ice}')
+    print(f'     ksnow: {k_snow}    aice: {a_ice}')
     massbal = mb.massBalance(args,climate)
     massbal.main()
 

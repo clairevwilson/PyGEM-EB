@@ -178,9 +178,9 @@ grainsize_ds = xr.open_dataset(grainsize_fp)
 sky_view = 0.936
 kp = 1
 # play with
-albedo_ice = 0.5            # albedo of ice [-] 
-kcond_ice = 2.5             # thermal conductivity of ice
-kcond_snow = 0.5            # thermal conductivity of snow
+albedo_ice = 0.6            # albedo of ice [-] 
+kcond_ice = 1.5             # thermal conductivity of ice
+kcond_snow = 0.6            # thermal conductivity of snow
 Boone_c1 = 2.7e-6           # s-1 (2.7e-6) --> 2.7e-4
 Boone_c5 = 0.018            # m3 kg-1 (0.018) --> 0.07
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
