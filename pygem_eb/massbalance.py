@@ -355,13 +355,16 @@ class massBalance():
         DENSITY_ICE = eb_prms.density_ice
         FRAC_IRREDUC = eb_prms.Sr
         dt = self.dt
+
+        # Get index of percolating layers (snow and firn)
+        snow_firn_idx = np.concatenate([layers.snow_idx,layers.firn_idx])
+        if len(snow_firn_idx) > 0 and layers.ice_idx[0] < snow_firn_idx[-1]:
+            if layers.ice_idx[0] != 0: # impermeable ice layer
+                snow_firn_idx = snow_firn_idx[:layers.ice_idx[0]]
+            else: # surface ice layer: all water runs off
+                snow_firn_idx = []
         
         # LAYERS IN
-        snow_firn_idx = np.concatenate([layers.snow_idx,layers.firn_idx])
-        # **** BYPASS SUPERIMPOSED ICE
-        if len(snow_firn_idx) > 0 and snow_firn_idx[0] != 0:
-            snow_firn_idx = np.arange(0,snow_firn_idx[-1]+2)
-            print('got superimposed ice',snow_firn_idx,layers.ltype,layers.ldensity)
         ldm = layers.ldrymass.copy()[snow_firn_idx]
         lw = layers.lwater.copy()[snow_firn_idx]
         lh = layers.lheight.copy()[snow_firn_idx]
@@ -370,9 +373,9 @@ class massBalance():
         # Initialize variables
         initial_mass = np.sum(layers.ldrymass + layers.lwater)
         rain_bool = rainfall > 0
-        runoff = 0  # any flow that leaves the point laterally
+        runoff = 0  # Any flow that leaves the point laterally
 
-        # Get completsely melted layers
+        # Get completely melted layers
         if self.melted_layers != 0:
             water_in = rainfall + np.sum(self.melted_layers.mass)
         else:
@@ -390,19 +393,23 @@ class massBalance():
             lh -= layermelt_sf / layers.ldensity[snow_firn_idx]
             lw += layermelt_sf
 
-            # initialize flow into the top layer
+            # Initialize flow into the top layer
             q_out = water_in / dt
             q_in_store = []
             q_out_store = []
             for layer in snow_firn_idx:
-                # set flow in equal to flow out of the previous layer
+                # Set flow in equal to flow out of the previous layer
                 q_in = q_out
 
-                # calculate flow out of layer i (cannot be negative)
-                flow_out = DENSITY_WATER*lh[layer]/dt * (
-                    theta_liq[layer]-FRAC_IRREDUC*porosity[layer])
-                qi = max(0,flow_out)
-
+                # Calculate flow out of layer i
+                try:
+                    q_out = DENSITY_WATER*lh[layer]/dt * (
+                        theta_liq[layer]-FRAC_IRREDUC*porosity[layer])
+                except:
+                    print(lh,snow_firn_idx,layers.ldensity[snow_firn_idx])
+                    assert 1==0
+                
+                # Check limits on flow out (q_out)
                 # check limit of qi based on underlying layer holding capacity
                 if layer < len(porosity) - 1 and theta_liq[layer] <= 0.3:
                     next = layer+1
@@ -410,8 +417,10 @@ class massBalance():
                 else: # no limit on bottom layer (1e6 sufficiently high)
                     lim = 1e6
                 # cannot have more flow out than flow in + existing water
-                lim = min(q_in + lw[layer],lim)
-                q_out = min(qi,lim)
+                lim = min(lim,q_in + lw[layer])
+                q_out = min(q_out,lim)
+                # cannot be negative
+                q_out = max(0,q_out)
 
                 # layer mass balance
                 lw[layer] += (q_in - q_out)*dt
@@ -421,7 +430,7 @@ class massBalance():
                 # layer cannot contain more water than there is pore space
                 layer_porosity = 1 - ldm[layer] / (lh[layer]*DENSITY_ICE)
                 water_lim = lh[layer]*layer_porosity*DENSITY_WATER
-                if lw[layer] > water_lim:
+                if lw[layer] > water_lim: # excess runs off
                     runoff += lw[layer] - water_lim
                     lw[layer] = water_lim
 
@@ -436,8 +445,9 @@ class massBalance():
 
             # Diffuse LAPs 
             if self.args.switch_LAPs == 1:
-                self.diffuse_LAPs(layers,np.array(q_out_store),enbal,rain_bool)
-            
+                self.diffuse_LAPs(np.array(q_out_store),
+                                  enbal,layers,rain_bool,
+                                  snow_firn_idx)
         else:
             # No percolation, but need to move melt to runoff
             layers.ldrymass -= layermelt
@@ -455,7 +465,7 @@ class massBalance():
 
         return runoff
         
-    def diffuse_LAPs(self,layers,q_out,enbal,rain_bool):
+    def diffuse_LAPs(self,q_out,enbal,layers,rain_bool,snow_firn_idx):
         """
         Diffuses LAPs vertically through the snow and firn layers based on
         inter-layer water fluxes from percolation.
@@ -478,29 +488,30 @@ class massBalance():
         dt = eb_prms.dt
 
         # LAYERS IN
-        snow_firn_idx = np.concatenate([layers.snow_idx,layers.firn_idx])
         lw = layers.lwater[snow_firn_idx]
         ldm = layers.ldrymass[snow_firn_idx]
 
-        # mBC/mdust is layer mass of species in kg m-2
+        # Layer mass of each species in kg m-2
         mBC = layers.lBC[snow_firn_idx]
         mdust = layers.ldust[snow_firn_idx]
 
-        # get wet deposition into top layer if it's raining
+        # Get wet deposition into top layer if it's raining
         if rain_bool and eb_prms.switch_LAPs == 1: # Switch runs have no BC
             mBC[0] += enbal.bcwet * dt * DEP_FACTOR
             mdust[0] += enbal.dustwet * eb_prms.ratio_DU3_DUtot * dt
 
-        # cBC/cdust is layer mass mixing ratio in kg kg-1
+        # Layer mass mixing ratio in kg kg-1
         cBC = mBC / (lw + ldm)
         cdust = mdust / (lw + ldm)
 
+        # Add LAPs from fully melted layers
         if self.melted_layers != 0:
             m_BC_in_top = np.array(np.sum(self.melted_layers.BC) / dt)
             m_dust_in_top = np.array(np.sum(self.melted_layers.dust) / dt)
         else:
             m_BC_in_top = np.array([0],dtype=float) 
             m_dust_in_top = np.array([0],dtype=float)
+        # Incoming aqu
         m_BC_in_top *= PARTITION_COEF_BC
         m_dust_in_top *= PARTITION_COEF_DUST
 
@@ -983,13 +994,13 @@ class Output():
         self.airtemp_output.append(float(enbal.tempC))
         self.surftemp_output.append(float(surface.stemp))
 
-        self.layertemp_output[step] = layers.ltemp
-        self.layerwater_output[step] = layers.lwater
-        self.layerheight_output[step] = layers.lheight
-        self.layerdensity_output[step] = layers.ldensity
+        self.layertemp_output[step] = layers.ltemp.copy()
+        self.layerwater_output[step] = layers.lwater.copy()
+        self.layerheight_output[step] = layers.lheight.copy()
+        self.layerdensity_output[step] = layers.ldensity.copy()
         self.layerBC_output[step] = layers.lBC / layers.lheight * 1e6
         self.layerdust_output[step] = layers.ldust / layers.lheight * 1e3
-        self.layergrainsize_output[step] = layers.grainsize
+        self.layergrainsize_output[step] = layers.grainsize.copy()
 
     def store_data(self):
         with xr.open_dataset(self.out_fn) as dataset:
@@ -1047,6 +1058,7 @@ class Output():
                 ds['layergrainsize'].values = layergrainsize_output
 
         ds.to_netcdf(self.out_fn)
+        print(ds.layergrainsize.sel(time=pd.to_datetime('2000-05-12 07:00:00')).values)
         return ds
     
     def add_vars(self):

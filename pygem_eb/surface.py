@@ -70,7 +70,7 @@ class Surface():
         """
         self.stype = layers.ltype[0]
         if self.args.switch_melt == 2 and layers.nlayers > 2:
-            layers.get_grain_size(airtemp,surftemp)
+            layers.get_grain_size(airtemp,surftemp,time)
         self.days_since_snowfall = (time - self.snow_timestamp)/pd.Timedelta(days=1)
         self.get_surr_albedo(layers,time)
         return

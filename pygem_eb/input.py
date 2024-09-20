@@ -86,6 +86,7 @@ snicar_input_fp = main_directory + '/biosnicar-py/biosnicar/inputs.yaml'
 shading_fp = main_directory + f'/shading/out/{glac_name}{site}_shade.csv'
 temp_bias_fp = main_directory + '/pygem_eb/sample_data/Gulkana/Gulkana_MERRA2_temp_bias.csv'
 albedo_out_fp = main_directory + '/../Output/EB/albedo.csv'
+dep_factor = 1 # multiplicative factor to adjust MERRA-2 deposition
 
 # ========== CLIMATE AND TIME INPUTS ========== 
 reanalysis = 'MERRA2' # 'MERRA2' (or 'ERA5-hourly' -- BROKEN)
@@ -131,7 +132,7 @@ if 6 < startdate.month < 9:         # initialize without snow
     initial_snowdepth = 0
 
 # OUTPUT
-store_vars = ['MB','EB']  # Variables to store of the possible set: ['MB','EB','Temp','Layers']
+store_vars = ['MB','EB','Temp','Layers']  # Variables to store of the possible set: ['MB','EB','Temp','Layers']
 store_bands = False     # Store spectral albedo .csv
 store_climate = False    # Store climate dataset .nc
 
@@ -179,10 +180,10 @@ sky_view = 0.936
 kp = 1
 # play with
 albedo_ice = 0.6            # albedo of ice [-] 
-kcond_ice = 1.5             # thermal conductivity of ice
-kcond_snow = 0.6            # thermal conductivity of snow
+kcond_ice = 2               # thermal conductivity of ice
+kcond_snow = 0.2            # thermal conductivity of snow
 Boone_c1 = 2.7e-6           # s-1 (2.7e-6) --> 2.7e-4
-Boone_c5 = 0.018            # m3 kg-1 (0.018) --> 0.07
+Boone_c5 = 0.07             # m3 kg-1 (0.018) --> 0.07
 firn_grainsize = 2000       # firn grain size in um
 ice_grainsize = 5000        # ice grain size in um (placeholder)
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
@@ -198,7 +199,6 @@ ksp_dust = 0.2              # 0.015 meltwater scavenging efficiency of dust (fro
 roughness_aging_rate = 0.1  # effect of aging on roughness length: 60 days from 0.24 to 4.0 => 0.06267
 albedo_TOD = [12]           # List of time(s) of day to calculate albedo [hr] 
 initSSA = 80                # initial estimate of Specific Surface Area of fresh snowfall (interpolation tables)
-dep_factor = 1              # multiplicative factor to adjust MERRA-2 deposition
 BC_freshsnow = 9e-7         # concentration of BC in fresh snow [kg m-3]
 dust_freshsnow = 6e-4       # concentration of dust in fresh snow [kg m-3]
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
@@ -237,7 +237,7 @@ temp_temp = 0               # temperature of temperate ice [C]
 temp_depth = 100             # depth of temperate ice [m]
 albedo_fresh_snow = 0.9     # Albedo of fresh snow [-] (Moelg et al. 2012, TC - 0.85)
 albedo_firn = 0.55          # Albedo of firn [-]
-albedo_ground = 0.1         # Albedo of ground [-]
+albedo_ground = 0.2         # Albedo of ground [-]
 roughness_fresh_snow = 0.24 # surface roughness length for fresh snow [mm] (Moelg et al. 2012, TC)
 roughness_firn = 4          # surface roughness length for firn [mm] (Moelg et al. 2012, TC)
 ratio_BC2_BCtot = 2.08      # Ratio to transform BC bin 2 deposition to total BC

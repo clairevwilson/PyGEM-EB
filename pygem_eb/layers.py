@@ -589,7 +589,7 @@ class Layers():
         self.update_layer_props()
         return 
 
-    def get_grain_size(self,airtemp,surftemp):
+    def get_grain_size(self,airtemp,surftemp,time):
         """
         Snow grain size metamorphism
         """
@@ -615,8 +615,6 @@ class Layers():
             refreeze = self.lrefreeze[idx]
             new_snow = self.lnewsnow[idx]
             old_snow = self.ldrymass[idx] - refreeze - new_snow
-            if np.any(old_snow) < 0:
-                print('overloaded new mass',refreeze,new_snow,self.ldrymass[idx])
             f_old = old_snow / self.ldrymass[idx]
             f_new = new_snow / self.ldrymass[idx]
             f_rfz = refreeze / self.ldrymass[idx]
@@ -626,12 +624,12 @@ class Layers():
             T = self.ltemp.copy()[idx] + 273.15
             surftempK = surftemp + 273.15
             p = self.ldensity.copy()[idx]
-            g = self.grainsize.copy()[idx]
+            grainsize = self.grainsize.copy()[idx]
 
             # Dry metamorphism
             if eb_prms.constant_drdry:
                 drdry = np.ones(len(idx))*eb_prms.constant_drdry * dt # um
-                drdry[np.where(g>RFZ_GRAINSIZE)[0]] = 0
+                drdry[np.where(grainsize>RFZ_GRAINSIZE)[0]] = 0
             else:
                 # Calculate temperature gradient
                 dTdz = np.zeros_like(T)
@@ -677,22 +675,24 @@ class Layers():
                 #     dr0 = self.dr0_rf.predict(X)
 
                 # Dry metamorphism
-                if np.any(g < FRESH_GRAINSIZE):
-                    drdrydt = dr0*np.power(tau/(tau + 1e-6),1/kap)/3600
-                else:
-                    drdrydt = dr0*np.power(tau/(tau + g - FRESH_GRAINSIZE),1/kap)/3600
-                drdry = drdrydt * dt
+                drdrydt = []
+                for r,t,k,g in zip(dr0,tau,kap,grainsize):
+                    if t + g < FRESH_GRAINSIZE:
+                        drdrydt.append(r*np.power(t/(t + 1e-6),1/k)/3600)
+                    else:
+                        drdrydt.append(r*np.power(t/(t + g - FRESH_GRAINSIZE),1/k)/3600)
+                drdry = np.array(drdrydt) * dt
 
             # Wet metamorphism
-            drwetdt = WET_C*f_liq**3/(4*PI*(g/1e6)**2)
+            drwetdt = WET_C*f_liq**3/(4*PI*(grainsize/1e6)**2)
             drwet = drwetdt * dt * 1e6
 
             # Get change in grain size due to aging
-            aged_grainsize = g + drdry + drwet
-           
+            aged_grainsize = grainsize + drdry + drwet
+                      
             # Sum contributions of old snow, new snow and refreeze
             grainsize = aged_grainsize*f_old + FRESH_GRAINSIZE*f_new + RFZ_GRAINSIZE*f_rfz
-            
+
             # Enforce maximum grainsize
             grainsize[np.where(grainsize > FIRN_GRAINSIZE)[0]] = FIRN_GRAINSIZE
             self.grainsize[idx] = grainsize

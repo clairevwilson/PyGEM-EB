@@ -393,6 +393,7 @@ def compare_runs(ds_list,time,labels,var,res='d',t=''):
     fig,ax = plt.subplots(figsize=(6,3))
     start = pd.to_datetime(time[0])
     end = pd.to_datetime(time[1])
+    time_sel = pd.date_range(start,end,freq='h')
     if len(time) == 2 and res != 'd':
         # start += pd.Timedelta(minutes=30)
         # end -= pd.Timedelta(minutes=30)
@@ -403,11 +404,11 @@ def compare_runs(ds_list,time,labels,var,res='d',t=''):
     else:
         time = pd.date_range(start,end,normalize=True)
     for i,ds in enumerate(ds_list):
+        ds = ds.sel(time=time_sel)
         c = plt.cm.Dark2(i)
         if res != 'h':
             if var in ['melt','runoff','refreeze','accum','MB','dh']:
                 ds_resampled = ds[var].resample(time=res).sum()
-                print(time,ds_resampled)
                 to_plot = ds_resampled.sel(time=time).cumsum()
             elif 'layer' in var:
                 ds_resampled = ds.resample(time=res).mean()
@@ -1063,7 +1064,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
         elif var in ['layerwater']:
             bounds = [-1,6]
         elif var in ['layertemp']:
-            bounds = [-14,0]
+            bounds = [-25,0]
         elif var in ['layergrainsize']:
             bounds = [50,1500]
         dens_lim = 890 if plot_firn else 600
