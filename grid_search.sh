@@ -25,14 +25,22 @@ fi
 # If file doesn't exist, create list of args
 if [[ ! -f $ARG_FILE ]]; then
     > $ARG_FILE
-    for k_snow in "VanDusen" "Sturm" "Douville" "Jansson" "OstinAndersson"; do
-        for a_ice in 0.4 0.5 0.6; do
-            for site in "AB" "B" "D"; do
-                echo "-k_snow=$k_snow -a_ice=$a_ice -site=$site" >> $ARG_FILE
-            done
+    for kw in 0.25 0.5 0.75 1; do
+        for site in "AB" "B" "D"; do
+            echo "-kw=$kw -site=$site" >> $ARG_FILE
         done
     done
 fi
+# if [[ ! -f $ARG_FILE ]]; then
+#     > $ARG_FILE
+#     for k_snow in "VanDusen" "Sturm" "Douville" "Jansson" "OstinAndersson"; do
+#         for a_ice in 0.4 0.5 0.6; do
+#             for site in "AB" "B" "D"; do
+#                 echo "-k_snow=$k_snow -a_ice=$a_ice -site=$site" >> $ARG_FILE
+#             done
+#         done
+#     done
+# fi
 
 # Run the job array with srun
 srun bash -c '
@@ -44,5 +52,5 @@ srun bash -c '
     
     # Run the Python script with the unique argument
     cd ../research/PyGEM-EB/
-    python grid_search.py $ARG -task_id $TASK_ID
+    python run_param_set.py $ARG -task_id $TASK_ID
 '

@@ -866,7 +866,7 @@ class Output():
         ----------
         """
         # Get unique filename (or scratch filename)
-        self.out_fn = eb_prms.output_name
+        self.out_fn = eb_prms.output_filepath + args.out
         if eb_prms.new_file:
             i = 0
             while os.path.exists(self.out_fn+f'{i}.nc'):
@@ -1058,7 +1058,6 @@ class Output():
                 ds['layergrainsize'].values = layergrainsize_output
 
         ds.to_netcdf(self.out_fn)
-        print(ds.layergrainsize.sel(time=pd.to_datetime('2000-05-12 07:00:00')).values)
         return ds
     
     def add_vars(self):

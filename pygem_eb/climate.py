@@ -102,7 +102,7 @@ class Climate():
         for var in self.measured_vars:
             data = df[var]
             # adjust elevation-dependent variables
-            if var in ['temp','tp','sp']:
+            if var in ['temp','tp','sp','wind']:
                 data = self.elev_adjust(data, var, self.AWS_elev)
                 varname = var
             else:
@@ -234,6 +234,10 @@ class Climate():
             # temp_data = self.cds['temp']
             # out[idx,:] = data*np.power((data + eb_prms.lapserate*(z-elev_data)+273.15)/(temp_data+273.15),
             #                 -eb_prms.gravity*eb_prms.molarmass_air/(eb_prms.R_gas*eb_prms.lapserate))
+        
+        # WIND SPEED
+        elif var == 'wind':
+            out = data*self.args.kw
         return out
     
     def check_ds(self):

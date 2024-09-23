@@ -37,6 +37,8 @@ def get_args(parse=True):
                         help='use threading to import climate data?')
     parser.add_argument('-store_data', action='store_true', 
                         help='store the model output?')
+    parser.add_argument('-out',action='store',type=str,
+                        help='Output file name excluding extension')
     parser.add_argument('-new_file', action='store_true',
                         default=eb_prms.new_file, help='')
     parser.add_argument('-debug', action='store_true', 
@@ -51,6 +53,8 @@ def get_args(parse=True):
                         help='Thermal conductivity of snow')
     parser.add_argument('-a_ice',default=eb_prms.albedo_ice,action='store',type=float,
                         help='Broadband albedo of ice')
+    parser.add_argument('-kw',default=eb_prms.wind_factor,action='store',type=float,
+                        help='Multiplicative wind factor')
     parser.add_argument('-task_id',default=-1,type=int,
                         help='Task ID if submitted as batch job')
     parser.add_argument('-f', '--fff', help='Dummy arg to fool ipython', default='1')
