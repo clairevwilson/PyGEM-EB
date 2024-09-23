@@ -51,7 +51,7 @@ class Surface():
         if args.task_id != -1:
             self.snicar_fn = os.getcwd() + f'/biosnicar-py/biosnicar/inputs_{args.task_id}.yaml'
             if not os.path.exists(self.snicar_fn):
-                self.reset_snicar(self.snicar_fn)
+                self.reset_SNICAR(self.snicar_fn)
         else:
             self.snicar_fn = eb_prms.snicar_input_fp
         return

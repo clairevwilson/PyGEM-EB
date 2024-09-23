@@ -64,7 +64,7 @@ class massBalance():
             self.time = time
 
             # Initiate the energy balance to unpack climate data
-            enbal = eb.energyBalance(self.climate,time,dt)
+            enbal = eb.energyBalance(self.climate,time,dt,self.args)
 
             # Get rain and snowfall amounts [kg m-2]
             rain,snowfall = self.get_precip(enbal)
@@ -1101,7 +1101,9 @@ class Output():
         props = eb_prms.glac_props[eb_prms.glac_no[0]]
         if args.use_AWS:
             measured = climate.measured_vars
-            AWS_str = props['name']+' '+str(props['site_elev'])+': '
+            AWS_name = props['name']
+            AWS_elev = climate.AWS_elev
+            AWS_str = f'{AWS_name} {AWS_elev}: '
             AWS_str += ', '.join(measured)
             re_vars = [e for e in climate.all_vars if e not in measured]
             re_str += ', '.join(re_vars)

@@ -144,7 +144,7 @@ method_heateq = 'Crank-Nicholson'       # 'Crank-Nicholson'
 method_densification = 'Boone'          # 'Boone', 'HerronLangway', 'Kojima'
 method_cooling = 'iterative'            # 'minimize' (slow) or 'iterative' (fast)
 method_ground = 'MolgHardy'             # 'MolgHardy'
-method_conductivity = 'OstinAndersson'  # 'OstinAndersson', 'VanDusen','Sturm','Douville','Jansson'
+method_conductivity = 'Sturm'           # 'Sturm','Douville','Jansson'
 # method_grainsizetable = 'interpolate' # unused
 
 # CONSTANT SWITCHES
@@ -181,9 +181,9 @@ dep_factor = 1 # multiplicative factor to adjust MERRA-2 deposition
 wind_factor = 1             # multiplicative wind scaling factor
 albedo_ice = 0.6            # albedo of ice [-] 
 kcond_ice = 2               # thermal conductivity of ice
-kcond_snow = 0.05            # thermal conductivity of snow
+kcond_snow = 0.05           # thermal conductivity of snow
 Boone_c1 = 2.7e-6           # s-1 (2.7e-6) --> 2.7e-4
-Boone_c5 = 0.05             # m3 kg-1 (0.018) --> 0.07
+Boone_c5 = 0.018            # m3 kg-1 (0.018) --> 0.07
 firn_grainsize = 2000       # firn grain size in um
 ice_grainsize = 5000        # ice grain size in um (placeholder)
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]

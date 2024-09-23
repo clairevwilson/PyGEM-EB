@@ -16,7 +16,7 @@ class energyBalance():
     MassBalance every timestep, so it stores the current climate data and 
     surface fluxes.
     """ 
-    def __init__(self,climate,time,dt):
+    def __init__(self,climate,time,dt,args):
         """
         Loads in the climate data at a given timestep to use in the surface energy balance.
 
@@ -55,6 +55,7 @@ class energyBalance():
         self.climateds = climate.cds
         self.time = time
         self.rH = 100 if self.rH > 100 else self.rH
+        self.wind *= args.kw
 
         # Radiation terms
         self.measured_SWin = 'SWin' in climate.measured_vars

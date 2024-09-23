@@ -38,8 +38,8 @@ def get_args(parse=True):
     parser.add_argument('-store_data', action='store_true', 
                         help='store the model output?')
     parser.add_argument('-out',action='store',type=str,
-                        help='Output file name excluding extension')
-    parser.add_argument('-new_file', action='store_true',
+                        help='Output file name EXCLUDING extension (.nc)')
+    parser.add_argument('--new_file', action='store_true',
                         default=eb_prms.new_file, help='')
     parser.add_argument('-debug', action='store_true', 
                         default=eb_prms.debug, help='')
@@ -55,6 +55,8 @@ def get_args(parse=True):
                         help='Broadband albedo of ice')
     parser.add_argument('-kw',default=eb_prms.wind_factor,action='store',type=float,
                         help='Multiplicative wind factor')
+    parser.add_argument('-n','--n_simultaneous_processes',default=1,type=int,
+                        help='Number of parallel processes to run')
     parser.add_argument('-task_id',default=-1,type=int,
                         help='Task ID if submitted as batch job')
     parser.add_argument('-f', '--fff', help='Dummy arg to fool ipython', default='1')
@@ -155,8 +157,8 @@ def run_model(climate,args,store_attrs=None):
     
     return out
 
-args = get_args()
 if __name__ == '__main__':
+    args = get_args()
     for gn in args.glac_no:
         climate = initialize_model(gn,args)
         time_elapsed = time.time()-start_time
