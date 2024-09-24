@@ -32,7 +32,7 @@ args.use_AWS = True                 # Use available AWS data
 args.debug = False                  # Don't need debug prints
 eb_prms.store_vars = ['MB','EB']    # Only store mass and energy balance results
 args.startdate = pd.to_datetime('2000-04-20 00:00:00')
-args.enddate = pd.to_datetime('2000-05-21 12:00:00')
+args.enddate = pd.to_datetime('2022-05-21 12:00:00')
 
 # Initialize the model
 climate = sim.initialize_model(args.glac_no[0],args)
