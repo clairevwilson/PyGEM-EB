@@ -2,49 +2,23 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import os, sys
-from pygem_eb.processing.plotting_fxns import *
-
-class HiddenPrints:
-    """
-    Class to hide prints when running SNICAR
-    """
-    def __enter__(self):
-        self._original_stdout = sys.stdout
-        sys.stdout = open(os.devnull, 'w')
-
-    def __exit__(self,exc_type, exc_val, exc_tb):
-        sys.stdout.close()
-        sys.stdout = self._original_stdout
-        return
-    
-# import model
+from pygem_eb.processing.objectives import *
 import pygem_eb.input as eb_prms
-eb_prms.startdate = pd.to_datetime('2023-04-18 00:30')
-eb_prms.enddate = eb_prms.startdate + pd.Timedelta(hours=2)
-eb_prms.new_file = False
-eb_prms.debug = False
-with HiddenPrints():
-    import run_simulation_eb as sim
-    eb_prms.store_data = True
+import run_simulation_eb as sim
 
-    # read command line args
-    args = sim.get_args()
-    args.startdate = pd.to_datetime('2023-04-18 00:30') # snow sample dates
-    args.enddate = pd.to_datetime('2023-07-08 00:30')
-    # initialize the model
-    climate = sim.initialize_model(args.glac_no[0],args)
+# ===== DATA FILEPATHS =====
+# A. Long run: seasonal mass balance data
+base = '/home/claire/research/MB_data/'
+data_fp_USGS = base + 'Gulkana/Input_Gulkana_Glaciological_Data.csv'
+# B. 2023 run
+data_fp_2023 = base + 'Stakes/gulkanaAB23_ALL.csv'
+# C. 2024 run
+data_fp_2024 = base + 'Stakes/gulkana24_ALL.csv'
 
-# ===== CALIBRATION DATA =====
-# GULKANA
-# surface height change
-stake_df = pd.read_csv('~/research/MB_data/Stakes/gulkanaAB23_ALL.csv')
-stake_df.index = pd.to_datetime(stake_df['Date'])
-dates_index = pd.date_range(args.startdate,args.enddate) - pd.Timedelta(minutes=30)
-stake_df = stake_df.loc[dates_index]
-stake_df['CMB'] -= stake_df['CMB'].iloc[0]
-
-# objective function
-objective = lambda model,data: np.mean(np.abs(model - data))
+# ===== OBJECTIVE FUNCTION =====
+# def objective(parameter):
+#     if param_name == 'a_ice':
+#         args
 
 low = 3e-6
 high = 3e-4

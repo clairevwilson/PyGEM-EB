@@ -248,10 +248,14 @@ class Climate():
             self.cds['wind'].values = wind
             self.cds['winddir'].values = winddir
 
-        # adjust MERRA-2 temperature bias (varies by month of the year)
+        # add MERRA-2 temperature bias
         temp_filled = True if not self.args.use_AWS else 'temp' in self.need_vars
         if eb_prms.temp_bias_adjust and temp_filled:
             self.adjust_temp_bias()
+        
+        # adjust MERRA-2 deposition by reduction coefficient
+        if eb_prms.reanalysis == 'MERRA2':
+            self.adjust_dep()
 
         # check all variables are there
         failed = []
@@ -259,28 +263,34 @@ class Climate():
             data = self.cds[var].values
             if np.all(np.isnan(data)):
                 failed.append(var)
+        # can input net radiation instead of incoming longwave
         if 'LWin' in failed and 'NR' in self.measured_vars:
             failed.drop('LWin')
         if len(failed) > 0:
             print('Missing data:',failed)
             quit()
 
+        # store the dataset as a netCDF
         if eb_prms.store_climate:
-            name = eb_prms.glac_name
-            out_fp = eb_prms.output_name.replace(name,name+'_climate')
+            out_fp = self.args.out + '_climate'
             self.cds.to_netcdf(out_fp+'.nc')
             print('Climate dataset saved to ',out_fp+'.nc')
         return
     
     def check_units(self,var,ds):
+        # Define the units the model needs
         model_units = {'temp':'C','uwind':'m s-1','vwind':'m s-1',
                        'rh':'%','sp':'Pa','tp':'m s-1','elev':'m',
                        'SWin':'J m-2', 'LWin':'J m-2', 'tcc':'1',
                        'bcdry':'kg m-2 s-1', 'bcwet':'kg m-2 s-1',
                        'dustdry':'kg m-2 s-1', 'dustwet':'kg m-2 s-1'}
+        
+        # Get the current variable's units
         vn = list(ds.keys())[0]
         units_in =  ds[vn].attrs['units'].replace('*','')
         units_out = model_units[var]
+
+        # Check and make replacements
         if units_in != units_out:
             if var == 'temp' and units_in == 'K':
                 ds[vn] = ds[vn] - 273.15
@@ -300,11 +310,35 @@ class Climate():
             else:
                 print(f'WARNING: units did not match for {var} but were not updated')
                 print(f'Previously {units_in}; should be {units_out}')
-                print('Make a manual change in utils.py')
+                print('Make a manual change in check_units (climate.py)')
                 quit()
         return ds
     
+    def adjust_dep(self):
+        """
+        Updates deposition based on preprocessed reduction coefficients
+        """
+        fn = self.reanalysis_fp + 'merra2_to_ukesm_conversion_map_MERRAgrid.nc'
+        ds_f = xr.open_dataarray(fn)
+        ds_f = ds_f.sel({self.lat_vn:self.lat,self.lon_vn:self.lon},method='nearest')
+        for date in ds_f.time.values:
+            # select the reduction coefficient of the current month
+            f = ds_f.sel(time=date).values[0]
+            # index the climate dataset by the month and year
+            month = pd.to_datetime(date).month
+            year = pd.to_datetime(date).year
+            idx_month = np.where(self.cds.coords['time'].dt.month.values == month)[0]
+            idx_year = np.where(self.cds.coords['time'].dt.year.values == year)[0]
+            idx = list(set(idx_month)&set(idx_year))
+            # update dry and wet BC deposition
+            self.cds['bcdry'][{'time':idx}] = self.cds['bcdry'][{'time':idx}] * f
+            self.cds['bcwet'][{'time':idx}] = self.cds['bcwet'][{'time':idx}] * f
+        return
+    
     def adjust_temp_bias(self):
+        """
+        Updates air temperature according to preprocessed bias adjustments
+        """
         bias_df = pd.read_csv(eb_prms.temp_bias_fp)
         for month in bias_df.index:
             bias = bias_df.loc[month]['bias']

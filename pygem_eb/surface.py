@@ -32,7 +32,7 @@ class Surface():
         # Set initial albedo based on surface type
         self.albedo_dict = {'snow':eb_prms.albedo_fresh_snow,
                             'firn':eb_prms.albedo_firn,
-                            'ice':eb_prms.albedo_ice}
+                            'ice':args.a_ice}
         self.bba = self.albedo_dict[self.stype]
         self.albedo = [self.bba]
         self.spectral_weights = np.ones(1)

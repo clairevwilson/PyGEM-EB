@@ -37,7 +37,7 @@ def get_args(parse=True):
                         help='use threading to import climate data?')
     parser.add_argument('-store_data', action='store_true', 
                         help='store the model output?')
-    parser.add_argument('-out',action='store',type=str,
+    parser.add_argument('-out',action='store',type=str,default=eb_prms.output_name,
                         help='Output file name EXCLUDING extension (.nc)')
     parser.add_argument('--new_file', action='store_true',
                         default=eb_prms.new_file, help='')

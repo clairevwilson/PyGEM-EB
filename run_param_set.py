@@ -23,8 +23,8 @@ params = {'k_snow':['Sturm','Douville','Jansson'],
 n_runs = 3 # three sites
 for param in list(params.keys()):
     n_runs *= len(params[param])
-n_runs_per_process = n_runs // n_processes
-n_runs_with_extra = n_runs % n_processes
+n_runs_per_process = n_runs // n_processes  # Base number of runs per CPU
+n_runs_with_extra = n_runs % n_processes    # Number of CPUs with one extra run
 
 # Force some args
 args.store_data = True              # Ensures output is stored
@@ -45,6 +45,7 @@ for k_snow in params['k_snow']:
     for a_ice in params['a_ice']:
         for kw in params['kw']:
             for site in ['AB','B','D']:
+                # Get args for the current run
                 args_run = copy.deepcopy(args)
 
                 # Set parameters
@@ -59,7 +60,7 @@ for k_snow in params['k_snow']:
                 # Specify attributes for output file
                 store_attrs = {'k_snow':str(k_snow),'a_ice':str(a_ice),'kw':str(kw)}
 
-                # Check if moving to the next set
+                # Check if moving to the next set of runs
                 n_runs_set = n_runs_per_process + (0 if set_no < n_runs_with_extra else 0)
                 if run_no >= n_runs_set:
                     set_no += 1
@@ -98,5 +99,6 @@ def run_model_parallel(list_inputs):
             massbal.output.add_attrs(store_attrs)
     return
 
+# Run model in parallel
 with Pool(n_processes) as processes_pool:
     processes_pool.map(run_model_parallel,packed_vars)
