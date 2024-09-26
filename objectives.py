@@ -138,7 +138,7 @@ def seasonal_mass_balance(data_fp,ds,site='B',method='MAE',plot=False):
         return winter_error, summer_error
 
 # ========== 2. CUMULATIVE MASS BALANCE ==========
-def cumulative_mass_balance(data_fp,ds,method='RMSE',plot=False):
+def cumulative_mass_balance(data_fp,ds,site='AB',method='MAE',plot=False):
     """
     Compares cumulative mass balance measurements from
     a stake to a model output. 

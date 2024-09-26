@@ -19,7 +19,7 @@ use_AWS = False          # Use AWS data? (or just reanalysis)
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/gulkana_22yrs.csv'}, 
+                            'AWS_fn':'Preprocessed/CLAWS_2024_no_SWout.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -109,8 +109,8 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2000-04-21 00:00:00') 
-    enddate = pd.to_datetime('2022-05-21 12:00:00')
+    startdate = pd.to_datetime('2024-04-21 00:00:00') 
+    enddate = pd.to_datetime('2024-08-20 12:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
