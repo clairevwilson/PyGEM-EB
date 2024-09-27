@@ -129,16 +129,27 @@ class Climate():
         
         # get reanalysis data geopotential
         z_fp = self.reanalysis_fp + self.var_dict['elev']['fn']
-        z_vn = self.var_dict['elev']['vn']
-        zds = xr.open_dataset(z_fp)
+        zds = xr.open_dataarray(z_fp)
         zds = zds.sel({self.lat_vn:lat,self.lon_vn:lon},method='nearest')
         zds = self.check_units('elev',zds)
-        self.reanalysis_elev = zds.isel(time=0)[z_vn].values
+        self.reanalysis_elev = zds.isel(time=0).values
 
         # define worker function for threading
         def access_cell(fn, var, result_dict):
             # open and check units of climate data
             ds = xr.open_dataset(fn)
+
+            # index by lat and lon
+            vn = self.var_dict[var]['vn'] 
+            lat_vn,lon_vn = [self.lat_vn,self.lon_vn]
+            if 'bc' in var or 'dust' in var:
+                if eb_prms.reanalysis == 'ERA5-hourly':
+                    lat_vn,lon_vn = ['lat','lon']
+            ds = ds.sel({lat_vn:lat,lon_vn:lon}, method='nearest')[vn]
+
+            # check the units
+            ds = self.check_units(var,ds)
+
             if var != 'elev':
                 dep_var = 'bc' in var or 'dust' in var
                 if not dep_var and eb_prms.reanalysis == 'ERA5-hourly':
@@ -149,14 +160,7 @@ class Climate():
                     ds = ds.interp(time=dates)
                 else:
                     ds = ds.sel(time=dates)
-            ds = self.check_units(var,ds)
-            # index by lat and lon
-            vn = self.var_dict[var]['vn'] 
-            lat_vn,lon_vn = [self.lat_vn,self.lon_vn]
-            if 'bc' in var or 'dust' in var:
-                if eb_prms.reanalysis == 'ERA5-hourly':
-                    lat_vn,lon_vn = ['lat','lon']
-            ds = ds.sel({lat_vn:lat,lon_vn:lon}, method='nearest')[vn]
+            
             assert np.abs(ds.coords[lat_vn].values - float(lat)) <= 0.5, 'Wrong grid cell accessed'
             assert np.abs(ds.coords[lon_vn].values - float(lon)) <= 0.5, 'Wrong grid cell accessed'
             data = ds.values
@@ -286,27 +290,26 @@ class Climate():
                        'dustdry':'kg m-2 s-1', 'dustwet':'kg m-2 s-1'}
         
         # Get the current variable's units
-        vn = list(ds.keys())[0]
-        units_in =  ds[vn].attrs['units'].replace('*','')
+        units_in = ds.attrs['units'].replace('*','')
         units_out = model_units[var]
 
         # Check and make replacements
         if units_in != units_out:
             if var == 'temp' and units_in == 'K':
-                ds[vn] = ds[vn] - 273.15
+                ds = ds - 273.15
             elif var == 'rh' and units_in in ['1','0-1']:
-                ds[vn] = ds[vn] * 100
+                ds  = ds * 100
             elif var == 'tp':
                 if units_in == 'kg m-2 s-1':
-                    ds[vn] = ds[vn] / 1000 * 3600
+                    ds = ds / 1000 * 3600
                 elif units_in == 'm':
-                    ds[vn] = ds[vn] / 3600
+                    ds = ds / 3600
             elif var == 'SWin' and units_in == 'W m-2':
-                ds[vn] = ds[vn] * 3600
+                ds = ds * 3600
             elif var == 'LWin' and units_in == 'W m-2':
-                ds[vn] = ds[vn] * 3600
+                ds = ds * 3600
             elif var == 'elev' and units_in in ['m+2 s-2','m2 s-2']:
-                ds[vn] = ds[vn] / eb_prms.gravity
+                ds = ds / eb_prms.gravity
             else:
                 print(f'WARNING: units did not match for {var} but were not updated')
                 print(f'Previously {units_in}; should be {units_out}')

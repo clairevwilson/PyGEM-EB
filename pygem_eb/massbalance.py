@@ -924,14 +924,17 @@ class Output():
                     layer=(['layer'],np.arange(eb_prms.max_nlayers))
                     ))
         # Select variables from the specified input
-        vars_list = vn_dict[eb_prms.store_vars[0]]
-        for var in eb_prms.store_vars[1:]:
-            vars_list.extend(vn_dict[var])
-        self.vars_list = vars_list
+        if 'basic' in eb_prms.store_vars:
+            self.vars_list = ['melt','accum','refreeze','dh']
+        else:
+            vars_list = vn_dict[eb_prms.store_vars[0]]
+            for var in eb_prms.store_vars[1:]:
+                vars_list.extend(vn_dict[var])
+            self.vars_list = vars_list
         
         # Create the netcdf file to store output
         if args.store_data:
-            all_variables[vars_list].to_netcdf(self.out_fn)
+            all_variables[self.vars_list].to_netcdf(self.out_fn)
 
         # Initialize energy balance outputs
         self.SWin_output = []       # incoming shortwave [W m-2]
@@ -1064,22 +1067,22 @@ class Output():
         """
         Adds additional variables to the output dataset.
         
-        dh: surface height change [m]
         SWnet: net shortwave radiation flux [W m-2]
         LWnet: net longwave radiation flux [W m-2]
         NetRad: net radiation flux (SW and LW) [W m-2]
         """
-        with xr.open_dataset(self.out_fn) as dataset:
-            ds = dataset.load()
+        if 'SWin' in self.vars_list:
+            with xr.open_dataset(self.out_fn) as dataset:
+                ds = dataset.load()
 
-            # add summed radiation terms
-            SWnet = ds['SWin'] + ds['SWout']
-            LWnet = ds['LWin'] + ds['LWout']
-            NetRad = SWnet + LWnet
-            ds['SWnet'] = (['time'],SWnet.values,{'units':'W m-2'})
-            ds['LWnet'] = (['time'],LWnet.values,{'units':'W m-2'})
-            ds['NetRad'] = (['time'],NetRad.values,{'units':'W m-2'})
-        ds.to_netcdf(self.out_fn)
+                # add summed radiation terms
+                SWnet = ds['SWin'] + ds['SWout']
+                LWnet = ds['LWin'] + ds['LWout']
+                NetRad = SWnet + LWnet
+                ds['SWnet'] = (['time'],SWnet.values,{'units':'W m-2'})
+                ds['LWnet'] = (['time'],LWnet.values,{'units':'W m-2'})
+                ds['NetRad'] = (['time'],NetRad.values,{'units':'W m-2'})
+            ds.to_netcdf(self.out_fn)
         return
     
     def add_basic_attrs(self,args,time_elapsed,climate):

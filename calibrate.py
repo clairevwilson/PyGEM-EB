@@ -12,143 +12,136 @@ from multiprocessing import Pool
 import pygem_eb.input as eb_prms
 import run_simulation_eb as sim
 import pygem_eb.massbalance as mb
-from pygem_eb.processing.objectives import *
+from objectives import *
 
 # ===== USER OPTIONS =====
+site = 'B'
 param_name = 'a_ice'    # Parameter to calibrate: a_ice or kw
 initial_guess = 0.4     # Initial guess for the parameter
-tolerance = 100         # Tolerance for MAE we are looking for
-step_size = 1e-2        # Size to step parameter on (initially)
-best_ksnow = []         # Storage for each guess's best snow parameterization
+bounds = [0.4,0.55]     # Bounds for parameter search
+tolerance = 1e-1        # Tolerance for MAE we are looking for
+step_size = 1e-2        # Initial step size to adjust parameter by
+max_n_iters = 2         # Max number of iterations to run
+best_runs = []          # Storage for each iteration's best run name
 
-# ===== DATA FILEPATHS =====
-base_mb = '/home/claire/research/MB_data/'
-base_AWS = '/home/claire/research/cliate_data/AWS/Preprocessed/'
-fp_dict = {'long': {'data_fp': base_mb + 'Gulkana/Input_Gulkana_Glaciological_Data.csv',
-                    'AWS_fp': base_AWS + 'gulkana_22yrs.csv'},
-            '2023': {'data_fp': base_mb + 'Stakes/gulkanaAB23_ALL.csv',
-                     'AWS_fp': base_AWS + 'gulkana_2023.csv'},
-            '2024':{'data_fp': base_mb + 'Stakes/gulkanaSITE24_ALL.csv',
-                    'AWS_fp': base_AWS + 'gulkana_2024.csv'}}
+# ===== FILEPATHS =====
+data_fp = '/home/claire/research/MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
+today = str(pd.Timestamp.today()).replace('-','_')[5:10]
+eb_prms.output_filepath = os.getcwd() + f'/../Output/EB/{today}/'
+if not os.path.exists(eb_prms.output_filepath):
+    os.mkdir(eb_prms.output_filepath)
+base_fn = f'{param_name}_calibration_{today}_run0_#.nc'
+n_today = 0
+while os.path.exists(eb_prms.output_filepath + base_fn.replace('#',str(n_today))):
+    n_today += 1
 
 # ===== RUN PREPROCESSING =====
 # Read command line args
 args = sim.get_args()
 n_processes = args.n_simultaneous_processes
-params = {'k_snow':['Sturm','Douville','Jansson','OstinAndersson','VanDusen'],
-          'site':['AB','B']}
+params_parallel = {'k_snow':['Sturm','Douville','Jansson','OstinAndersson','VanDusen']}
 
 # Force some args
 args.store_data = True              # Ensures output is stored
 args.use_AWS = True                 # Use available AWS data
 args.debug = False                  # Don't need debug prints
-eb_prms.store_vars = ['MB']         # Only store mass balance results
+eb_prms.store_vars = ['basic']      # Only store basic results
+
+# Initialize model
+args.startdate = pd.to_datetime('2000-04-20 00:00:00')
+args.enddate = pd.to_datetime('2022-05-20 00:00:00')
+climate = sim.initialize_model(args.glac_no[0],args)
+all_runs_counter = 0
 
 # Determine number of runs for each parallel process
-n_runs = len(fp_dict) # number of different time period runs
-for param in list(params.keys()):
-    n_runs *= len(params[param]) # number of parameter options
+n_runs = 1                                  # Number of sites 
+for param in params_parallel:
+    n_runs *= len(params_parallel[param])   # Number of parallel parameter options
 n_runs_per_process = n_runs // n_processes  # Base number of runs per CPU
 n_runs_with_extra = n_runs % n_processes    # Number of CPUs with one extra run
 
-# Define the dates for three model runs
-runs_dict = {'long':{'start':'2000-04-20 00:00:00','end':'2022-05-21 12:00:00'},
-        '2023':{'start':'2023-04-20 00:00:00','end':'2023-08-21 00:00:00'},
-        '2024':{'start':'2024-04-20 00:00:00','end':'2024-08-21 00:00:00'}}
-
-# Initialize climate for each of the runs
-for run in runs_dict:
-    # Get the dates for the model run
-    args.startdate = pd.to_datetime(runs_dict[run]['start'])
-    args.enddate = pd.to_datetime(runs_dict[run]['end'])
-
-    # Set the filepath for AWS data
-    eb_prms.AWS_fn = fp_dict[run]['AWS_fp']
-
-    # Initialize the model
-    climate = sim.initialize_model(args.glac_no[0],args)
-
-    # Add climate to runs_dict
-    runs_dict[run]['climate'] = climate
-
-# ===== FUNCTIONS =====
+# ===== PARALLEL FUNCTION =====
 def run_model_parallel(list_inputs):
+    """
+    Loops through runs per process and runs the model
+    """
     # Loop through the variable sets
     for inputs in list_inputs:
         # Unpack inputs
         args,climate,store_attrs = inputs
         
-        # Run the model if the run doesn't already exist
-        run_fp = eb_prms.output_filepath + args.out + '0.nc'
-        if not os.path.exists(run_fp):
-            # Start timer
-            start_time = time.time()
+        # Start timer
+        start_time = time.time()
 
-            # Run the model
-            massbal = mb.massBalance(args,climate)
-            massbal.main()
+        # Run the model
+        massbal = mb.massBalance(args,climate)
+        massbal.main()
 
-            # Completed model run: end timer
-            time_elapsed = time.time() - start_time
+        # Completed model run: end timer
+        time_elapsed = time.time() - start_time
 
-            # Store output
-            massbal.output.add_vars()
-            massbal.output.add_basic_attrs(args,time_elapsed,climate)
-            massbal.output.add_attrs(store_attrs)
+        # Store output
+        massbal.output.add_vars()
+        massbal.output.add_basic_attrs(args,time_elapsed,climate)
+        massbal.output.add_attrs(store_attrs)
     return 
 
 # ===== OBJECTIVE FUNCTION =====
 def objective(parameter):    
+    """
+    Prepares the inputs for parallel runs, executes the model
+    in parallel, and assesses loss.
+    """
+    global all_runs_counter
+
     # Parse the input parameter
     if param_name == 'a_ice':
         a_ice = parameter
+        kw = 1
     elif param_name == 'kw':
         kw = parameter
+        a_ice = 0.6
+        print('using uncalibrated a_ice: replace in calibrate.py')
 
     # Parse list for inputs to Pool function
     packed_vars = [[] for _ in range(n_processes)]
     run_no = 0  # Counter for runs added to each set
     set_no = 0  # Index for the parallel process
+    start_counter = all_runs_counter # Index for the first run of this iteration
 
     # Loop through the options we want to run in parallel
-    for run in runs_dict:
+    for k_snow in params_parallel['k_snow']:
         # Get args for the current run
         args_run = copy.deepcopy(args)
 
-        # Grab the preprocessed climate
-        climate = runs_dict[run]['climate']
-        args_run.startdate = pd.to_datetime(runs_dict[run]['start'])
-        args_run.enddate = pd.to_datetime(runs_dict[run]['end'])
+        # Set parameters
+        args_run.k_snow = k_snow
+        args_run.kw = kw
+        args_run.a_ice = a_ice
+        args_run.site = site
 
-        for k_snow in params['k_snow']:
-            for site in params['site']:
-                # Set parameters
-                args_run.k_snow = k_snow
-                args_run.kw = kw
-                args_run.a_ice = a_ice
-                args_run.site = site
+        # Set output filename
+        args_run.out = f'{param_name}_calibration_{today}_run{all_runs_counter}_'
 
-                # Set identifying output filename
-                args_run.out = f'ksnow{k_snow}_aice{a_ice}_site{site}_{run}_'
+        # Specify attributes for output file
+        store_attrs = {'k_snow':str(k_snow),'a_ice':str(a_ice),
+                        'kw':str(kw),'site':site}
 
-                # Specify attributes for output file
-                store_attrs = {'k_snow':str(k_snow),'a_ice':str(a_ice),
-                               'kw':str(kw),'site':site}
+        # Check if moving to the next set of runs
+        n_runs_set = n_runs_per_process + (0 if set_no < n_runs_with_extra else 0)
+        if run_no >= n_runs_set:
+            set_no += 1
+            run_no = 0
 
-                # Check if moving to the next set of runs
-                n_runs_set = n_runs_per_process + (0 if set_no < n_runs_with_extra else 0)
-                if run_no >= n_runs_set:
-                    set_no += 1
-                    run_no = 0
+        # Set task ID for SNICAR input file
+        args_run.task_id = set_no
+    
+        # Store model inputs
+        packed_vars[set_no].append((args_run,climate,store_attrs))
 
-                # Set task ID for SNICAR input file
-                args_run.task_id = set_no
-            
-                # Store model inputs
-                packed_vars[set_no].append((args_run,climate,store_attrs))
-
-                # Advance counter
-                run_no += 1
+        # Advance counter
+        run_no += 1
+        all_runs_counter += 1
 
     # Run model in parallel
     with Pool(n_processes) as processes_pool:
@@ -156,42 +149,21 @@ def objective(parameter):
 
     # Assess model outputs
     all_loss = []
-    for k_snow in params['k_snow']:
-        site_loss = []
-        for site in params['site']:
-            run_loss = []
-            for run in runs_dict:
-                # 2023 run doesn't need to be assessed at site B
-                if site != 'AB' and run == '2023':
-                    continue
+    all_names = []
+    for run in np.arange(start_counter, all_runs_counter):
+        # Get the output dataset
+        out = f'{param_name}_calibration_{today}_run{run}_{n_today}.nc'
+        ds = xr.open_dataset(eb_prms.output_filepath + out)
 
-                # Get the output dataset
-                out = f'ksnow{k_snow}_aice{a_ice}_site{site}_{run}_'
-                ds = xr.open_dataset(eb_prms.output_filepath + out + '0.nc')
-
-                # Evaluate loss
-                loss_fun = seasonal_mass_balance if run == 'long' else cumulative_mass_balance
-                data_fp = fp_dict[run]['data_fp'].replace('SITE',site)
-                loss = loss_fun(data_fp,ds,site=site)
-                if type(loss) == tuple: # seasonal mass balance stores winter and summer
-                    loss = np.mean(loss)
-                run_loss.append(loss)
-            
-            # Weight loss by length of run
-            weights = np.array([22,1])
-            if len(run_loss) == 3:
-                weights = np.append(weights,1)
-            weighted_loss = np.sum(np.array(run_loss) * weights / np.sum(weights))
-            site_loss.append[weighted_loss]
-
-        # Calculate site mean weighted loss
-        site_mean_weighted_loss = np.mean(site_loss)
-        all_loss.append(site_mean_weighted_loss)
+        # Evaluate loss
+        loss = seasonal_mass_balance(data_fp,ds,site=site)
+        all_loss.append(np.mean(loss)) # average winter and summer loss
+        all_names.append(out)
     
     # Determine best snow parameterization for the current parameter set
     best_loss = np.min(all_loss)
     best_idx = np.argmin(all_loss)
-    best_ksnow.append(params['k_snow'][best_idx])
+    best_runs.append(all_names[best_idx])
 
     return best_loss
 
@@ -201,17 +173,78 @@ param_storage = [initial_guess]
 result_storage = []
 # Initialize guess
 parameter = initial_guess
+loss = np.inf
+n_iters = 0
 
 # Begin search
-while loss > tolerance:
+while loss > tolerance and n_iters <= max_n_iters:
     # Run the objective function
     loss = objective(parameter)
+    result_storage.append(loss)
 
-    # Determine which way the parameter needs to move based on the long run
-    # Load the best long run
-    k_snow = best_ksnow[-1]
-    fn_best = f'ksnow{k_snow}_aice{parameter}_site{site}_long_'
-    ds = xr.open_dataset(eb_prms.output_filepath + fn_best + '0.nc')
+    # Load the best run
+    fn_best = best_runs[-1]
+    ds = xr.open_dataset(eb_prms.output_filepath + fn_best)
+    best_ksnow = ds.attrs['k_snow']
+
+    # If we achieved loss within tolerance, don't update the parameter
+    if loss < tolerance:
+        break
+
+    # Calculate the bias in the best run
+    winter_bias,summer_bias = seasonal_mass_balance(data_fp,ds,site=site,method='ME')
+    
+    # Adjust parameter according to bias
+    if param_name == 'a_ice':
+        if summer_bias < 0: # Overestimating melt
+            direction = 1
+        elif summer_bias > 0: # Underestimating melt
+            direction = -1
+        else:
+            print(f'Got a nan result from bias with {fn_best}')
+            quit()
+    else:
+        print(f'Need to code how to adjust {param_name} based on bias')
+        quit()
+    
+    # Step parameter
+    last = parameter
+    parameter += step_size * direction
+
+    # If we already tried this parameter, step halfway back
+    diff = np.abs(np.array(param_storage) - parameter)
+    while np.any(diff < 1e-5):
+        step_size /= 2
+        parameter += step_size * direction * -1
+        diff = np.abs(np.array(param_storage) - parameter)
+
+    # Bound parameter
+    parameter = max(parameter,bounds[0])
+    parameter = min(parameter,bounds[-1])
+    if parameter in bounds:
+        bound_hit = 'lower' if parameter == bounds[0] else 'upper'
+        print(f'Warning: parameter hit the {bound_hit} bounds')
+        n_iters = max_n_iters - 1
+
+    # Next step
+    param_storage.append(parameter)
+    n_iters += 1
+
+print(f'Completed calibration in {n_iters} iterations')
+print(f'     Best a_ice = {parameter}       Best k_snow = {best_ksnow}')
+print(f'     MAE: {loss:.3f} m w.e.')
+
+# Loss plot
+plt.plot(np.arange(n_iters),result_storage)
+plt.ylabel('Loss (MAE)')
+plt.xlabel('Iterations')
+plt.savefig(eb_prms.output_filepath+'loss_iterations.png',dpi=150)
+
+# Best result plot
+fig, ax = seasonal_mass_balance(data_fp,ds,site=site,method='MAE',plot=True)
+title = ax.get_title()
+ax.set_title(title)
+plt.savefig(eb_prms.output_filepath+f'mass_balance_{site}.png',dpi=150)
 
 # low = 3e-6
 # high = 3e-4
