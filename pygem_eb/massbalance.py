@@ -924,13 +924,10 @@ class Output():
                     layer=(['layer'],np.arange(eb_prms.max_nlayers))
                     ))
         # Select variables from the specified input
-        if 'basic' in eb_prms.store_vars:
-            self.vars_list = ['melt','accum','refreeze','dh']
-        else:
-            vars_list = vn_dict[eb_prms.store_vars[0]]
-            for var in eb_prms.store_vars[1:]:
-                vars_list.extend(vn_dict[var])
-            self.vars_list = vars_list
+        vars_list = vn_dict[eb_prms.store_vars[0]]
+        for var in eb_prms.store_vars[1:]:
+            vars_list.extend(vn_dict[var])
+        self.vars_list = vars_list
         
         # Create the netcdf file to store output
         if args.store_data:
@@ -1006,8 +1003,10 @@ class Output():
         self.layergrainsize_output[step] = layers.grainsize.copy()
 
     def store_data(self):
+        # Load output dataset
         with xr.open_dataset(self.out_fn) as dataset:
             ds = dataset.load()
+            # Store variables
             if 'EB' in eb_prms.store_vars:
                 ds['SWin'].values = self.SWin_output
                 ds['SWout'].values = self.SWout_output
@@ -1028,10 +1027,10 @@ class Output():
                 ds['accum'].values = self.accum_output
                 ds['snowdepth'].values = self.snowdepth_output
                 ds['dh'].values = self.dh_output
-            if 'Temp' in eb_prms.store_vars:
+            if 'temp' in eb_prms.store_vars:
                 ds['airtemp'].values = self.airtemp_output
                 ds['surftemp'].values = self.surftemp_output
-            if 'Layers' in eb_prms.store_vars:
+            if 'layers' in eb_prms.store_vars:
                 layertemp_output = pd.DataFrame.from_dict(self.layertemp_output,orient='index')
                 layerdensity_output = pd.DataFrame.from_dict(self.layerdensity_output,orient='index')
                 layerheight_output = pd.DataFrame.from_dict(self.layerheight_output,orient='index')
@@ -1059,7 +1058,7 @@ class Output():
                 ds['layerBC'].values = layerBC_output
                 ds['layerdust'].values = layerdust_output
                 ds['layergrainsize'].values = layergrainsize_output
-
+        # Save NetCDF
         ds.to_netcdf(self.out_fn)
         return ds
     

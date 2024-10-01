@@ -80,7 +80,8 @@ class Layers():
         self.delayed_snow = 0
         self.max_snow = np.sum(self.ldrymass[self.snow_idx])
         
-        print(f'{self.nlayers} layers initialized')
+        if args.debug:
+            print(f'{self.nlayers} layers initialized')
         return 
     
     def make_layers(self,snow_height,firn_height,ice_height):
@@ -479,7 +480,7 @@ class Layers():
                     # Merge layers if there is firn under the new firn layer
                     if self.ltype[layer+1] in ['firn']: 
                         self.merge_layers(layer)
-                        print('new firn!')
+
                 else:
                     layer += 1
             # New ICE
@@ -489,7 +490,7 @@ class Layers():
                 # Merge into ice below
                 if self.ltype[layer+1] in ['ice']:
                     self.merge_layers(layer)
-                    print('new ice!')
+
             else:
                 layer += 1
 

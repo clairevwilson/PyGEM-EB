@@ -177,7 +177,7 @@ grainsize_ds = xr.open_dataset(grainsize_fp)
 sky_view = 0.936
 kp = 1
 # play with
-dep_factor = 1 # multiplicative factor to adjust MERRA-2 deposition
+dep_factor = 1              # multiplicative factor to adjust MERRA-2 deposition
 wind_factor = 1             # multiplicative wind scaling factor
 albedo_ice = 0.6            # albedo of ice [-] 
 kcond_ice = 2               # thermal conductivity of ice
@@ -190,7 +190,7 @@ dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
 layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
 # leave
 snow_threshold_low = 0      # lower threshold for linear snow-rain scaling [C]
-snow_threshold_high = 1     # upper threshold for linear snow-rain scaling [C]
+snow_threshold_high = 3     # upper threshold for linear snow-rain scaling [C]
 precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 roughness_ice = 1.7         # surface roughness length for ice [mm] (Moelg et al. 2012, TC)

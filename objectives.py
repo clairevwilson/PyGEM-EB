@@ -128,11 +128,13 @@ def seasonal_mass_balance(data_fp,ds,site='B',method='MAE',plot=False):
             ax.set_xticks(np.arange(years[0],years[-1],4))
             ax.set_yticks(np.arange(np.round(min_all,0),np.round(max_all,0)+1,1))
             ax.set_ylabel('Seasonal mass balance (m w.e.)',fontsize=14)
+            title = f'Summer {method} = {summer_error:.3f}   Winter {method} = {winter_error:.3f}'
             if method == 'MAE':
                 winter_error = objective(winter_model,winter_data,'ME') 
                 summer_error = objective(summer_model,summer_data,'ME')
                 method = 'Mean Error' 
-            ax.set_title(f'Summer {method} = {summer_error:.3f}   Winter {method} = {winter_error:.3f}')
+                title += f'\nSummer {method} = {summer_error:.3f}   Winter {method} = {winter_error:.3f}'
+            ax.set_title(title)
         ax.plot(np.nan,np.nan,linestyle='--',color='grey',label='Data')
         ax.plot(np.nan,np.nan,color='grey',label='Modeled')
         ax.legend(fontsize=12,ncols=2)
