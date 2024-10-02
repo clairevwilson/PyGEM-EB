@@ -15,10 +15,10 @@ import pygem_eb.massbalance as mb
 from objectives import *
 
 # ===== USER OPTIONS =====
-site = 'B'
+site = 'AB'
 param_name = 'a_ice'    # Parameter to calibrate: a_ice or kw
-initial_guess = 0.4     # Initial guess for the parameter
-bounds = [0.38,0.42]     # Bounds for parameter search
+initial_guess = 0.2     # Initial guess for the parameter
+bounds = [0.2,0.4]     # Bounds for parameter search
 tolerance = 1e-1        # Tolerance for MAE we are looking for
 step_size = 2e-2        # Initial step size to adjust parameter by
 # site = 'D'
@@ -32,8 +32,8 @@ best_runs = []          # Storage for each iteration's best run name
 
 # ===== FILEPATHS =====
 data_fp = os.getcwd() + '/../MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
-today = str(pd.Timestamp.today()).replace('-','_')[5:10] #  + '_AB'
-# print('REMOVE SITE FROM TODAY')
+today = str(pd.Timestamp.today()).replace('-','_')[5:10] + '_AB'
+print('REMOVE SITE FROM TODAY')
 eb_prms.output_filepath = os.getcwd() + f'/../Output/EB/{today}/'
 if not os.path.exists(eb_prms.output_filepath):
     os.mkdir(eb_prms.output_filepath)
@@ -142,7 +142,7 @@ def objective(parameter):
             run_no = 0
 
         # Set task ID for SNICAR input file
-        args_run.task_id = set_no +5
+        args_run.task_id = set_no + 10
     
         # Store model inputs
         packed_vars[set_no].append((args_run,climate,store_attrs))
@@ -222,7 +222,7 @@ while loss > tolerance and n_iters < max_n_iters:
             print(f'Overestimated melt: decreasing {param_name}')
         elif summer_bias > 0:
             direction = 1
-            print(f'Underestimated melt: icreasing {param_name}')
+            print(f'Underestimated melt: increasing {param_name}')
         else:
             print(f'Got a {summer_bias} result from bias with {fn_best}: quitting')
             quit()

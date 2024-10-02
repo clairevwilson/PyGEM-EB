@@ -189,8 +189,8 @@ ice_grainsize = 5000        # ice grain size in um (placeholder)
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
 layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
 # leave
-snow_threshold_low = 0      # lower threshold for linear snow-rain scaling [C]
-snow_threshold_high = 3     # upper threshold for linear snow-rain scaling [C]
+snow_threshold_low = 1.2    # lower threshold for linear snow-rain scaling [C]
+snow_threshold_high = 3.2   # upper threshold for linear snow-rain scaling [C]
 precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 roughness_ice = 1.7         # surface roughness length for ice [mm] (Moelg et al. 2012, TC)
