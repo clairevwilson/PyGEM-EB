@@ -55,7 +55,10 @@ class energyBalance():
         self.climateds = climate.cds
         self.time = time
         self.rH = 100 if self.rH > 100 else self.rH
+
+        # Adjust calibrated values
         self.wind *= args.kw
+        self.tp *= args.kp
 
         # Radiation terms
         self.measured_SWin = 'SWin' in climate.measured_vars

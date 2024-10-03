@@ -15,9 +15,10 @@ args = sim.get_args()
 n_processes = args.n_simultaneous_processes
 
 # Define sets of parameters
-params = {'k_snow':['Sturm','Douville','Jansson'],
-          'a_ice':[0.2,0.4,0.6],
-          'kw':[0.25,0.5,0.75,1]}
+params = {'k_snow':['VanDusen'],
+          'a_ice':[0.4],
+          'kw':[1],
+          'T_threshold':[[0,1],[0,2],[1.2,3.2]]}
 
 # Determine number of runs for each process
 n_runs = 3 # three sites
@@ -30,7 +31,7 @@ n_runs_with_extra = n_runs % n_processes    # Number of CPUs with one extra run
 args.store_data = True              # Ensures output is stored
 args.use_AWS = True                 # Use available AWS data
 args.debug = False                  # Don't need debug prints
-eb_prms.store_vars = ['MB','EB']    # Only store mass and energy balance results
+# eb_prms.store_vars = ['MB','EB']    # Only store mass and energy balance results
 args.startdate = pd.to_datetime('2000-04-20 00:00:00')
 args.enddate = pd.to_datetime('2022-05-21 12:00:00')
 
@@ -42,9 +43,11 @@ packed_vars = [[] for _ in range(n_processes)]
 run_no = 0  # Counter for runs added to each set
 set_no = 0  # Index for the parallel process
 for k_snow in params['k_snow']:
-    for a_ice in params['a_ice']:
-        for kw in params['kw']:
+    for threshold in params['T_threshold']:
+        for a_ice in params['a_ice']:
+        # for kw in params['kw']:
             for site in ['AB','B','D']:
+                kw = 0.6 if site == 'D' else 1
                 # Get args for the current run
                 args_run = copy.deepcopy(args)
 
@@ -53,12 +56,16 @@ for k_snow in params['k_snow']:
                 args_run.a_ice = a_ice
                 args_run.kw = kw
                 args_run.site = site
+                eb_prms.snow_threshold_low = threshold[0]
+                eb_prms.snow_threshold_high = threshold[1]
 
                 # Set identifying output filename
-                args_run.out = f'kw{kw}_ksnow{k_snow}_aice{a_ice}_site{site}_'
+                args_run.out = f'low{threshold[0]}_high{threshold[1]}_site{site}_'
 
                 # Specify attributes for output file
-                store_attrs = {'k_snow':str(k_snow),'a_ice':str(a_ice),'kw':str(kw)}
+                store_attrs = {'k_snow':str(k_snow),'a_ice':str(a_ice),'kw':str(kw),
+                               'threshold_low':str(threshold[0]),
+                               'threshold_high':str(threshold[1])}
 
                 # Check if moving to the next set of runs
                 n_runs_set = n_runs_per_process + (0 if set_no < n_runs_with_extra else 0)

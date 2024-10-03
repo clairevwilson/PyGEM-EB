@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
 import pandas as pd
+import itertools
 
 # User options
 date_form = mpl.dates.DateFormatter('%b %d')
@@ -311,3 +312,94 @@ def snow_temperature(data_fp,ds,method='RMSE',plot=False,plot_heights=[0.5]):
         plt.show()
 
     return error
+
+def grid_plot(params_dict,summer_result,winter_result):
+    """
+    Parameters
+    ----------
+    params_dict : dict
+        dict formatted as 'param_name':[option_1,option_2,...]
+    result_summer and reuslt_winter : np.array
+        should be size (N1xN2x...Nn) where:
+            n is the number of param sets
+            N is the number of options in each set
+    """
+    # Parse parameters
+    param_names = list(params_dict.keys())
+    combos = list(itertools.combinations(param_names,2))
+    n_combos = len(combos)
+    mid_idx = n_combos / 2
+    if mid_idx % 1 != 0:
+        mid_idx = int(mid_idx)
+
+    # Create plot
+    fig = plt.figure(figsize=(3*n_combos, 5))
+    ratios = np.append(np.array([1]*n_combos).flatten(),0.3)
+    gs = fig.add_gridspec(2,n_combos+1, wspace=1,hspace=0.5, width_ratios=ratios)
+
+    # Normalize loss values across all three plots for shared colorbar
+    all_summer = summer_result[~np.isnan(summer_result)].flatten()
+    all_winter = winter_result[~np.isnan(winter_result)].flatten()
+    norm_summer = plt.Normalize(vmin=np.min(all_summer), vmax=np.max(all_summer))
+    norm_winter = plt.Normalize(vmin=np.min(all_winter), vmax=np.max(all_winter))
+    cmap = 'viridis_r'
+
+    # Create the scatter plots
+    for j,pair in enumerate(combos):
+        # Unpack the parameters
+        param_1 = params_dict[pair[0]]
+        param_2 = params_dict[pair[1]]
+
+        # If parameter is a string, need to parse differently
+        ylabels = False
+        xlabels = False
+        if type(param_1[0]) == str:
+            xlabels = param_1
+            param_1 = np.arange(len(param_1))
+        if type(param_2[0]) == str:
+            ylabels = param_2
+            param_2 = np.arange(len(param_2))
+        
+        # Create meshgrid
+        x,y = np.meshgrid(param_1,param_2)
+        for i,season in enumerate(['winter','summer']):
+            ax = fig.add_subplot(gs[i,j])
+    
+            if n_combos > 1:
+                slices = [slice(None)] * n_combos
+                slices[np.flip(np.arange(len(combos)))[j]] = mid_idx
+                if season == 'summer':
+                    result = summer_result[tuple(slices)]
+                    norm = norm_summer
+                elif season == 'winter':
+                    result = winter_result[tuple(slices)]
+                    norm = norm_winter
+            else:
+                if season == 'summer':
+                    result = summer_result
+                    norm = norm_summer
+                elif season == 'winter':
+                    result = winter_result
+                    norm = norm_winter
+
+            ax.scatter(x,y,c=result.T,cmap=cmap,s=500,norm=norm)
+            ax.set_xlabel(pair[0],fontsize=12)
+            ax.set_ylabel(pair[1],fontsize=12)
+            ax.set_xticks(param_1)
+            ax.set_yticks(param_2)
+            ax.grid(True)
+            if type(xlabels) != bool:
+                ax.set_xticklabels(xlabels)
+            if type(ylabels) != bool:
+                ax.set_yticklabels(ylabels)
+
+    # Add colorbars to each row
+    cax1 = fig.add_subplot(gs[0,n_combos])
+    cax2 = fig.add_subplot(gs[1,n_combos])
+    axes = np.array(fig.get_axes()).reshape(2,n_combos+1)
+    cbar = fig.colorbar(mpl.cm.ScalarMappable(norm=norm_winter, cmap=cmap),ax=axes[0,:-1], orientation='vertical',cax=cax1)
+    cbar.set_label('Winter MAE',loc='top',fontsize=12)
+
+    cbar = fig.colorbar(mpl.cm.ScalarMappable(norm=norm_summer, cmap=cmap), ax=axes[1,:-1], orientation='vertical',cax=cax2)
+    cbar.set_label('Summer MAE',loc='top',fontsize=12)
+    return fig, axes

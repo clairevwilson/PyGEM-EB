@@ -434,6 +434,73 @@ def compare_runs(ds_list,time,labels,var,res='d',t=''):
     fig.suptitle(t)
     return
 
+def plot_by(ds,time,vars,t='Monthly EB Outputs',by='doy'):
+    h = 1.5
+    fig,axes = plt.subplots(len(vars),1,figsize=(7,h*len(vars)),sharex=True,layout='constrained')
+    if len(vars) == 1:
+        axes = [axes]
+    
+    if by == 'month':
+        ds[by] = (['time'],pd.to_datetime(ds['time'].values).month)
+        time_list = np.arange(1,13)
+    elif by == 'hour':
+        ds[by] = (['time'],pd.to_datetime(ds['time'].values).hour)
+        time_list = np.arange(0,24)
+    elif by == 'doy':
+        ds[by] = (['time'],pd.to_datetime(ds['time'].values).day_of_year)
+        time_list = np.arange(1,366)
+
+    if len(time) == 2:
+        start = pd.to_datetime(time[0])
+        end = pd.to_datetime(time[1])
+        time = pd.date_range(start,end,freq='h')
+    ds = ds.sel(time=time)
+    c_iter = iter([plt.cm.Dark2(i) for i in range(8)])
+    for i,v in enumerate(vars):
+        axis = axes[i]
+        vararray = np.array(v)
+        for var in vararray:
+            try:
+                c = next(c_iter)
+            except:
+                c_iter = iter([plt.cm.Dark2(i) for i in range(8)])
+                c = next(c_iter)
+        
+            var_out = []
+            for time in time_list:
+                ds_sel = ds.where(ds[by] == time,drop=True)
+                if 'layer' in var:
+                    vardata = ds_sel.isel(layer=0)[var].to_numpy()
+                else:
+                    vardata = ds_sel[var].to_numpy()
+                if by == 'doy':
+                    nyrs = int(vardata.shape[0] / 24)
+                    try:
+                        vardata = np.sum(vardata.reshape(24,nyrs),axis=0)
+                    except:
+                        if time != 366:
+                            print('Must index dates exactly 1 year - 1 day apart')
+                        vardata = np.array([0])
+                    out = np.mean(vardata)
+                else:
+                    out = np.mean(vardata)
+                var_out.append(out)
+            axis.plot(time_list,np.cumsum(var_out),label=var,color=c)
+            axis.legend()
+            if by == 'doy':
+                axis.axvline(111,color='green')
+                axis.axvline(232,color='red')
+    if by == 'month':
+        months = pd.date_range('2024-01-01','2024-12-31',freq='MS')
+        month_names = [date.month_name()[:3] for date in months]
+        axis.set_xticks(np.arange(1,13),month_names)
+    if by == 'doy':
+        axis.set_xlabel('Day of year')
+    axis.set_ylabel('Melt (m w.e.)')
+    axis.tick_params(length=5)
+    fig.suptitle(t)
+    print(np.cumsum(var_out)[231] / np.cumsum(var_out)[-1])
+
 def panel_dh_compare(ds_list,time,labels,units,stake_df,rows=2,t=''):
     """
     Returns a comparison of different model runs

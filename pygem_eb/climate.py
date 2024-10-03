@@ -229,7 +229,7 @@ class Climate():
 
         # PRECIP: correct according to lapserate, precipitation factor
         elif var == 'tp':
-            out = data*(1+eb_prms.precgrad*(self.elev-elev_data))*eb_prms.kp
+            out = data*(1+eb_prms.precgrad*(self.elev-elev_data))
 
         # SURFACE PRESSURE: correct according to barometric law
         elif var == 'sp':

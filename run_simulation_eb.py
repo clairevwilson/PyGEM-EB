@@ -55,6 +55,8 @@ def get_args(parse=True):
                         help='Broadband albedo of ice')
     parser.add_argument('-kw',default=eb_prms.wind_factor,action='store',type=float,
                         help='Multiplicative wind factor')
+    parser.add_argument('-kp',default=eb_prms.kp,action='store',type=float,
+                        help='Multiplicative precipitation factor')
     parser.add_argument('-n','--n_simultaneous_processes',default=1,type=int,
                         help='Number of parallel processes to run')
     parser.add_argument('-task_id',default=-1,type=int,
@@ -88,7 +90,7 @@ def initialize_model(glac_no,args):
         site_fp = os.path.join(data_fp,eb_prms.glac_name+'/site_constants.csv')
         site_df = pd.read_csv(site_fp,index_col='site')
         args.elev = site_df.loc[site]['elevation']
-        eb_prms.kp = site_df.loc[site]['kp']
+        # eb_prms.kp = site_df.loc[site]['kp']
         eb_prms.slope = site_df.loc[site]['slope']
         eb_prms.aspect = site_df.loc[site]['aspect']
         eb_prms.sky_view = site_df.loc[site]['sky_view']

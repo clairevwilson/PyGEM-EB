@@ -171,8 +171,6 @@ class massBalance():
             # precip falls as snow
             rain = 0
             snow = enbal.tp*DENSITY_WATER
-            if 4 < self.time.month < 10: # kp adjusts only winter snowfall
-                snow /= eb_prms.kp
         elif SNOW_THRESHOLD_LOW < enbal.tempC < SNOW_THRESHOLD_HIGH:
             # mix of rain and snow
             fraction_rain = np.interp(enbal.tempC,temp_scale,rain_scale)
@@ -182,6 +180,7 @@ class massBalance():
             # precip falls as rain
             rain = enbal.tp*DENSITY_WATER
             snow = 0
+        
         return rain,snow  # kg m-2
 
     def penetrating_SW(self,layers,surface_SW):

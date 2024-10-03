@@ -16,37 +16,43 @@ from objectives import *
 
 # ===== USER OPTIONS =====
 site = 'AB'
-param_name = 'a_ice'    # Parameter to calibrate: a_ice or kw
-initial_guess = 0.2     # Initial guess for the parameter
-bounds = [0.2,0.4]     # Bounds for parameter search
-tolerance = 1e-1        # Tolerance for MAE we are looking for
-step_size = 2e-2        # Initial step size to adjust parameter by
-# site = 'D'
-# param_name = 'kw'       # Parameter to calibrate: a_ice or kw
-# initial_guess = 0.2     # Initial guess for the parameter
-# bounds = [0.2,0.8]      # Bounds for parameter search
-# tolerance = 1e-1        # Tolerance for MAE we are looking for
-# step_size = 1e-1        # Initial step size to adjust parameter by
+# Parameter tuning summer balance
+summer_param = 'kw' if site == 'D' else 'a_ice'
+summer_info = {'AB':{'bounds':[0.2,0.4],'x0':0.4},
+                 'B':{'bounds':[0.4,0.55],'x0':0.4},
+                 'D':{'bounds':[0.2,0.8],'x0':0.4}}
+summer_x0 = summer_info[site]['x0']          # Initial guess for the summer parameter
+summer_bounds = summer_info[site]['bounds']  # Bounds for parameter search
+summer_step = 0.02
+# Parameter tuning winter balance
+winter_param = 'kp'
+winter_x0 = 1             # Initial guess for the winter parameter (kp)
+winter_bounds = [0.5,4]   # Bounds for kp search
+winter_step = 0.5
+# Optimization choices
+tolerance = 1e-1          # Tolerance for MAE we are looking for
 max_n_iters = 10        # Max number of iterations to run
-best_runs = []          # Storage for each iteration's best run name
 
 # ===== FILEPATHS =====
 data_fp = os.getcwd() + '/../MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
-today = str(pd.Timestamp.today()).replace('-','_')[5:10] + '_AB'
-print('REMOVE SITE FROM TODAY')
-eb_prms.output_filepath = os.getcwd() + f'/../Output/EB/{today}/'
+today = str(pd.Timestamp.today()).replace('-','_')[5:10]
+base_fn = f'calibration_{site}_{today}_run#_'
+n_today = 0
+eb_prms.output_filepath = os.getcwd() + f'/../Output/EB/{today}_{n_today}/'
+while os.path.exists(eb_prms.output_filepath + base_fn.replace('#','0') + '0.nc'):
+    n_today += 1
+    eb_prms.output_filepath = os.getcwd() + f'/../Output/EB/{today}_{n_today}/'
 if not os.path.exists(eb_prms.output_filepath):
     os.mkdir(eb_prms.output_filepath)
-base_fn = f'{param_name}_calibration_{today}_run0_#.nc'
-n_today = 0
-while os.path.exists(eb_prms.output_filepath + base_fn.replace('#',str(n_today))):
-    n_today += 1
 
 # ===== RUN PREPROCESSING =====
 # Read command line args
 args = sim.get_args()
 n_processes = args.n_simultaneous_processes
+# Set parameters that should be run in parallel
 params_parallel = {'k_snow':['Sturm','Douville','Jansson','OstinAndersson','VanDusen']}
+# Initialize storage
+best_runs = []          # Storage for each iteration's best run name
 
 # Force some args
 args.store_data = True              # Ensures output is stored
@@ -95,7 +101,7 @@ def run_model_parallel(list_inputs):
     return 
 
 # ===== OBJECTIVE FUNCTION =====
-def objective(parameter):    
+def objective(parameters):    
     """
     Prepares the inputs for parallel runs, executes the model
     in parallel, and assesses loss.
@@ -103,13 +109,12 @@ def objective(parameter):
     global all_runs_counter
 
     # Parse the input parameter
-    if param_name == 'a_ice':
-        a_ice = parameter
+    if site == 'D':
+        kw, kp = parameters
+        a_ice = 0.4
+    else:
+        a_ice, kp = parameters
         kw = 1
-    elif param_name == 'kw':
-        kw = parameter
-        a_ice = 0.42
-        print('using uncalibrated a_ice')
 
     # Parse list for inputs to Pool function
     packed_vars = [[] for _ in range(n_processes)]
@@ -125,15 +130,16 @@ def objective(parameter):
         # Set parameters
         args_run.k_snow = k_snow
         args_run.kw = kw
+        args_run.kp = kp
         args_run.a_ice = a_ice
         args_run.site = site
 
         # Set output filename
-        args_run.out = f'{param_name}_calibration_{today}_run{all_runs_counter}_'
+        args_run.out = base_fn.replace('#',str(all_runs_counter))
 
         # Specify attributes for output file
         store_attrs = {'k_snow':str(k_snow),'a_ice':str(a_ice),
-                        'kw':str(kw),'site':site}
+                        'kw':str(kw),'kp':str(kp),'site':site}
 
         # Check if moving to the next set of runs
         n_runs_set = n_runs_per_process + (0 if set_no < n_runs_with_extra else 0)
@@ -142,7 +148,7 @@ def objective(parameter):
             run_no = 0
 
         # Set task ID for SNICAR input file
-        args_run.task_id = set_no + 10
+        args_run.task_id = set_no 
     
         # Store model inputs
         packed_vars[set_no].append((args_run,climate,store_attrs))
@@ -160,7 +166,7 @@ def objective(parameter):
     all_names = []
     for run in np.arange(start_counter, all_runs_counter):
         # Get the output dataset
-        out = f'{param_name}_calibration_{today}_run{run}_{n_today}.nc'
+        out = base_fn.replace('#',str(run)) + '_0.nc'
         ds = xr.open_dataset(eb_prms.output_filepath + out)
 
         # Evaluate loss
@@ -177,18 +183,21 @@ def objective(parameter):
 
 # ===== OPTIMIZATION =====
 # Initialize storage
-param_storage = [initial_guess]
+param_storage = {'summer':[summer_x0],'winter':[winter_x0]}
 result_storage = []
 # Initialize guess
-parameter = initial_guess
+parameters = (summer_x0, winter_x0)
 loss = np.inf
 n_iters = 0
 
 # Begin search
 while loss > tolerance and n_iters < max_n_iters:
+    # Unpack parameters
+    winter_value, summer_value = parameters
+
     # Run the objective function
-    print(f'Testing {param_name} = {parameter}')
-    loss = objective(parameter)
+    print(f'Testing {winter_param} = {winter_value}, {summer_param} = {summer_value}')
+    loss = objective(parameters)
     result_storage.append(loss)
 
     # Load the best run
@@ -197,86 +206,101 @@ while loss > tolerance and n_iters < max_n_iters:
     best_ksnow = ds.attrs['k_snow']
 
     # If we achieved loss within tolerance, don't update the parameter
-    print(loss,tolerance)
     if loss < tolerance:
+        n_iters += 1
         break
 
     # Calculate the bias in the best run
     winter_bias,summer_bias = seasonal_mass_balance(data_fp,ds,site=site,method='ME')
-    print('bias',summer_bias)
 
-    # Adjust parameter according to bias
-    if param_name == 'a_ice':
+    # Adjust parameters according to bias
+    if summer_param == 'a_ice':
         if summer_bias < 0:
-            direction = 1
-            print(f'Overestimated melt: increasing {param_name}')
+            summer_direction = 1
+            print(f'Overestimated melt: increasing {summer_param}')
         elif summer_bias > 0:
-            direction = -1
-            print(f'Underestimated melt: decreasing {param_name}')
+            summer_direction = -1
+            print(f'Underestimated melt: decreasing {summer_param}')
         else:
             print(f'Got a {summer_bias} result from bias with {fn_best}: quitting')
             quit()
-    elif param_name == 'kw':
+    elif summer_param == 'kw':
         if summer_bias < 0:
-            direction = -1
-            print(f'Overestimated melt: decreasing {param_name}')
+            summer_direction = -1
+            print(f'Overestimated melt: decreasing {summer_param}')
         elif summer_bias > 0:
-            direction = 1
-            print(f'Underestimated melt: increasing {param_name}')
+            summer_direction = 1
+            print(f'Underestimated melt: increasing {summer_param}')
         else:
             print(f'Got a {summer_bias} result from bias with {fn_best}: quitting')
             quit()
     else:
-        print(f'Need to code how to adjust {param_name} based on bias')
+        print(f'Need to code how to adjust {summer_param} based on bias')
         quit()
-    
+    if winter_bias < 0:
+        winter_direction = 1
+    elif winter_bias > 0:
+        winter_direction = -1
+    else:
+        print(f'Got a {winter_bias} result from bias with {fn_best}: quitting')
+        quit()
+
     # Step parameter
-    last = parameter
-    parameter += step_size * direction
+    summer_value += summer_step * summer_direction
+    winter_value += winter_step * winter_direction
 
     # If we already tried this parameter, step halfway back
-    diff = np.abs(np.array(param_storage) - parameter)
+    diff = np.abs(np.array(param_storage['summer']) - summer_value)
     while np.any(diff < 1e-6):
-        step_size /= 2
-        parameter += step_size * direction * -1
-        diff = np.abs(np.array(param_storage) - parameter)
+        summer_step /= 2
+        summer_value += summer_step * summer_direction * -1
+        diff = np.abs(np.array(param_storage['summer']) - summer_value)
 
-    # Bound parameter
-    parameter = max(parameter,bounds[0])
-    parameter = min(parameter,bounds[-1])
-    diff = np.abs(np.array(param_storage) - parameter)
-    if parameter in bounds and np.any(diff < 1e-6):
-        bound_hit = 'lower' if parameter == bounds[0] else 'upper'
-        n_iters += 1
-        print(f'Warning: parameter hit the {bound_hit} bounds')
-        break
-    else:
-        param_storage.append(parameter)
+    # winter
+    diff = np.abs(np.array(param_storage['winter']) - winter_value)
+    while np.any(diff < 1e-6):
+        winter_step /= 2
+        winter_value += winter_step * winter_direction * -1
+        diff = np.abs(np.array(param_storage['winter']) - winter_value)
+
+    # Bound parameters
+    summer_value = max(summer_value,summer_bounds[0])
+    summer_value = min(summer_value,summer_bounds[-1])
+    winter_value = max(winter_value,winter_bounds[0])
+    winter_value = min(winter_value,winter_bounds[-1])
+
+    # Pack parameters
+    parameters = (summer_value, winter_value)
 
     # Next step
     n_iters += 1
 
 print(f'Completed calibration in {n_iters} iterations')
-print(f'     Best {param_name} = {parameter}       Best k_snow = {best_ksnow}')
+print(f'     Best {winter_param} = {winter_value}')
+print(f'     Best {summer_param} = {summer_value}')
+print(f'     Best k_snow = {best_ksnow}')
 print(f'     MAE: {loss:.3f} m w.e.')
 
 # Loss plot
 plt.plot(np.arange(n_iters),result_storage)
 plt.ylabel('Loss (MAE)')
 plt.xlabel('Iterations')
-plt.savefig(eb_prms.output_filepath+'loss_iterations.png',dpi=150)
+plt.savefig(eb_prms.output_filepath+f'loss_iterations_{site}.png')
 
 # Loss with parameter
-plt.plot(param_storage,result_storage)
-plt.ylabel('Loss (MAE)')
-plt.xlabel(f'{param_name}')
-plt.savefig(eb_prms.output_filepath+'loss_parameter.png',dpi=150)
+fig,axes = plt.subplots(2)
+axes[0].plot(param_storage['winter'],result_storage)
+axes[0].set_xlabel(f'{winter_param}')
+axes[1].plot(param_storage['summer'],result_storage)
+axes[1].set_xlabel(f'{summer_param}')
+fig.supylabel('Loss (MAE)')
+plt.savefig(eb_prms.output_filepath+f'loss_parameter_{site}.png')
 
-# Best result plot
-k_snow = ds.attrs['k_snow']
-fig, ax = seasonal_mass_balance(data_fp,ds,site=site,method='MAE',plot=True)
-fig.suptitle(f'Current best run at {site}: {param_name} = {parameter}   k_snow = {k_snow}')
-plt.savefig(eb_prms.output_filepath+f'mass_balance_{site}.png',dpi=150)
+# # Best result plot
+# k_snow = ds.attrs['k_snow']
+# fig, ax = seasonal_mass_balance(data_fp,ds,site=site,method='MAE',plot=True)
+# fig.suptitle(f'Current best run at {site}: {summer_param} = {summer_value}      k_snow = {k_snow}')
+# plt.savefig(eb_prms.output_filepath+f'mass_balance_{site}.png',dpi=150)
 
 # low = 3e-6
 # high = 3e-4
