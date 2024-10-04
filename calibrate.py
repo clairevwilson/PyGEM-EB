@@ -15,10 +15,10 @@ import pygem_eb.massbalance as mb
 from objectives import *
 
 # ===== USER OPTIONS =====
-site = 'AB'
+site = 'D'
 # Parameter tuning summer balance
 summer_param = 'kw' if site == 'D' else 'a_ice'
-summer_info = {'AB':{'bounds':[0.2,0.4],'x0':0.4},
+summer_info = {'AB':{'bounds':[0.2,0.4],'x0':0.3},
                  'B':{'bounds':[0.4,0.55],'x0':0.4},
                  'D':{'bounds':[0.2,0.8],'x0':0.4}}
 summer_x0 = summer_info[site]['x0']          # Initial guess for the summer parameter
@@ -26,7 +26,7 @@ summer_bounds = summer_info[site]['bounds']  # Bounds for parameter search
 summer_step = 0.02
 # Parameter tuning winter balance
 winter_param = 'kp'
-winter_x0 = 1             # Initial guess for the winter parameter (kp)
+winter_x0 = 2.5             # Initial guess for the winter parameter (kp)
 winter_bounds = [0.5,4]   # Bounds for kp search
 winter_step = 0.5
 # Optimization choices
@@ -149,6 +149,10 @@ def objective(parameters):
 
         # Set task ID for SNICAR input file
         args_run.task_id = set_no 
+        if site == 'B':
+            args_run.task_id += 5
+        elif site == 'D':
+            args_run.task_id += 10
     
         # Store model inputs
         packed_vars[set_no].append((args_run,climate,store_attrs))
@@ -166,7 +170,7 @@ def objective(parameters):
     all_names = []
     for run in np.arange(start_counter, all_runs_counter):
         # Get the output dataset
-        out = base_fn.replace('#',str(run)) + '_0.nc'
+        out = base_fn.replace('#',str(run)) + '0.nc'
         ds = xr.open_dataset(eb_prms.output_filepath + out)
 
         # Evaluate loss
@@ -193,7 +197,7 @@ n_iters = 0
 # Begin search
 while loss > tolerance and n_iters < max_n_iters:
     # Unpack parameters
-    winter_value, summer_value = parameters
+    summer_value, winter_value = parameters
 
     # Run the objective function
     print(f'Testing {winter_param} = {winter_value}, {summer_param} = {summer_value}')
@@ -212,6 +216,7 @@ while loss > tolerance and n_iters < max_n_iters:
 
     # Calculate the bias in the best run
     winter_bias,summer_bias = seasonal_mass_balance(data_fp,ds,site=site,method='ME')
+    print(f'Winter bias: {winter_bias} m w.e.    Summer bias: {summer_bias} m w.e.')
 
     # Adjust parameters according to bias
     if summer_param == 'a_ice':
@@ -239,8 +244,10 @@ while loss > tolerance and n_iters < max_n_iters:
         quit()
     if winter_bias < 0:
         winter_direction = 1
+        print(f'Underestimated winter MB: increasing {winter_param}')
     elif winter_bias > 0:
         winter_direction = -1
+        print(f'Overestimated winter MB: decreasing {winter_param}')
     else:
         print(f'Got a {winter_bias} result from bias with {fn_best}: quitting')
         quit()
@@ -271,6 +278,8 @@ while loss > tolerance and n_iters < max_n_iters:
 
     # Pack parameters
     parameters = (summer_value, winter_value)
+    param_storage['winter'].append(winter_value)
+    param_storage['summer'].append(summer_value)
 
     # Next step
     n_iters += 1

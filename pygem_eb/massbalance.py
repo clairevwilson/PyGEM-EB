@@ -438,9 +438,10 @@ class massBalance():
             layers.lwater[snow_firn_idx] = lw
             layers.ldrymass[snow_firn_idx] = ldm
             runoff += q_out*dt + np.sum(layermelt[layers.ice_idx])
-            if np.any(layers.lnewsnow > layers.ldrymass):
-                where = np.where(layers.lnewsnow > layers.ldrymass)[0]
-                layers.lnewsnow[where] = 0
+
+            # Remove melted ice mass
+            for layer in layers.ice_idx:
+                layers.ldrymass[layer] -= layermelt[layer]
 
             # Diffuse LAPs 
             if self.args.switch_LAPs == 1:
@@ -457,9 +458,6 @@ class massBalance():
         ins = water_in
         outs = runoff
         change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
-        if np.abs(change - (ins-outs)) >= eb_prms.mb_threshold:
-            print(layers.ldrymass,layers.lwater,initial_mass,layers.ltype)
-            print(self.time,change,ins,outs)
         assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, 'percolation failed mass conservation'
 
         return runoff

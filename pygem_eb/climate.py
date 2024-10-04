@@ -324,18 +324,21 @@ class Climate():
         fn = self.reanalysis_fp + 'merra2_to_ukesm_conversion_map_MERRAgrid.nc'
         ds_f = xr.open_dataarray(fn)
         ds_f = ds_f.sel({self.lat_vn:self.lat,self.lon_vn:self.lon},method='nearest')
-        for date in ds_f.time.values:
-            # select the reduction coefficient of the current month
-            f = ds_f.sel(time=date).values[0]
-            # index the climate dataset by the month and year
-            month = pd.to_datetime(date).month
-            year = pd.to_datetime(date).year
-            idx_month = np.where(self.cds.coords['time'].dt.month.values == month)[0]
-            idx_year = np.where(self.cds.coords['time'].dt.year.values == year)[0]
-            idx = list(set(idx_month)&set(idx_year))
-            # update dry and wet BC deposition
-            self.cds['bcdry'][{'time':idx}] = self.cds['bcdry'][{'time':idx}] * f
-            self.cds['bcwet'][{'time':idx}] = self.cds['bcwet'][{'time':idx}] * f
+        f = ds_f.mean('time').values.flatten()[0]
+        # for date in ds_f.time.values:
+        #     # select the reduction coefficient of the current month
+        #     f = ds_f.sel(time=date).values[0]
+        #     # index the climate dataset by the month and year
+        #     month = pd.to_datetime(date).month
+        #     year = pd.to_datetime(date).year
+        #     idx_month = np.where(self.cds.coords['time'].dt.month.values == month)[0]
+        #     idx_year = np.where(self.cds.coords['time'].dt.year.values == year)[0]
+        #     idx = list(set(idx_month)&set(idx_year))
+        #     # update dry and wet BC deposition
+        #     self.cds['bcdry'][{'time':idx}] = self.cds['bcdry'][{'time':idx}] * f
+        #     self.cds['bcwet'][{'time':idx}] = self.cds['bcwet'][{'time':idx}] * f
+        self.cds['bcdry'].values *= f
+        self.cds['bcwet'].values *= f
         return
     
     def adjust_temp_bias(self):

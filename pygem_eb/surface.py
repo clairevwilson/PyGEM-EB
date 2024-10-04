@@ -52,6 +52,12 @@ class Surface():
             self.snicar_fn = os.getcwd() + f'/biosnicar-py/biosnicar/inputs_{args.task_id}.yaml'
             if not os.path.exists(self.snicar_fn):
                 self.reset_SNICAR(self.snicar_fn)
+            try:
+                with HiddenPrints():
+                    from biosnicar import get_albedo
+                    _,_ = get_albedo.get('adding-doubling',plot=False,validate=False)
+            except:
+                self.reset_SNICAR(self.snicar_fn)
         else:
             self.snicar_fn = eb_prms.snicar_input_fp
         return
@@ -380,8 +386,13 @@ class Surface():
         return albedo,spectral_weights
     
     def reset_SNICAR(self,fp):
+        # remove old file if it exists
+        if os.path.exists(fp):
+            os.remove(fp)
+        # open the base inputs file
         with open(eb_prms.snicar_input_fp, 'rb') as src_file:
             file_contents = src_file.read()
+        # copy the base inputs file to fp
         with open(fp, 'wb') as dest_file:
             dest_file.write(file_contents)
     

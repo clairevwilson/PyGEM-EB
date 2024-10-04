@@ -109,8 +109,8 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2024-04-21 00:00:00') 
-    enddate = pd.to_datetime('2024-08-20 12:00:00')
+    startdate = pd.to_datetime('2005-04-21 00:00:00') 
+    enddate = pd.to_datetime('2005-08-20 12:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
