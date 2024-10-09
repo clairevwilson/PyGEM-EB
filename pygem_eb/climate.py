@@ -276,9 +276,9 @@ class Climate():
 
         # store the dataset as a netCDF
         if eb_prms.store_climate:
-            out_fp = self.args.out + '_climate'
+            out_fp = eb_prms.output_filepath + self.args.out + 'climate'
             self.cds.to_netcdf(out_fp+'.nc')
-            print('Climate dataset saved to ',out_fp+'.nc')
+            print('Climate dataset saved to',out_fp+'.nc')
         return
     
     def check_units(self,var,ds):
@@ -345,11 +345,17 @@ class Climate():
         """
         Updates air temperature according to preprocessed bias adjustments
         """
-        bias_df = pd.read_csv(eb_prms.temp_bias_fp)
-        for month in bias_df.index:
-            bias = bias_df.loc[month]['bias']
-            idx = np.where(self.cds.coords['time'].dt.month.values == month)[0]
-            self.cds['temp'][{'time':idx}] = self.cds['temp'][{'time':idx}] + bias
+        if eb_prms.method_temp_bias == 'monthly':
+            bias_df = pd.read_csv(eb_prms.temp_bias_fp)
+            for month in bias_df.index:
+                bias = bias_df.loc[month]['bias']
+                idx = np.where(self.cds.coords['time'].dt.month.values == month)[0]
+                self.cds['temp'][{'time':idx}] = self.cds['temp'][{'time':idx}] + bias
+        else:
+            old_T = self.cds['temp'].values
+            new_T = eb_prms.temp_bias_slope * old_T + eb_prms.temp_bias_intercept
+            self.cds['temp'].values = new_T 
+        
         return
 
     def getVaporPressure(self,tempC):

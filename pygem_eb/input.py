@@ -109,8 +109,8 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2005-04-21 00:00:00') 
-    enddate = pd.to_datetime('2005-08-20 12:00:00')
+    startdate = pd.to_datetime('2024-04-21 00:00:00') 
+    enddate = pd.to_datetime('2024-08-20 12:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
@@ -119,7 +119,7 @@ else:
     # startdate = pd.to_datetime('2016-05-11 00:30') # JIF sample dates
     # enddate = pd.to_datetime('2016-07-18 00:30')
     
-#  ========== MODEL OPTIONS ========== 
+# ========== MODEL OPTIONS ========== 
 # INITIALIATION
 initialize_water = 'zero_w0'        # 'zero_w0' or 'initial_w0'
 initialize_temp = 'interp'          # 'piecewise', 'interp' or 'ripe' (all temps=0)
@@ -132,7 +132,7 @@ if 6 < startdate.month < 9:         # initialize without snow
 # OUTPUT
 store_vars = ['MB','EB','Temp','Layers']  # Variables to store of the possible set: ['MB','EB','Temp','Layers']
 store_bands = False     # Store spectral albedo .csv
-store_climate = False    # Store climate dataset .nc
+store_climate = True    # Store climate dataset .nc
 
 # TIMESTEP
 dt = 3600                   # Model timestep [s]
@@ -145,6 +145,7 @@ method_densification = 'Boone'          # 'Boone', 'HerronLangway', 'Kojima'
 method_cooling = 'iterative'            # 'minimize' (slow) or 'iterative' (fast)
 method_ground = 'MolgHardy'             # 'MolgHardy'
 method_conductivity = 'Sturm'           # 'Sturm','Douville','Jansson'
+method_temp_bias = 'linear'
 # method_grainsizetable = 'interpolate' # unused
 
 # CONSTANT SWITCHES
@@ -249,6 +250,8 @@ ratio_DU_bin4 = 0.203775    # " SNICAR Bin 4 (2.5-5um)
 ratio_DU_bin5 = 0.034       # " SNICAR Bin 5 (5-50um)
 diffuse_cloud_limit = 0.6   # Threshold to consider cloudy vs clear-sky in SNICAR
 mb_threshold = 1e-3         # Threshold to consider not conserving mass (m w.e.)
+temp_bias_slope = 0.72801
+temp_bias_intercept = 2.234
 
 # ========== OTHER PYGEM INPUTS ========== 
 rgi_regionsO1 = [1]

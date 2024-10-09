@@ -635,6 +635,8 @@ class massBalance():
 
             for layer in snowfirn_idx:
                 weight_above = GRAVITY*np.sum(ldm[:layer]+lw[:layer])
+                if c4*(0.-lT[layer])+c5*lp[layer] > 1234:
+                    print(f'!! Overflow error from lT {lT[layer]} lp {lp[layer]} c4,c5: {c4}, {c5}')
                 viscosity = VISCOSITY_SNOW*np.exp(c4*(0.-lT[layer])+c5*lp[layer])
 
                 # get change in density
@@ -728,9 +730,10 @@ class massBalance():
 
         # set temperate ice and heat-diffusing layer indices
         temperate_idx = np.where(layers.ldepth > TEMP_DEPTH)[0]
+        if len(temperate_idx) < 1:
+            temperate_idx = [layers.nlayers - 1]
         diffusing_idx = np.arange(temperate_idx[0])
-        if len(temperate_idx) > 0:
-            layers.ltemp[temperate_idx] = TEMP_TEMP
+        layers.ltemp[temperate_idx] = TEMP_TEMP
 
         # LAYERS IN
         nl = len(diffusing_idx)
