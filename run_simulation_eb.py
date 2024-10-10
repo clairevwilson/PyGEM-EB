@@ -61,6 +61,8 @@ def get_args(parse=True):
                         help='Number of parallel processes to run')
     parser.add_argument('-task_id',default=-1,type=int,
                         help='Task ID if submitted as batch job')
+    parser.add_argument('-params_fn',action='store',default='None',
+                        help='Relative filename of params .txt file')
     parser.add_argument('-f', '--fff', help='Dummy arg to fool ipython', default='1')
     if parse:
         args = parser.parse_args()
@@ -99,6 +101,13 @@ def initialize_model(glac_no,args):
         eb_prms.shading_fp = os.getcwd() + f'/shading/out/{eb_prms.glac_name}{site}_shade.csv'
         if site not in eb_prms.output_name:
             eb_prms.output_name += f'{site}_'
+    
+    # CHECK FOR PARAMS INPUT FILE
+    if args.params_fn != 'None':
+        params = pd.read_csv(args.params_fn,index_col=0)
+        args.kp = params.loc['kp',args.site].astype(float)
+        args.kw = params.loc['kw',args.site].astype(float)
+        args.a_ice = params.loc['a_ice',args.site].astype(float)
 
     # ===== GET GLACIER CLIMATE =====
     # get glacier properties and initialize the climate class

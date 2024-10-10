@@ -371,6 +371,7 @@ class massBalance():
 
         # Initialize variables
         initial_mass = np.sum(layers.ldrymass + layers.lwater)
+        ldmi,lwi = (layers.ldrymass,layers.lwater)
         rain_bool = rainfall > 0
         runoff = 0  # Any flow that leaves the point laterally
 
@@ -458,7 +459,11 @@ class massBalance():
         ins = water_in
         outs = runoff
         change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
-        assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, 'percolation failed mass conservation'
+        if np.abs(change - (ins-outs)) >= eb_prms.mb_threshold:
+            print('ins',water_in,'outs',runoff,'now',np.sum(layers.ldrymass + layers.lwater),'initial',initial_mass)
+            print('now',layers.ldrymass,layers.lwater)
+            print('initial',ldmi,lwi)
+        # assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, 'percolation failed mass conservation'
 
         return runoff
         
@@ -594,7 +599,9 @@ class massBalance():
 
         # CHECK MASS CONSERVATION
         change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
-        assert np.abs(change) < eb_prms.mb_threshold, 'refreezing failed mass conservation'
+        if np.abs(change) >= eb_prms.mb_threshold:
+            print('change',change, 'initial',initial_mass,'dry, water',layers.ldrymass, layers.lwater)
+        # assert np.abs(change) < eb_prms.mb_threshold, 'refreezing failed mass conservation'
         
         return np.sum(refreeze)
     

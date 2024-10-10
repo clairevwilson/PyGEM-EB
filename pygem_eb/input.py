@@ -109,8 +109,8 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2024-04-21 00:00:00') 
-    enddate = pd.to_datetime('2024-08-20 12:00:00')
+    startdate = pd.to_datetime('2000-04-20 00:00:00') 
+    enddate = pd.to_datetime('2024-04-20 00:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
@@ -132,7 +132,7 @@ if 6 < startdate.month < 9:         # initialize without snow
 # OUTPUT
 store_vars = ['MB','EB','Temp','Layers']  # Variables to store of the possible set: ['MB','EB','Temp','Layers']
 store_bands = False     # Store spectral albedo .csv
-store_climate = True    # Store climate dataset .nc
+store_climate = False   # Store climate dataset .nc
 
 # TIMESTEP
 dt = 3600                   # Model timestep [s]

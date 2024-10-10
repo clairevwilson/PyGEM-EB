@@ -16,12 +16,14 @@ from objectives import *
 
 # ===== USER OPTIONS =====
 sites = ['AB','B','D']
-n_spc_runs_ahead = 0    # Step if you're going to run this script more than once
+n_spc_runs_ahead = 1    # Step if you're going to run this script more than once
 # Summer parameter bounds and guesses by site
 summer_info = {'A':{'param':'a_ice','bounds':[0.2,0.4],'x0':0.2,'step':0.05},
-                    'AB':{'param':'a_ice','bounds':[0.2,0.4],'x0':0.2,'step':0.05},
-                    'B':{'param':'a_ice','bounds':[0.4,0.55],'x0':0.4,'step':0.02},
-                    'D':{'param':'kw','bounds':[0.2,2],'x0':0.75,'step':0.1}}
+               'AB':{'param':'kw','bounds':[0.5,5],'x0':2.5,'step':0.5},
+                'B':{'param':'kw','bounds':[0.5,5],'x0':2.5,'step':0.5},
+                # 'AB':{'param':'a_ice','bounds':[0.2,0.4],'x0':0.2,'step':0.05},
+                # 'B':{'param':'a_ice','bounds':[0.4,0.55],'x0':0.4,'step':0.02},
+                'D':{'param':'kw','bounds':[0.2,5],'x0':1.5,'step':0.5}}
 # Winter parameter is always kp
 winter_info = {'param':'kp','bounds':[0.5,4],'x0':3,'step':0.1}
 # Optimization choices
@@ -52,7 +54,7 @@ for site in sites:
 
 # Force some args
 args.store_data = True              # Ensures output is stored
-args.use_AWS = True                 # Use available AWS data
+args.use_AWS = False                 # Use available AWS data
 if not args.use_AWS:
     print('use AWS is false')
 args.debug = False                  # Don't need debug prints
@@ -126,12 +128,14 @@ def objective(parameters):
 
         # Parse the input parameter
         kp = parameters[site]['kp']
-        if site == 'D':
-            kw = parameters[site]['kw']
-            a_ice = 0.4
-        else:
-            a_ice = parameters[site]['a_ice']
-            kw = 1
+        # if site == 'D':
+        #     kw = parameters[site]['kw']
+        #     a_ice = 0.4
+        # else:
+        #     a_ice = parameters[site]['a_ice']
+        #     kw = 1
+        kw = parameters[site]['kw']
+        a_ice = 0.25 if site == 'AB' else 0.4
         
         for k_snow in params_parallel['k_snow']:
             # Get args for the current run
@@ -338,6 +342,7 @@ while overall_loss > tolerance and n_iters < max_n_iters:
     
     # Store results
     overall_loss = np.mean([best[site]['loss'] for site in sites])
+    print(f'   Overall loss: {overall_loss:.4f}')
     result_storage.append(overall_loss)
     param_storage.append(copy.deepcopy(parameters))
 
