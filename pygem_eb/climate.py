@@ -325,6 +325,7 @@ class Climate():
         ds_f = xr.open_dataarray(fn)
         ds_f = ds_f.sel({self.lat_vn:self.lat,self.lon_vn:self.lon},method='nearest')
         f = ds_f.mean('time').values.flatten()[0]
+        # To do time-moving monthly factors:
         # for date in ds_f.time.values:
         #     # select the reduction coefficient of the current month
         #     f = ds_f.sel(time=date).values[0]
@@ -345,17 +346,9 @@ class Climate():
         """
         Updates air temperature according to preprocessed bias adjustments
         """
-        if eb_prms.method_temp_bias == 'monthly':
-            bias_df = pd.read_csv(eb_prms.temp_bias_fp)
-            for month in bias_df.index:
-                bias = bias_df.loc[month]['bias']
-                idx = np.where(self.cds.coords['time'].dt.month.values == month)[0]
-                self.cds['temp'][{'time':idx}] = self.cds['temp'][{'time':idx}] + bias
-        else:
-            old_T = self.cds['temp'].values
-            new_T = eb_prms.temp_bias_slope * old_T + eb_prms.temp_bias_intercept
-            self.cds['temp'].values = new_T 
-        
+        old_T = self.cds['temp'].values
+        new_T = eb_prms.temp_bias_slope * old_T + eb_prms.temp_bias_intercept
+        self.cds['temp'].values = new_T 
         return
 
     def getVaporPressure(self,tempC):

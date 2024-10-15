@@ -147,7 +147,7 @@ def seasonal_mass_balance(data_fp,ds,site='B',method='MAE',plot=False):
         return winter_error, summer_error
 
 # ========== 2. CUMULATIVE MASS BALANCE ==========
-def cumulative_mass_balance(data_fp,ds,site='AB',method='MAE',plot=False):
+def cumulative_mass_balance(data_fp,ds,method='MAE',plot=False):
     """
     Compares cumulative mass balance measurements from
     a stake to a model output. 
@@ -159,19 +159,27 @@ def cumulative_mass_balance(data_fp,ds,site='AB',method='MAE',plot=False):
     # Load dataset
     stake_df = pd.read_csv(data_fp)
     stake_df.index = pd.to_datetime(stake_df['Date'])
+    stake_df['CMB'] -= stake_df['CMB'].iloc[0]
 
-    # Retrieve the dates and index stake data
+    # Retrieve the dates
     start = stake_df.index[0]
     end = stake_df.index[-1]
     assert ds.time.values[0] < end, 'Model run begins after field date period'
     assert ds.time.values[-1] > start, 'Model run ends before field date period'
-    stake_df['CMB'] -= stake_df['CMB'].iloc[0]
+    if start < ds.time.values[0]:
+        start = pd.to_datetime(ds.time.values[0])
+    if end > ds.time.values[-1]:
+        end = pd.to_datetime(ds.time.values[-1])
 
+    # Index state data
+    stake_df = stake_df.loc[pd.date_range(start,end)]
+            
     # Index model data
-    if start.minute != pd.to_datetime(ds.time.values[0]).minute:
-        start += pd.Timedelta(minutes=30)
-    if end.minute != pd.to_datetime(ds.time.values[0]).minute:
-        end -= pd.Timedelta(minutes=30)
+    if pd.to_datetime(ds.time.values[0]).minute == 30:
+        if start.minute != pd.to_datetime(ds.time.values[0]).minute:
+            start += pd.Timedelta(minutes=30)
+        if end.minute != pd.to_datetime(ds.time.values[0]).minute:
+            end -= pd.Timedelta(minutes=30)
     ds = ds.sel(time=pd.date_range(start,end,freq='h'))
     ds = ds.dh.cumsum() - ds.dh.isel(time=0)
     ds = ds.sel(time=pd.date_range(start,end))
@@ -186,8 +194,8 @@ def cumulative_mass_balance(data_fp,ds,site='AB',method='MAE',plot=False):
 
     # Plot
     if plot:
-        fig,ax = plt.subplots()
-        ax.plot(stake_df.index,stake_df['CMB'],label='Stake',linestyle='--',color='black')
+        fig,ax = plt.subplots(figsize=(3,6))
+        ax.plot(stake_df.index,stake_df['CMB'],label='GNSS-IR',linestyle='--',color='black')
         ax.plot(ds.time.values,ds.values,label='Model')
         ax.legend(fontsize=12)
         ax.xaxis.set_major_formatter(date_form)

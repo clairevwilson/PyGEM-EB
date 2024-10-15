@@ -145,7 +145,6 @@ method_densification = 'Boone'          # 'Boone', 'HerronLangway', 'Kojima'
 method_cooling = 'iterative'            # 'minimize' (slow) or 'iterative' (fast)
 method_ground = 'MolgHardy'             # 'MolgHardy'
 method_conductivity = 'Sturm'           # 'Sturm','Douville','Jansson'
-method_temp_bias = 'linear'
 # method_grainsizetable = 'interpolate' # unused
 
 # CONSTANT SWITCHES

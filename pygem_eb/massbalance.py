@@ -460,7 +460,7 @@ class massBalance():
         outs = runoff
         change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
         if np.abs(change - (ins-outs)) >= eb_prms.mb_threshold:
-            print('ins',water_in,'outs',runoff,'now',np.sum(layers.ldrymass + layers.lwater),'initial',initial_mass)
+            print('percolation ins',water_in,'outs',runoff,'now',np.sum(layers.ldrymass + layers.lwater),'initial',initial_mass)
             print('now',layers.ldrymass,layers.lwater)
             print('initial',ldmi,lwi)
         # assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, 'percolation failed mass conservation'
@@ -600,7 +600,7 @@ class massBalance():
         # CHECK MASS CONSERVATION
         change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
         if np.abs(change) >= eb_prms.mb_threshold:
-            print('change',change, 'initial',initial_mass,'dry, water',layers.ldrymass, layers.lwater)
+            print('rfz change',change, 'initial',initial_mass,'dry, water',layers.ldrymass, layers.lwater)
         # assert np.abs(change) < eb_prms.mb_threshold, 'refreezing failed mass conservation'
         
         return np.sum(refreeze)

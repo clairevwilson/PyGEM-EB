@@ -6,16 +6,17 @@ import copy
 import pandas as pd
 from multiprocessing import Pool
 # Internal libraries
-import pygem_eb.input as eb_prms
 import run_simulation_eb as sim
 import pygem_eb.massbalance as mb
 
-# Which sites to run parallel
-sites = ['AB','B','D']
+# User info
+sites = ['ABB','BD','T'] # Sites to run in parallel
+params_fn = False                 # False or filename of parameters for run
+# '../Gulkana_params_10_08.csv'
 
 # Read command line args
 args = sim.get_args()
-args.startdate = '2000-04-20 00:00'
+args.startdate = '2024-04-20 00:00'
 args.enddate = '2024-08-20 00:00'
 args.store_data = True              # Ensures output is stored
 args.debug = False                  # Don't need debug prints
@@ -32,12 +33,14 @@ for site in sites:
     args_run.site = site
 
     # Set parameters filename (relative to PyGEM-EB/)
-    params_fn = '../Gulkana_params_10_08_HIGHWIND.csv'
-    args_run.params_fn = params_fn
+    if params_fn:
+        args_run.params_fn = params_fn
+        store_attrs = {'params_fn':params_fn}
+    else:
+        store_attrs = {'params':'baseline; calibrated kp'}
 
     # Output info
-    args_run.out = f'Gulkana_10_09_paramset_{site}_'
-    store_attrs = {'params_fn':params_fn}
+    args_run.out = f'Gulkana_10_09_{site}_'
 
     # Set task ID for SNICAR input file
     args_run.task_id = run_no

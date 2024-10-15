@@ -69,7 +69,7 @@ args.site_name += args.site
 
 # =================== FILEPATHS ===================
 # in
-site_fp = 'in/gulkana/gulkana_sites.csv' # if choosing lat/lon by site
+site_fp = '../pygem_eb/sample_data/Gulkana/site_constants.csv' # if choosing lat/lon by site
 dem_fp = 'in/gulkana/Gulkana_DEM_20m.tif'
 aspect_fp = 'in/gulkana/Gulkana_Aspect_20m.tif'
 slope_fp = 'in/gulkana/Gulkana_Slope_20m.tif'
@@ -92,6 +92,7 @@ I0 = 1368       # solar constant in W m-2
 P0 = 101325     # sea-level pressure in Pa
 PSI = 0.75      # vertical atmospheric clear-sky transmissivity
 MEAN_RAD = 1    # mean earth-sun radius in AU
+buffer = 20     # minimum number of gridcells away from which horizon can be found
 
 # =================== LABELING ===================
 varprops = {'dirirr':{'label':'direct flat-surface irradiance [W m-2]','cmap':'plasma'},
@@ -114,10 +115,11 @@ class Shading():
         """
         if args.site_by == 'id':
             # get site lat and lon    
-            latlon_df = pd.read_csv(site_fp,index_col=0)
-            args.lat = latlon_df.loc[args.site]['lat']    # latitude of point of interest
-            args.lon = latlon_df.loc[args.site]['lon']    # longitude of point of interest
+            site_df = pd.read_csv(site_fp,index_col=0)
+            args.lat = site_df.loc[args.site]['lat']    # latitude of point of interest
+            args.lon = site_df.loc[args.site]['lon']    # longitude of point of interest
             args.site_name = glacier_name + args.site
+            self.site_df = site_df
 
         # =================== SETUP ===================
         # open files
@@ -267,13 +269,11 @@ class Shading():
         
         return xs,ys
 
-    def find_horizon_point(self,elev,xs,ys,buffer = 10):
+    def find_horizon_point(self,elev,xs,ys):
         """Finds the horizon along a line of elevation
         values paired to x,y coordinates
         - elev: array of elevations in a single direction
-        - xs, ys: coordinates corresponding to elev
-        - buffer: minimum number of gridcells away the horizon 
-                can be found (needed when looking uphill)"""
+        - xs, ys: coordinates corresponding to elev"""
         # calculate distance from origin and height relative to origin
         distances = np.sqrt((xs-self.xx)**2+(ys-self.yy)**2)
         distances[np.where(distances < 1e-3)[0]] = 1e-6
@@ -521,7 +521,16 @@ class Shading():
         else:
             plt.show()
 
+    def store_site_info(self):
+        self.site_df.loc[args.site,'sky_view'] = self.sky_view
+        self.site_df.loc[args.site,'slope'] = self.slp*180/pi
+        self.site_df.loc[args.site,'aspect'] = self.asp*180/pi
+        self.site_df.loc[args.site,'elevation'] = int(self.point_elev)
+        self.site_df.to_csv(site_fp)
+        print(f'Saved sky view, slope, aspect and elevation to {site_fp}')
+
 # RUN MODEL
-if run_model:
+if __name__ == '__main__':
     model = Shading(args)
     model.main()
+    model.store_site_info()
