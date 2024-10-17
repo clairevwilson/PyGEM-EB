@@ -10,9 +10,10 @@ import run_simulation_eb as sim
 import pygem_eb.massbalance as mb
 
 # User info
-sites = ['ABB','BD','T'] # Sites to run in parallel
+sites = ['AB','ABB','B','BD','T'] # Sites to run in parallel
 params_fn = False                 # False or filename of parameters for run
 # '../Gulkana_params_10_08.csv'
+run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
 
 # Read command line args
 args = sim.get_args()
@@ -35,12 +36,12 @@ for site in sites:
     # Set parameters filename (relative to PyGEM-EB/)
     if params_fn:
         args_run.params_fn = params_fn
-        store_attrs = {'params_fn':params_fn}
+        store_attrs = {'params_fn':params_fn,'site':site}
     else:
-        store_attrs = {'params':'baseline; calibrated kp'}
+        store_attrs = {'site':site}
 
     # Output info
-    args_run.out = f'Gulkana_10_09_{site}_'
+    args_run.out = f'Gulkana_{run_date}_{site}_'
 
     # Set task ID for SNICAR input file
     args_run.task_id = run_no

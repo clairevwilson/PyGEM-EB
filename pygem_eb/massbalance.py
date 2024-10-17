@@ -892,8 +892,8 @@ class Output():
                          'sensible','latent','meltenergy','albedo',
                          'SWin_sky','SWin_terr'],
                    'MB':['melt','refreeze','runoff','accum','snowdepth','dh'],
-                   'Temp':['airtemp','surftemp'],
-                   'Layers':['layertemp','layerdensity','layerwater','layerheight',
+                   'temp':['airtemp','surftemp'],
+                   'layers':['layertemp','layerdensity','layerwater','layerheight',
                              'layerBC','layerdust','layergrainsize']}
 
         # Create file to store outputs

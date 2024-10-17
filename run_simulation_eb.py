@@ -62,7 +62,7 @@ def get_args(parse=True):
     parser.add_argument('-task_id',default=-1,type=int,
                         help='Task ID if submitted as batch job')
     parser.add_argument('-params_fn',action='store',default='None',
-                        help='Relative filename of params .txt file')
+                        help='Filepath to params .txt file')
     parser.add_argument('-f', '--fff', help='Dummy arg to fool ipython', default='1')
     if parse:
         args = parser.parse_args()
@@ -92,7 +92,6 @@ def initialize_model(glac_no,args):
         site_fp = os.path.join(data_fp,eb_prms.glac_name+'/site_constants.csv')
         site_df = pd.read_csv(site_fp,index_col='site')
         args.elev = site_df.loc[site]['elevation']
-        # eb_prms.kp = site_df.loc[site]['kp']
         eb_prms.slope = site_df.loc[site]['slope']
         eb_prms.aspect = site_df.loc[site]['aspect']
         eb_prms.sky_view = site_df.loc[site]['sky_view']

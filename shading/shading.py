@@ -31,9 +31,9 @@ from pyproj import Transformer
 from numpy import pi, cos, sin, arctan
 
 # =================== INPUTS ===================
-site_by = 'id'                  # method to choose lat/lon ('id' or 'latlon')
-site = 'B'                         # name of site for indexing .csv OR specify lat/lon
-lat,lon = [60.8155986,-139.1236350] # site lat/lon
+site_by = 'id'                      # method to choose lat/lon ('id' or 'latlon')
+site = 'B'                          # name of site for indexing .csv OR specify lat/lon
+lat,lon = [60.8155986,-139.1236350] # site latitude,longitude 
 timezone = pd.Timedelta(hours=-8)   # time zone of location
 glacier_name = 'Gulkana'            # name of glacier for labeling
 
@@ -50,10 +50,11 @@ get_diffuse = False # doesn't work yet
 assert get_shade or get_direct or get_diffuse, 'Why are you running this?'
 
 # model parameters
-time_freq = '30min'         # timestep in offset alias notation
-angle_step = 5              # step to calculate horizon angle (degrees)
-search_length = 5000        # distance to search from center point (m)
-sub_dt = 10                 # timestep to calculate solar corrections (minutes)
+time_freq = '30min'     # timestep in offset alias notation
+angle_step = 5          # step to calculate horizon angle (degrees)
+search_length = 5000    # distance to search from center point (m)
+sub_dt = 10             # timestep to calculate solar corrections (minutes)
+buffer = 20             # min # of gridcells away from which horizon can be found
 
 # =================== PARSE ARGS ===================
 parser = argparse.ArgumentParser(description='pygem-eb shading model')
@@ -92,7 +93,6 @@ I0 = 1368       # solar constant in W m-2
 P0 = 101325     # sea-level pressure in Pa
 PSI = 0.75      # vertical atmospheric clear-sky transmissivity
 MEAN_RAD = 1    # mean earth-sun radius in AU
-buffer = 20     # minimum number of gridcells away from which horizon can be found
 
 # =================== LABELING ===================
 varprops = {'dirirr':{'label':'direct flat-surface irradiance [W m-2]','cmap':'plasma'},

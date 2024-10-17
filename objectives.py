@@ -204,7 +204,7 @@ def cumulative_mass_balance(data_fp,ds,method='MAE',plot=False):
         ax.set_xlim(start,end)
         ax.set_ylabel('Surface height change (m)',fontsize=14)
         ax.set_title(f'{method} = {error:.3e}')
-        plt.show()
+        return fig, ax
 
     return error
 
