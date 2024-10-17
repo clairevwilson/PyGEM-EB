@@ -27,6 +27,7 @@ import pandas as pd
 import geopandas as gpd
 import argparse
 import suncalc
+import copy
 from pyproj import Transformer
 from numpy import pi, cos, sin, arctan
 
@@ -137,6 +138,15 @@ class Shading():
         aspect = aspect.where(aspect > 0)
         slope = slope.where(slope > 0)
 
+        # # Calculate slope and aspect from DEM
+        # dy,dx = np.gradient(dem,self.dem_res,self.dem_res)
+        # slope_rad = np.sqrt(dx**2 + dy**2)
+        # # Fill in arrays to dataset
+        # slope = copy.deepcopy(dem)
+        # aspect = copy.deepcopy(dem)
+        # slope.values = np.arctan(slope_rad) * (180 / np.pi)
+        # aspect.values = np.arctan2(-dy, dx) * (180 / np.pi)
+
         # get min/max elevation for plotting
         self.min_elev = int(np.round(np.min(dem.values)/100,0)*100)
         self.max_elev = int(np.round(np.max(dem.values)/100,0)*100)
@@ -206,6 +216,7 @@ class Shading():
         # get diffuse fraction from incoming solar data
         if get_diffuse:
             self.diffuse(df)
+        return
 
     # =================== FUNCTIONS ===================
     def r_sun(self,time):

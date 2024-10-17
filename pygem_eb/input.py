@@ -19,7 +19,7 @@ use_AWS = False          # Use AWS data? (or just reanalysis)
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/gulkana_22yrs.csv'}, 
+                            'AWS_fn':'Preprocessed/CLAWS_2024.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -72,19 +72,22 @@ output_sim_fp = output_filepath + 'simulations/'
 model_run_date = str(pd.Timestamp.today()).replace('-','_')[0:10]
 glac_name = glac_props[glac_no[0]]['name']
 
-# Define input filepaths
+# Filepaths
 glac_no_str = str(glac_no[0]).replace('.','_')
-grainsize_fp = main_directory + '/pygem_eb/sample_data/grainsize/drygrainsize(SSAin=60).nc'
-initial_temp_fp = main_directory + '/pygem_eb/sample_data/gulkanaBtemp.csv'
-initial_density_fp = main_directory + '/pygem_eb/sample_data/gulkanaBdensity.csv'
-initial_LAP_fp = main_directory + f'/../Data/Nagorski/May_Mend-2_BC.csv'
+# Grain size evolution lookup table
+grainsize_fp = main_directory + '/data/grainsize/drygrainsize(SSAin=60).nc'
+# SNICAR inputs
 snicar_input_fp = main_directory + '/biosnicar-py/biosnicar/inputs.yaml'
+# Initial conditions
+initial_temp_fp = main_directory + '/pygem_eb/sample_data/sample_initial_temp.csv'
+initial_density_fp = main_directory + '/pygem_eb/sample_data/sample_initial_density.csv'
+initial_grains_fp = main_directory + '/pygem_eb/sample_data/sample_initial_grains.csv'
+initial_LAP_fp = main_directory + f'/pygem_eb/sample_data/sample_initial_laps.csv' # f'/../Data/Nagorski/May_Mend-2_BC.csv'
+# Shading
 shading_fp = main_directory + f'/shading/out/{glac_name}{site}_shade.csv'
-temp_bias_fp = main_directory + '/pygem_eb/sample_data/Gulkana/Gulkana_MERRA2_temp_bias.csv'
-# Define output filepaths
+# Output filepaths
 albedo_out_fp = main_directory + '/../Output/EB/albedo.csv'
 output_name = f'{glac_name}_{model_run_date}_'
-# output_name = f'{output_filepath}EB/{glac_name}_{model_run_date}_BCred4'
 
 # ========== CLIMATE AND TIME INPUTS ========== 
 reanalysis = 'MERRA2' # 'MERRA2' (or 'ERA5-hourly' -- BROKEN)
@@ -109,8 +112,8 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2000-04-20 00:00:00') 
-    enddate = pd.to_datetime('2024-04-20 00:00:00')
+    startdate = pd.to_datetime('2024-04-20 00:00:00') 
+    enddate = pd.to_datetime('2024-08-20 00:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
@@ -121,10 +124,8 @@ else:
     
 # ========== MODEL OPTIONS ========== 
 # INITIALIATION
-initialize_water = 'zero_w0'        # 'zero_w0' or 'initial_w0'
-initialize_temp = 'interp'          # 'piecewise', 'interp' or 'ripe' (all temps=0)
-initialize_dens = 'interp'          # 'piecewise' or 'interp'
-initialize_LAPs = 'interp'          # 'fresh' or 'interp'
+initialize_temp = 'interpolate'     # 'interpolate' or 'ripe'
+initialize_LAPs = 'interpolate'     # 'interpolate' or 'clean' 
 surftemp_guess =  -10               # guess for surface temperature of first timestep
 if 6 < startdate.month < 9:         # initialize without snow
     initial_snowdepth = 0

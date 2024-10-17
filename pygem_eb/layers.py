@@ -43,27 +43,21 @@ class Layers():
         self.ldepth = ldepth                # LAYER DEPTH (midlayer) [m]
 
         # Initialize layer temperature, density, water content
-        ltemp,ldensity,lwater = self.get_Tpw(snow,firn)
+        ltemp,ldensity,lwater,lgrainsize = self.initialize_layers(snow,firn)
         self.ltemp = ltemp                  # LAYER TEMPERATURE [C]
         self.ldensity = ldensity            # LAYER DENSITY [kg m-3]
         self.ldrymass = ldensity*lheight    # LAYER DRY (SOLID) MASS [kg m-2]
         self.lwater = lwater                # LAYER WATER CONTENT [kg m-2]
+        self.grainsize = lgrainsize         # LAYER GRAIN SIZE [um]
 
         # Initialize LAPs (black carbon and dust)
         if eb_prms.switch_LAPs == 1:
-            lBC,ldust = self.get_LAPs()
+            lBC,ldust = self.initialize_LAPs()
         else:
             lBC = np.zeros(self.nlayers)
             ldust = np.zeros(self.nlayers)
         self.lBC = lBC                      # LAYER BLACK CARBON MASS [kg m-2]
         self.ldust = ldust                  # LAYER DUST MASS [kg m-2]
-
-        # Grain size initial timestep can copy density
-        self.grainsize = self.ldensity.copy()   # LAYER GRAIN SIZE [um]
-        self.grainsize[0:3] = np.array([50,60,70]) # ***** how to initialize grainsize?
-        self.grainsize[np.where(self.grainsize>300)[0]] = 300
-        self.grainsize[np.where(self.ltype == 'firn')[0]] = 1000
-        self.grainsize[np.where(self.ltype == 'ice')[0]] = 1800
 
         # Initialize RF model for grain size lookups
         # if eb_prms.method_grainsizetable in ['ML']:
@@ -156,9 +150,10 @@ class Layers():
         self.ice_idx = np.where(ltype=='ice')[0]
         return np.array(lheight), np.array(ldepth), np.array(ltype), nlayers
 
-    def get_Tpw(self,snow_height,firn_height):
+    def initialize_layers(self,snow_height,firn_height):
         """
-        Initializes the layer temperatures, densities and water content.
+        Initializes the layer temperature, density, 
+        water content and grain size.
 
         Parameters:
         -----------
@@ -166,132 +161,90 @@ class Layers():
             Array containing depth of snow, firn and ice
         Returns:
         --------
-        layertemp, layerdensity, layerwater : np.ndarray
+        ltemp, ldensity, lwater, lgrainsize : np.ndarray
             Arrays containing layer temperature [C], density [kg m-3]
-            and water content [kg m-2]
+            water content [kg m-2], and grain size [um]
         """
         snow_idx = self.snow_idx
+        firn_idx = self.firn_idx
         ice_idx = self.ice_idx
 
-        # Read in temp and density data from csv
-        temp_data = pd.read_csv(eb_prms.initial_temp_fp)[['depth','temp']].to_numpy()
-        density_data = pd.read_csv(eb_prms.initial_density_fp)[['depth','density']].to_numpy()
+        # Read in depth profiles
+        temp_data = pd.read_csv(eb_prms.initial_temp_fp)
+        density_data = pd.read_csv(eb_prms.initial_density_fp)
+        grainsize_data = pd.read_csv(eb_prms.initial_grains_fp)
 
-        # Initialize temperature profiles from piecewise formulation or interpolating data
-        if eb_prms.initialize_temp in ['piecewise']:
-            ltemp = self.init_piecewise(self.ldepth,temp_data,'temp')
-        elif eb_prms.initialize_temp in ['interp']:
-            ltemp = np.interp(self.ldepth,temp_data[:,0],temp_data[:,1])
+        # TEMPERATURE [C]
+        if eb_prms.initialize_temp in ['interpolate']:
+            ltemp = np.interp(self.ldepth,temp_data['depth'],temp_data['temp'])
         elif eb_prms.initialize_temp in ['ripe']:
             ltemp = np.ones(self.nlayers)*0
         else:
-            assert 1==0, 'Choose between piecewise, interp or ripe for temp init'
-
-        # Initialize SNOW density profiles from piecewise formulation or interpolating data
-        if eb_prms.initialize_dens in ['piecewise']:
-            ldensity = self.init_piecewise(self.ldepth[snow_idx],density_data,'density')
-        elif eb_prms.initialize_dens in ['interp']:
-            ldensity = np.interp(self.ldepth[snow_idx],density_data[:,0],density_data[:,1])
-        else:
-            assert 1==0, 'Choose between piecewise and interp for density init'
-
-        # Calculate firn density slope that linearly increases density
-        # from the bottom snow layer to top ice layer
-        if snow_height > 0 and firn_height> 0:
-            pslope = (eb_prms.density_ice - ldensity[-1]) / (
-                self.ldepth[ice_idx[0]]-self.ldepth[snow_idx[-1]])
-        elif firn_height > 0:
-            pslope = (eb_prms.density_ice - eb_prms.density_firn)/(firn_height)
+            print('Choose between ripe and interpolate in initialize_temp')
+            quit()
         
-        # Add firn and ice layer densities
+        # GRAIN SIZE [um]
+        lgrainsize = np.interp(self.ldepth,grainsize_data['depth'],
+                               grainsize_data['grainsize'])
+        lgrainsize[self.ltype == 'firn'] = eb_prms.firn_grainsize
+        lgrainsize[self.ltype == 'ice'] = eb_prms.ice_grainsize
+
+        # DENSITY [kg m-3]
+        # SNOW layers initialized by interpolation
+        ldensity = np.interp(self.ldepth[snow_idx],
+                             density_data['depth'],density_data['density'])
+        if len(firn_idx) > 0:
+            # Calculate firn density slope from snow --> ice
+            if snow_height > 0 and firn_height > 0:
+                pslope = (eb_prms.density_ice - ldensity[-1]) / (
+                    self.ldepth[ice_idx[0]]-self.ldepth[snow_idx[-1]])
+            # No snow: set boundary tp constant density_firn
+            elif firn_height > 0:
+                pslope = (eb_prms.density_ice - eb_prms.density_firn)/(firn_height)
+        # Append firn and ice layer densities
         for (type,depth) in zip(self.ltype,self.ldepth):
-            if type in ['firn']:
+            if type in ['firn']: 
                 ldensity = np.append(ldensity,
                     ldensity[snow_idx[-1]] + pslope*(depth-self.ldepth[snow_idx[-1]]))
             elif type in ['ice']:
                 ldensity = np.append(ldensity,eb_prms.density_ice)
 
-        # Initialize water content [kg m-2]
-        assert eb_prms.initialize_water in ['zero_w0'], 'Only zero water content method is set up'
-        lwater = np.zeros(self.nlayers)
+        # WATER CONTENT [kg m-2]
+        lwater = np.zeros(self.nlayers) # Always dry to start
 
-        return ltemp,ldensity,lwater
+        return ltemp,ldensity,lwater,lgrainsize
     
-    def get_LAPs(self):
+    def initialize_LAPs(self):
         n = self.nlayers
         lheight = self.lheight
         ldepth = self.ldepth
-        if eb_prms.initialize_LAPs in ['fresh']:
+        if eb_prms.initialize_LAPs in ['clean']:
             lBC = np.ones(n)*eb_prms.BC_freshsnow*lheight
             ldust = np.ones(n)*eb_prms.dust_freshsnow*lheight 
-        elif eb_prms.initialize_LAPs in ['interp']:
-            BC_data = pd.read_csv(eb_prms.initial_LAP_fp,index_col=0)
-            dust_data = pd.read_csv(eb_prms.initial_LAP_fp.replace('BC','dust'),index_col=0)
+        elif eb_prms.initialize_LAPs in ['interpolate']:
+            lap_data = pd.read_csv(eb_prms.initial_LAP_fp,index_col=0)
 
             # add boundaries for interpolation
-            BC_data.loc[0,'BC'] = eb_prms.BC_freshsnow
-            dust_data.loc[0,'dust'] = eb_prms.dust_freshsnow
-            BC_data.loc[10,'BC'] = eb_prms.BC_freshsnow
-            dust_data.loc[10,'dust'] = eb_prms.dust_freshsnow
-            BC_data = BC_data.sort_index()
-            dust_data = dust_data.sort_index()
+            lap_data.loc[0,'BC'] = eb_prms.BC_freshsnow
+            lap_data.loc[0,'dust'] = eb_prms.dust_freshsnow
+            lap_data.loc[100,'BC'] = eb_prms.BC_freshsnow
+            lap_data.loc[100,'dust'] = eb_prms.dust_freshsnow
+            lap_data = lap_data.sort_index()
 
             # interpolate concentration by depth
-            BC_depth = BC_data.index.to_numpy()
-            dust_depth = dust_data.index.to_numpy()
-            cBC = np.interp(ldepth,BC_depth,BC_data.to_numpy().flatten())
-            cdust = np.interp(ldepth,dust_depth,dust_data.to_numpy().flatten())
+            data_depth = lap_data.index.to_numpy()
+            cBC = np.interp(ldepth,data_depth,lap_data['BC'].values.flatten())
+            cdust = np.interp(ldepth,data_depth,lap_data['dust'].values.flatten())
 
             # calculate mass from concentration
             lBC = cBC * lheight
             ldust = cdust * lheight
+        else:
+            print('Choose between clean and interpolate in initialize_LAPs')
+            quit()
         lBC[self.ice_idx] = 0
         ldust[self.ice_idx] = 0
-        return lBC, ldust            
-    
-    def init_piecewise(self,ldepth,snow_var,varname):
-        """
-        Based on the DEBAM scheme for temperature and density that assumes linear
-        changes with depth in three piecewise sections.
-
-        Parameters
-        ----------
-        ldepth : np.ndarray
-            Middles depth of the layers to be filled.
-        snow_var : np.ndarray
-            Turning point snow temperatures or densities and the associated
-            depths in pairs by (depth,temp/density value). If a surface value 
-            (z=0) is not prescribed, temperature is assumed to be 0C, or density 
-            to be 100 kg m-3.
-        varname : str
-            'temp' or 'density': which variable is being calculated
-        """
-        # Check if inputs are the correct dimensions
-        assert np.shape(snow_var) in [(4,2),(3,2)], "! Snow inputs data is improperly formatted"
-
-        # Check if a surface value is given; if not, add a row at z=0 m, T=0 C / p=100 kg m-3
-        if np.shape(snow_var) == (3,2):
-            assert snow_var[0,0] == 1.0, "! Snow inputs data is improperly formatted"
-            if varname in ['temp']:
-                np.insert(snow_var,0,[0,0],axis=0)
-            elif varname in ['density']:
-                np.insert(snow_var,0,[0,100],axis=0)
-
-        #calculate slopes and intercepts for the piecewise function
-        snow_var = np.array(snow_var)
-        slopes = [(snow_var[i,1]-snow_var[i+1,1])/(snow_var[i,0]-snow_var[i+1,0]) for i in range(3)]
-        intercepts = [snow_var[i+1,1] - slopes[i]*snow_var[i+1,0] for i in range(3)]
-
-        #solve piecewise functions at each layer depth
-        layer_var = np.piecewise(
-                        ldepth,
-                        [ldepth <= snow_var[1,0], 
-                            (ldepth <= snow_var[2,0]) & (ldepth > snow_var[1,0]),
-                            (ldepth > snow_var[2,0])],
-                        [lambda x: slopes[0]*x+intercepts[0],
-                            lambda x:slopes[1]*x+intercepts[1],
-                            lambda x: slopes[2]*x+intercepts[2]])
-        return layer_var
+        return lBC, ldust
     
     # ========= UTILITY FUNCTIONS ==========
     def add_layers(self,layers_to_add):

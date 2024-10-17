@@ -11,7 +11,7 @@ import pygem_eb.massbalance as mb
 
 # User info
 sites = ['AB','ABB','B','BD','T'] # Sites to run in parallel
-params_fn = False                 # False or filename of parameters for run
+params_fn = '../Output/params/10_08_highwind.csv'                 # False or filename of parameters for run
 # '../Gulkana_params_10_08.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
 
@@ -21,9 +21,11 @@ args.startdate = '2024-04-20 00:00'
 args.enddate = '2024-08-20 00:00'
 args.store_data = True              # Ensures output is stored
 args.debug = False                  # Don't need debug prints
+# args.use_AWS = True
 
 # Determine number of runs for each process
 n_processes = len(sites)
+args.n_processes = n_processes
 
 # Parse list for inputs to Pool function
 packed_vars = [[] for _ in range(n_processes)]
