@@ -160,6 +160,7 @@ def cumulative_mass_balance(data_fp,ds,method='MAE',plot=False):
     stake_df = pd.read_csv(data_fp)
     stake_df.index = pd.to_datetime(stake_df['Date'])
     stake_df['CMB'] -= stake_df['CMB'].iloc[0]
+    stake_df = stake_df.sort_index()
 
     # Retrieve the dates
     start = stake_df.index[0]
@@ -172,7 +173,11 @@ def cumulative_mass_balance(data_fp,ds,method='MAE',plot=False):
         end = pd.to_datetime(ds.time.values[-1])
 
     # Index state data
-    stake_df = stake_df.loc[pd.date_range(start,end)]
+    stake_df = stake_df.loc[start:end]
+    idx_data = []
+    for i,date in enumerate(pd.date_range(start,end)):
+        if date in stake_df.index:
+            idx_data.append(i)
             
     # Index model data
     if pd.to_datetime(ds.time.values[0]).minute == 30:
@@ -185,7 +190,7 @@ def cumulative_mass_balance(data_fp,ds,method='MAE',plot=False):
     ds = ds.sel(time=pd.date_range(start,end))
 
     # Clean up arrays
-    model = ds.values
+    model = ds.values[idx_data]
     data = stake_df['CMB'].values
     assert model.shape == data.shape
 
@@ -196,7 +201,11 @@ def cumulative_mass_balance(data_fp,ds,method='MAE',plot=False):
     if plot:
         fig,ax = plt.subplots(figsize=(3,6))
         ax.plot(stake_df.index,stake_df['CMB'],label='GNSS-IR',linestyle='--',color='black')
-        ax.plot(ds.time.values,ds.values,label='Model')
+        ax.plot(ds.time.values,ds.values,label='Model',color='crimson')
+        # error bounds
+        lower = stake_df['CMB'] - stake_df['sigma']
+        upper = stake_df['CMB'] + stake_df['sigma']
+        ax.fill_between(stake_df.index,lower,upper,alpha=0.2,color='gray')
         ax.legend(fontsize=12)
         ax.xaxis.set_major_formatter(date_form)
         ax.set_xticks(pd.date_range(start,end,freq='MS'))

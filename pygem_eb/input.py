@@ -19,7 +19,7 @@ use_AWS = False          # Use AWS data? (or just reanalysis)
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/CLAWS_2024.csv'}, 
+                            'AWS_fn':'Preprocessed/CLAWS_2024_noLWin.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -184,7 +184,7 @@ albedo_ice = 0.6            # albedo of ice [-]
 kcond_ice = 2               # thermal conductivity of ice
 kcond_snow = 0.05           # thermal conductivity of snow
 Boone_c1 = 2.7e-6           # s-1 (2.7e-6) --> 2.7e-4
-Boone_c5 = 0.025            # m3 kg-1 (0.018) --> 0.07
+Boone_c5 = 0.018            # m3 kg-1 (0.018) --> 0.07
 firn_grainsize = 2000       # firn grain size in um
 ice_grainsize = 5000        # ice grain size in um (placeholder)
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]

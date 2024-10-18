@@ -58,6 +58,9 @@ class massBalance():
         surface = self.surface
         dt = self.dt
 
+        # Constants
+        DENSITY_WATER = eb_prms.density_water
+
         # ===== ENTER TIME LOOP =====
         for time in self.time_list:
             # BEGIN MASS BALANCE
@@ -118,9 +121,11 @@ class massBalance():
 
             # END MASS BALANCE
             self.runoff = runoff
-            self.melt = np.sum(layermelt) / eb_prms.density_water
+            self.melt = (np.sum(layermelt)) / DENSITY_WATER
+            if self.melted_layers != 0:
+                self.melt += np.sum(self.melted_layers.mass) / DENSITY_WATER
             self.refreeze = refreeze
-            self.accum = snowfall / eb_prms.density_water
+            self.accum = snowfall / DENSITY_WATER
 
             # Store timestep data
             self.output.store_timestep(self,enbal,surface,layers,time)   
@@ -638,7 +643,8 @@ class massBalance():
             c2 = 0.042      # K-1 (0.042)
             c3 = 0.046      # m3 kg-1 (0.046)
             c4 = 0.081      # K-1 (0.081)
-            c5 = eb_prms.Boone_c5      # m3 kg-1 (0.018) --> 0.07
+            # c5 = eb_prms.Boone_c5      # m3 kg-1 (0.018) --> 0.07
+            c5 = 0.025
 
             for layer in snowfirn_idx:
                 weight_above = GRAVITY*np.sum(ldm[:layer]+lw[:layer])
