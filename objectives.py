@@ -200,10 +200,10 @@ def cumulative_mass_balance(data_fp,ds,method='MAE',plot=False):
     # Plot
     if plot:
         fig,ax = plt.subplots(figsize=(3,6))
-        df_stake_daily = pd.read_csv(data_fp.replace('GNSSIR','stake'),index_col=0)
-        df_stake_daily.index = pd.to_datetime(df_stake_daily.index)
-        df_stake_daily['CMB'] -= df_stake_daily['CMB'].iloc[0]
-        df_stake_daily = df_stake_daily.sort_index().loc[start:end]
+        # df_stake_daily = pd.read_csv(data_fp.replace('GNSSIR','stake'),index_col=0)
+        # df_stake_daily.index = pd.to_datetime(df_stake_daily.index)
+        # df_stake_daily['CMB'] -= df_stake_daily['CMB'].iloc[0]
+        # df_stake_daily = df_stake_daily.sort_index().loc[start:end]
         # ax.plot(df_stake_daily.index,df_stake_daily['CMB'],label='Stake',linestyle=':',color='gray')
 
         # plot gnssir
@@ -245,7 +245,8 @@ def snow_temperature(data_fp,ds,method='RMSE',plot=False,plot_heights=[0.5]):
     temp_df = pd.read_csv(data_fp,index_col=0)
     temp_df.index = pd.to_datetime(temp_df.index)
     temp_df = temp_df.resample('30min').interpolate()
-    h0 = np.array(temp_df.columns).astype(float)
+    h0 = np.array(temp_df.columns).astype(float)/100
+    h0 = np.max(h0) - h0
 
     # Retrieve the dates and index stake data
     start = pd.to_datetime(temp_df.index[0])
@@ -255,14 +256,14 @@ def snow_temperature(data_fp,ds,method='RMSE',plot=False,plot_heights=[0.5]):
     start = max(start,ds.time.values[0])
     end = min(end,ds.time.values[-1])
     time = pd.date_range(start,end,freq='h')
-    if time[0].minute != 30:
+    if time[0].minute != 30 and pd.to_datetime(ds.time.values[0]).minute == 30:
         time += pd.Timedelta(minutes=30)
     temp_df = temp_df.loc[time]
 
     # Initialize time loop
-    buried = np.arange(len(temp_df.columns))
     store = {'measured':[],'modeled':[],'measure_plot':[],'model_plot':[]}
     for j,hour in enumerate(time):
+        buried = np.arange(len(temp_df.columns))
         current_meas = temp_df.loc[hour].values
         if np.any(current_meas > 0):
             n_exposed = len(np.where(current_meas > 0)[0])

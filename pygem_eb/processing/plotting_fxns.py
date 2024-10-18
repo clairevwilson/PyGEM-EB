@@ -432,7 +432,7 @@ def compare_runs(ds_list,time,labels,var,res='d',t=''):
     ax.tick_params(length=5)
     ax.set_xlim(time[0],time[-1])
     fig.suptitle(t)
-    return
+    return fig,ax
 
 def plot_by(ds,time,vars,t='Monthly EB Outputs',by='doy'):
     h = 1.5
@@ -1215,6 +1215,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
 
     # Show plot
     # plt.show()
+    return fig,ax
 
 def plot_single_layer(ds,layer,vars,time,cumMB=False,t='',vline=None,res='h',resample=False):
     if len(time) == 2:

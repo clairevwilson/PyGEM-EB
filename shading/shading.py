@@ -6,7 +6,7 @@ Requirements: - DEM, slope and aspect rasters surrounding glacier
               - Coordinates for point to perform calculations
 
 1. Input site coordinates and time zone
-2. Load DEM, slope and aspect grid
+2. Load DEM and calculate slope/aspect
 3. Determine horizon angles
         Optional: plot horizon search
 4. Calculate sky-view factor
@@ -27,7 +27,6 @@ import pandas as pd
 import geopandas as gpd
 import argparse
 import suncalc
-import copy
 from pyproj import Transformer
 from numpy import pi, cos, sin, arctan
 
@@ -55,7 +54,7 @@ time_freq = '30min'     # timestep in offset alias notation
 angle_step = 5          # step to calculate horizon angle (degrees)
 search_length = 5000    # distance to search from center point (m)
 sub_dt = 10             # timestep to calculate solar corrections (minutes)
-buffer = 20             # min # of gridcells away from which horizon can be found
+buffer = 20             # min num of gridcells away from which horizon can be found
 
 # =================== PARSE ARGS ===================
 parser = argparse.ArgumentParser(description='pygem-eb shading model')
@@ -71,17 +70,16 @@ args.site_name += args.site
 
 # =================== FILEPATHS ===================
 # in
-site_fp = '../pygem_eb/sample_data/Gulkana/site_constants.csv' # if choosing lat/lon by site
-dem_fp = 'in/gulkana/Gulkana_DEM_20m.tif'
-aspect_fp = 'in/gulkana/Gulkana_Aspect_20m.tif'
-slope_fp = 'in/gulkana/Gulkana_Slope_20m.tif'
-# dem_fp = 'in/south/south_dem.tif'
-# aspect_fp = 'in/south/south_aspect.tif'
-# slope_fp = 'in/south/south_slope.tif'
-# optional shapefile for visualizing
+dem_fp = 'in/gulkana/Gulkana_DEM_20m.tif'   # DEM containing glacier + surroundings
+# if using get_diffuse, need a solar radiation file
+solar_fp = '/home/claire/research/climate_data/AWS/CNR4/cnr4_2023.csv'
+# optional: shapefile of glacier outline for plotting
 shp_fp = 'in/shapefile/Gulkana.shp'
-# optional solar radiation file for diffuse fraction
-# solar_fp = '/home/claire/research/climate_data/AWS/CNR4/cnr4_2023.csv'
+# optional: if choosing lat/lon by site, need site constants
+site_fp = '../pygem_eb/sample_data/Gulkana/site_constants.csv'
+# optional: slope/aspect .tif (can also be calculated from DEM)
+aspect_fp = None     # 'in/gulkana/Gulkana_Aspect_20m.tif'
+slope_fp = None      # 'in/gulkana/Gulkana_Slope_20m.tif'
 
 # out
 shade_fp = f'out/{args.site_name}_shade.csv'
@@ -125,27 +123,38 @@ class Shading():
         # =================== SETUP ===================
         # open files
         dem = rxr.open_rasterio(dem_fp).isel(band=0)
-        aspect = rxr.open_rasterio(aspect_fp).isel(band=0)
-        slope = rxr.open_rasterio(slope_fp).isel(band=0)
-        self.dem_res = dem.rio.resolution()[0]
+        self.x_res = dem.rio.resolution()[0]
+        self.y_res = dem.rio.resolution()[1]
 
-        # ensure same coordinates
-        shapefile = gpd.read_file(shp_fp).set_crs(epsg=4326)
-        shapefile = shapefile.to_crs(dem.rio.crs)
+        if 'search' in args.plot:
+            # load shapefile and ensure same coordinates
+            shapefile = gpd.read_file(shp_fp).set_crs(epsg=4326)
+            shapefile = shapefile.to_crs(dem.rio.crs)
+            self.shapefile = shapefile
 
         # filter nans
         dem = dem.where(dem > 0)
-        aspect = aspect.where(aspect > 0)
-        slope = slope.where(slope > 0)
 
-        # # Calculate slope and aspect from DEM
-        # dy,dx = np.gradient(dem,self.dem_res,self.dem_res)
-        # slope_rad = np.sqrt(dx**2 + dy**2)
-        # # Fill in arrays to dataset
-        # slope = copy.deepcopy(dem)
-        # aspect = copy.deepcopy(dem)
-        # slope.values = np.arctan(slope_rad) * (180 / np.pi)
-        # aspect.values = np.arctan2(-dy, dx) * (180 / np.pi)
+        # if specified aspect/slope files:
+        if aspect_fp and slope_fp:
+            # open files
+            aspect = rxr.open_rasterio(aspect_fp).isel(band=0)
+            slope = rxr.open_rasterio(slope_fp).isel(band=0)
+
+            # filter nans and convert to radians
+            aspect = aspect.where(aspect > 0)*np.pi/180
+            slope = slope.where(slope > 0)*np.pi/180
+        else:
+            # calculate gradient from DEM
+            dx,dy = np.gradient(dem,self.y_res,self.x_res)
+            # calculate slope and aspect from gradient
+            slope = np.arctan(np.sqrt(dx**2 + dy**2))
+            aspect = np.arctan2(-dy,-dx)
+            # adjust so 0 is North
+            aspect = (aspect + 2*np.pi) % (2*np.pi) 
+            # store in a DataArray
+            slope = xr.DataArray(slope, dims=['y', 'x'], coords={'y': dem.y, 'x': dem.x})
+            aspect = xr.DataArray(aspect, dims=['y', 'x'], coords={'y': dem.y, 'x': dem.x})
 
         # get min/max elevation for plotting
         self.min_elev = int(np.round(np.min(dem.values)/100,0)*100)
@@ -165,8 +174,8 @@ class Shading():
         self.point_elev = dem.sel(x=xx, y=yy, method='nearest').values
 
         # get slope and aspect at point of interest
-        asp = aspect.sel(x=xx, y=yy, method='nearest').values * pi/180
-        slp = slope.sel(x=xx, y=yy, method='nearest').values * pi/180
+        asp = aspect.sel(x=xx, y=yy, method='nearest').values
+        slp = slope.sel(x=xx, y=yy, method='nearest').values
         print(f'{args.site_name} point stats:')
         print(f'        elevation: {self.point_elev:.0f} m a.s.l.')
         print(f'        aspect: {asp*180/pi:.1f} o')
@@ -177,7 +186,6 @@ class Shading():
         self.dem = dem
         self.slope = slope
         self.aspect = aspect
-        self.shapefile = shapefile
         self.asp = asp
         self.slp = slp
         return
@@ -256,7 +264,7 @@ class Shading():
         # get starting coordinates
         start_x = self.xx
         start_y = self.yy
-        step_size = self.dem_res
+        step_size = self.x_res
 
         # convert angle to radians and make 0 north
         rad = angle * pi/180 + pi/2

@@ -7,9 +7,9 @@ import pandas as pd
 import xarray as xr
 # import pygem.oggm_compat as oggm
 
-debug=True           # Print monthly outputs?
+debug=False           # Print monthly status?
 store_data=False      # Save file?
-new_file=True        # Write to scratch file?
+new_file=True         # Make new file or write to scratch?
 
 # ========== USER OPTIONS ========== 
 glac_no = ['01.00570']  # List of RGI glacier IDs
@@ -19,7 +19,7 @@ use_AWS = False          # Use AWS data? (or just reanalysis)
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/CLAWS_2024.csv'}, 
+                            'AWS_fn':'Preprocessed/gulkana_22yrs.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -145,8 +145,7 @@ method_heateq = 'Crank-Nicholson'       # 'Crank-Nicholson'
 method_densification = 'Boone'          # 'Boone', 'HerronLangway', 'Kojima'
 method_cooling = 'iterative'            # 'minimize' (slow) or 'iterative' (fast)
 method_ground = 'MolgHardy'             # 'MolgHardy'
-method_conductivity = 'Sturm'           # 'Sturm','Douville','Jansson'
-# method_grainsizetable = 'interpolate' # unused
+method_conductivity = 'Sturm'           # 'Sturm','Douville','Jansson','OstinAndersson','VanDusen'
 
 # CONSTANT SWITCHES
 constant_snowfall_density = False        # False or density in kg m-3
@@ -190,14 +189,15 @@ ice_grainsize = 5000        # ice grain size in um (placeholder)
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
 layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
 # leave
-snow_threshold_low = 1.2    # lower threshold for linear snow-rain scaling [C]
-snow_threshold_high = 3.2   # upper threshold for linear snow-rain scaling [C]
+snow_threshold_low = 0    # lower threshold for linear snow-rain scaling [C]
+snow_threshold_high = 2   # upper threshold for linear snow-rain scaling [C]
 precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 roughness_ice = 1.7         # surface roughness length for ice [mm] (Moelg et al. 2012, TC)
 ksp_BC = 1                  # 0.1-0.2 meltwater scavenging efficiency of BC (from CLM5)
 ksp_dust = 0.2              # 0.015 meltwater scavenging efficiency of dust (from CLM5)
-roughness_aging_rate = 0.1  # effect of aging on roughness length: 60 days from 0.24 to 4.0 => 0.06267
+roughness_aging_rate = 3    # effect of aging on roughness length: 60 days from 0.24 to 4.0 => 0.06267
+# rate of (0.24mm --> 30mm in 30 days) = aging rate of 3
 albedo_TOD = [12]           # List of time(s) of day to calculate albedo [hr] 
 initSSA = 80                # initial estimate of Specific Surface Area of fresh snowfall (interpolation tables)
 BC_freshsnow = 9e-7         # concentration of BC in fresh snow [kg m-3]
@@ -234,13 +234,13 @@ rfz_grainsize = 1500        # Grainsize of refrozen snow [um]
 Sr = 0.033                  # for irreducible water content flow method
 rainBC = BC_freshsnow       # concentration of BC in rain
 raindust = dust_freshsnow   # concentration of dust in rain
-temp_temp = -5               # temperature of temperate ice [C]
-temp_depth = 100             # depth of temperate ice [m]
+temp_temp = -5              # temperature of temperate ice [C]
+temp_depth = 100            # depth of temperate ice [m]
 albedo_fresh_snow = 0.9     # Albedo of fresh snow [-] (Moelg et al. 2012, TC - 0.85)
-albedo_firn = 0.55          # Albedo of firn [-]
+albedo_firn = 0.5           # Albedo of firn [-]
 albedo_ground = 0.2         # Albedo of ground [-]
 roughness_fresh_snow = 0.24 # surface roughness length for fresh snow [mm] (Moelg et al. 2012, TC)
-roughness_firn = 4          # surface roughness length for firn [mm] (Moelg et al. 2012, TC)
+roughness_firn = 30         # surface roughness length for firn [mm] (Moelg et al. 2012, TC)
 ratio_BC2_BCtot = 2.08      # Ratio to transform BC bin 2 deposition to total BC
 ratio_DU3_DUtot = 3         # Ratio to transform dust bin 3 deposition to total dust
 ratio_DU_bin1 = 0.0751      # Ratio to transform total dust to SNICAR Bin 1 (0.05-0.5um)

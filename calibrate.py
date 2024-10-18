@@ -16,19 +16,29 @@ from objectives import *
 
 # ===== USER OPTIONS =====
 sites = ['AB','B','D']
-n_spc_runs_ahead = 1    # Step if you're going to run this script more than once
+n_spc_runs_ahead = 0    # Step if you're going to run this script more than once
+
 # Summer parameter bounds and guesses by site
 summer_info = {'A':{'param':'a_ice','bounds':[0.2,0.4],'x0':0.2,'step':0.05},
-               'AB':{'param':'kw','bounds':[0.5,5],'x0':2.5,'step':0.5},
-                'B':{'param':'kw','bounds':[0.5,5],'x0':2.5,'step':0.5},
+               'AB':{'param':'kw','bounds':[0.2,5],'x0':2.5,'step':0.5},
+                'B':{'param':'kw','bounds':[0.2,5],'x0':2.5,'step':0.5},
                 # 'AB':{'param':'a_ice','bounds':[0.2,0.4],'x0':0.2,'step':0.05},
                 # 'B':{'param':'a_ice','bounds':[0.4,0.55],'x0':0.4,'step':0.02},
                 'D':{'param':'kw','bounds':[0.2,5],'x0':1.5,'step':0.5}}
 # Winter parameter is always kp
 winter_info = {'param':'kp','bounds':[0.5,4],'x0':3,'step':0.1}
+
 # Optimization choices
 tolerance = 1e-1          # Tolerance for MAE we are looking for
 max_n_iters = 15          # Max number of iterations to run
+
+# ===== INITIAL PRINTS =====
+print(f'Starting calibration on {len(sites)} sites:')
+for site in sites:
+    param = summer_info[site]['param']
+    bounds = summer_info[site]['bounds']
+    print(f'   For site {site}, calibrating summer mass balance using {param} with bounds {bounds}')
+print(f'                       and winter mass balance using kp with bounds [0.5, 4]')
 
 # ===== FILEPATHS =====
 data_fp = os.getcwd() + '/../MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
@@ -54,10 +64,9 @@ for site in sites:
 
 # Force some args
 args.store_data = True              # Ensures output is stored
-args.use_AWS = False                 # Use available AWS data
+args.use_AWS = True                 # Use available AWS data
 if not args.use_AWS:
     print('use AWS is false')
-args.debug = False                  # Don't need debug prints
 eb_prms.store_vars = ['MB']         # Only store basic results
 
 # Initialize model

@@ -100,14 +100,7 @@ class Climate():
         
         # extract and store data
         for var in self.measured_vars:
-            data = df[var]
-            # adjust elevation-dependent variables
-            if var in ['temp','tp','sp']:
-                data = self.elev_adjust(data, var, self.AWS_elev)
-                varname = var
-            else:
-                varname = var
-            self.cds[varname].values = data.astype(float)
+            self.cds[var].values = df[var].astype(float)
 
         # figure out which data is still needed from reanalysis
         need_vars = [e for e in self.all_vars if e not in AWS_vars]
@@ -132,7 +125,7 @@ class Climate():
         zds = xr.open_dataarray(z_fp)
         zds = zds.sel({self.lat_vn:lat,self.lon_vn:lon},method='nearest')
         zds = self.check_units('elev',zds)
-        self.reanalysis_elev = zds.isel(time=0).values
+        self.reanalysis_elev = zds.isel(time=0).values.ravel()[0]
 
         # define worker function for threading
         def access_cell(fn, var, result_dict):
@@ -163,14 +156,8 @@ class Climate():
             
             assert np.abs(ds.coords[lat_vn].values - float(lat)) <= 0.5, 'Wrong grid cell accessed'
             assert np.abs(ds.coords[lon_vn].values - float(lon)) <= 0.5, 'Wrong grid cell accessed'
-            data = ds.values
-            # adjust elevation-dependent variables
-            if var in ['temp','tp','sp']:
-                data = self.elev_adjust(data.ravel(), var, self.reanalysis_elev)
-            else:
-                data = data.ravel()
             # store result
-            result_dict[var] = data
+            result_dict[var] = ds.values.ravel()
             ds.close()
             if not use_threads:
                 return result_dict
@@ -215,7 +202,7 @@ class Climate():
             self.cds[varname].values = all_data[var].flatten()
         return
 
-    def elev_adjust(self, data, var, elev_data):
+    def adjust_to_elevation(self):
         """
         Adjusts elevation-dependent climate variables (temperature, precip,
         surface pressure).
@@ -223,23 +210,32 @@ class Climate():
         Parameters
         =========
         """
+        # CONSTANTS
+        LAPSE_RATE = eb_prms.lapserate
+        PREC_GRAD = eb_prms.precgrad
+        GRAVITY = eb_prms.gravity
+        R_GAS = eb_prms.R_gas
+        MM_AIR = eb_prms.molarmass_air
+
         # TEMPERATURE: correct according to lapserate
-        if var == 'temp':
-            out = data + eb_prms.lapserate*(self.elev-elev_data)
+        temp_elev = self.AWS_elev if 'temp' in self.measured_vars else self.reanalysis_elev
+        new_temp = self.cds.temp.values + LAPSE_RATE*(self.elev - temp_elev)
 
         # PRECIP: correct according to lapserate, precipitation factor
-        elif var == 'tp':
-            out = data*(1+eb_prms.precgrad*(self.elev-elev_data))
+        tp_elev = self.AWS_elev if 'tp' in self.measured_vars else self.reanalysis_elev
+        new_tp = self.cds.tp.values*(1+PREC_GRAD*(self.elev-tp_elev))
 
         # SURFACE PRESSURE: correct according to barometric law
-        elif var == 'sp':
-            out = data
-            # **** FIGURE THIS OUT TO ACTUALLY ADJUST BY ELEVATION
-            # temp_data = self.cds['temp']
-            # out[idx,:] = data*np.power((data + eb_prms.lapserate*(z-elev_data)+273.15)/(temp_data+273.15),
-            #                 -eb_prms.gravity*eb_prms.molarmass_air/(eb_prms.R_gas*eb_prms.lapserate))
+        sp_elev = self.AWS_elev if 'sp' in self.measured_vars else self.reanalysis_elev
+        temp_sp_elev = new_temp + LAPSE_RATE*(sp_elev - self.elev) + 273.15
+        ratio = ((new_temp + 273.15) / temp_sp_elev) ** (GRAVITY*MM_AIR/(R_GAS*LAPSE_RATE))
+        new_sp = self.cds.sp.values * ratio
 
-        return out
+        # Store
+        self.cds.temp.values = new_temp.ravel()
+        self.cds.tp.values = new_tp.ravel()
+        self.cds.sp.values = new_sp.ravel()
+        return
     
     def check_ds(self):
         # need to get wind from u/v components in reanalysis data      
@@ -256,6 +252,9 @@ class Climate():
         temp_filled = True if not self.args.use_AWS else 'temp' in self.need_vars
         if eb_prms.temp_bias_adjust and temp_filled:
             self.adjust_temp_bias()
+
+        # adjust elevation dependence
+        self.adjust_to_elevation()
         
         # adjust MERRA-2 deposition by reduction coefficient
         if eb_prms.reanalysis == 'MERRA2':

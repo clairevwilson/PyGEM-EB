@@ -10,7 +10,7 @@ import run_simulation_eb as sim
 import pygem_eb.massbalance as mb
 
 # User info
-sites = ['AB','B','D','T'] # Sites to run in parallel
+sites = ['ABB','B','T'] # Sites to run in parallel
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
 params_fn = '../Output/params/10_08.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
@@ -18,7 +18,7 @@ run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
 # Read command line args
 args = sim.get_args()
 args.startdate = '2024-04-20 00:00'
-args.enddate = '2024-08-20 00:00'
+args.enddate = '2024-08-20 12:00'
 args.store_data = True              # Ensures output is stored
 args.debug = False                  # Don't need debug prints
 args.use_AWS = True
