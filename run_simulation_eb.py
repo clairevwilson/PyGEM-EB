@@ -63,6 +63,12 @@ def get_args(parse=True):
                         help='Task ID if submitted as batch job')
     parser.add_argument('-params_fn',action='store',default='None',
                         help='Filepath to params .txt file')
+    parser.add_argument('-initial_snow_depth',action='store',type=float,
+                        default=eb_prms.initial_snow_depth,
+                        help='Snow depth in m')
+    parser.add_argument('-initial_firn_depth',action='store',type=float,
+                        default=eb_prms.initial_firn_depth,
+                        help='Firn depth in m')
     parser.add_argument('-f', '--fff', help='Dummy arg to fool ipython', default='1')
     if parse:
         args = parser.parse_args()
@@ -95,12 +101,12 @@ def initialize_model(glac_no,args):
         eb_prms.slope = site_df.loc[site]['slope']
         eb_prms.aspect = site_df.loc[site]['aspect']
         eb_prms.sky_view = site_df.loc[site]['sky_view']
-        eb_prms.initial_snow_depth = site_df.loc[site]['snowdepth']
-        eb_prms.initial_firn_depth = site_df.loc[site]['firndepth']
+        args.initial_snow_depth = site_df.loc[site]['snowdepth']
+        args.initial_firn_depth = site_df.loc[site]['firndepth']
         eb_prms.shading_fp = os.getcwd() + f'/shading/out/{eb_prms.glac_name}{site}_shade.csv'
         if site not in eb_prms.output_name:
-            eb_prms.output_name += f'{site}_'
-    
+            eb_prms.output_name += f'{site}_'    
+
     # CHECK FOR PARAMS INPUT FILE
     if args.params_fn != 'None':
         params = pd.read_csv(args.params_fn,index_col=0)

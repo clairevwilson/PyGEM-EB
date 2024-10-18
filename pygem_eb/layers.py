@@ -31,8 +31,8 @@ class Layers():
         self.args = args
 
         # Load in initial depths of snow, firn and ice in m
-        snow = eb_prms.initial_snow_depth
-        firn = eb_prms.initial_firn_depth
+        snow = args.initial_snow_depth
+        firn = args.initial_firn_depth
         ice = eb_prms.initial_ice_depth
 
         # Calculate the layer depths based on initial snow, firn and ice depths
