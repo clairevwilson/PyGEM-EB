@@ -426,12 +426,13 @@ class energyBalance():
         """
         # CONSTANTS
         ROUGHNESS_FRESH_SNOW = eb_prms.roughness_fresh_snow
+        ROUGHNESS_AGED_SNOW = eb_prms.roughness_aged_snow
         ROUGHNESS_FIRN = eb_prms.roughness_firn
         ROUGHNESS_ICE = eb_prms.roughness_ice
         AGING_RATE = eb_prms.roughness_aging_rate
 
         if layertype[0] in ['snow']:
-            sigma = min(ROUGHNESS_FRESH_SNOW + AGING_RATE * days_since_snowfall, ROUGHNESS_FIRN)
+            sigma = min(ROUGHNESS_FRESH_SNOW + AGING_RATE * days_since_snowfall, ROUGHNESS_AGED_SNOW)
         elif layertype[0] in ['firn']:
             sigma = ROUGHNESS_FIRN
         elif layertype[0] in ['ice']:

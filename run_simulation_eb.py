@@ -104,6 +104,12 @@ def initialize_model(glac_no,args):
         args.initial_snow_depth = site_df.loc[site]['snowdepth']
         args.initial_firn_depth = site_df.loc[site]['firndepth']
         eb_prms.shading_fp = os.getcwd() + f'/shading/out/{eb_prms.glac_name}{site}_shade.csv'
+        if site not in ['AB','ABB','BD','T']:
+            eb_prms.initial_density_fp = f'pygem_eb/sample_data/Gulkana/gulkana{site}meandensity.csv'
+        elif site == 'T':
+            eb_prms.initial_density_fp = f'pygem_eb/sample_data/Gulkana/gulkanaDdensity.csv'
+        elif site == 'BD':
+            eb_prms.initial_density_fp = f'pygem_eb/sample_data/Gulkana/gulkanaBdensity.csv'
         if site not in eb_prms.output_name:
             eb_prms.output_name += f'{site}_'    
 

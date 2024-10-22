@@ -149,7 +149,7 @@ method_conductivity = 'Sturm'           # 'Sturm','Douville','Jansson','OstinAnd
 
 # CONSTANT SWITCHES
 constant_snowfall_density = False        # False or density in kg m-3
-constant_freshgrainsize = False          # False or grain size in um (54.5 is standard)
+constant_freshgrainsize = 54.5          # False or grain size in um (54.5 is standard)
 constant_drdry = False                   # False or dry metamorphism grain size growth rate [um s-1] (1e-4 seems reasonable)
 
 # ALBEDO SWITCHES
@@ -179,9 +179,9 @@ kp = 1
 # play with
 dep_factor = 1              # multiplicative factor to adjust MERRA-2 deposition
 wind_factor = 1             # multiplicative wind scaling factor
-albedo_ice = 0.6            # albedo of ice [-] 
+albedo_ice = 0.4            # albedo of ice [-] 
 kcond_ice = 2               # thermal conductivity of ice
-kcond_snow = 0.05           # thermal conductivity of snow
+kcond_snow = 'Sturm'        # thermal conductivity of snow
 Boone_c1 = 2.7e-6           # s-1 (2.7e-6) --> 2.7e-4
 Boone_c5 = 0.018            # m3 kg-1 (0.018) --> 0.07
 firn_grainsize = 2000       # firn grain size in um
@@ -189,19 +189,21 @@ ice_grainsize = 5000        # ice grain size in um (placeholder)
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
 layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
 # leave
-snow_threshold_low = 0    # lower threshold for linear snow-rain scaling [C]
-snow_threshold_high = 2   # upper threshold for linear snow-rain scaling [C]
+snow_threshold_low = 0      # lower threshold for linear snow-rain scaling [C]
+snow_threshold_high = 1     # upper threshold for linear snow-rain scaling [C]
 precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
-roughness_ice = 1.7         # surface roughness length for ice [mm] (Moelg et al. 2012, TC)
-ksp_BC = 1                  # 0.1-0.2 meltwater scavenging efficiency of BC (from CLM5)
-ksp_dust = 0.2              # 0.015 meltwater scavenging efficiency of dust (from CLM5)
-roughness_aging_rate = 3    # effect of aging on roughness length: 60 days from 0.24 to 4.0 => 0.06267
-# rate of (0.24mm --> 30mm in 30 days) = aging rate of 3
-albedo_TOD = [12]           # List of time(s) of day to calculate albedo [hr] 
+roughness_ice = 50          # surface roughness length for ice [mm] (Moelg et al. 2012, TC)
+roughness_fresh_snow = 0.24 # surface roughness length for fresh snow [mm] (Moelg et al. 2012, TC)
+roughness_aged_snow = 15    # surface roughness length for aged snow [mm] (MADE UP - sastrugi?)
+roughness_firn = 4          # surface roughness length for firn [mm] (Moelg et al. 2012, TC)
+roughness_aging_rate = 5    # rate in mm/day fresh --> aged snow (60 days from 0.24 to 4.0 => 0.06267)
+albedo_TOD = [14]           # List of time(s) of day to calculate albedo [hr] 
 initSSA = 80                # initial estimate of Specific Surface Area of fresh snowfall (interpolation tables)
-BC_freshsnow = 9e-7         # concentration of BC in fresh snow [kg m-3]
-dust_freshsnow = 6e-4       # concentration of dust in fresh snow [kg m-3]
+BC_freshsnow = 1e-7         # concentration of BC in fresh snow [kg m-3]
+dust_freshsnow = 1e-4       # concentration of dust in fresh snow [kg m-3]
+ksp_BC = 0.5                # 0.1-0.2 meltwater scavenging efficiency of BC (from CLM5)
+ksp_dust = 0.2              # 0.015 meltwater scavenging efficiency of dust (from CLM5)
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
 
 # ========== CONSTANTS ===========
@@ -213,7 +215,7 @@ k_air = 0.023               # Thermal conductivity of air [W K-1 m-1] (Mellor, 1
 Lh_rf = 333550              # Latent heat of fusion of ice [J kg-1]
 gravity = 9.81              # Gravity [m s-2]
 pressure_std = 101325       # Standard pressure [Pa]
-temp_std = 288.15           # Standard temperature [K]
+temp_std = 293.15           # Standard temperature [K]
 R_gas = 8.3144598           # Universal gas constant [J mol-1 K-1]
 molarmass_air = 0.0289644   # Molar mass of Earth's air [kg mol-1]
 Cp_water = 4184             # Isobaric heat capacity of water [J kg-1 K-1]
@@ -239,8 +241,6 @@ temp_depth = 100            # depth of temperate ice [m]
 albedo_fresh_snow = 0.9     # Albedo of fresh snow [-] (Moelg et al. 2012, TC - 0.85)
 albedo_firn = 0.5           # Albedo of firn [-]
 albedo_ground = 0.2         # Albedo of ground [-]
-roughness_fresh_snow = 0.24 # surface roughness length for fresh snow [mm] (Moelg et al. 2012, TC)
-roughness_firn = 30         # surface roughness length for firn [mm] (Moelg et al. 2012, TC)
 ratio_BC2_BCtot = 2.08      # Ratio to transform BC bin 2 deposition to total BC
 ratio_DU3_DUtot = 3         # Ratio to transform dust bin 3 deposition to total dust
 ratio_DU_bin1 = 0.0751      # Ratio to transform total dust to SNICAR Bin 1 (0.05-0.5um)
