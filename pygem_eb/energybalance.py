@@ -290,7 +290,9 @@ class energyBalance():
         # ADJUST WIND SPEED
         z = 2 # reference height in m
         if eb_prms.wind_ref_height != 2:
-            self.wind *= np.log(2/roughness) / np.log(eb_prms.wind_ref_height/roughness)
+            wind_2m *= np.log(2/roughness) / np.log(eb_prms.wind_ref_height/roughness)
+        else:
+            wind_2m = self.wind
 
         # Transform humidity into mixing ratio (q), get air density from PV=nRT
         Ewz = self.vapor_pressure(self.tempC)  # vapor pressure at 2m
@@ -313,14 +315,14 @@ class energyBalance():
         if eb_prms.method_turbulent in ['MO-similarity']:
             while loop:
                 # calculate stability terms
-                fric_vel = KARMAN*self.wind / (np.log(z/z0)-self.PhiM(z,L))
+                fric_vel = KARMAN*wind_2m / (np.log(z/z0)-self.PhiM(z,L))
                 cD = KARMAN**2/np.square(np.log(z/z0) - self.PhiM(z,L) - self.PhiM(z0,L))
                 csT = KARMAN*np.sqrt(cD) / (np.log(z/z0t) - self.PhiT(z,L) - self.PhiT(z0,L))
                 csQ = KARMAN*np.sqrt(cD) / (np.log(z/z0q) - self.PhiT(z,L) - self.PhiT(z0,L))
                 
                 # calculate fluxes
-                Qs = density_air*CP_AIR*csT*self.wind*(self.tempC - surftemp)
-                Ql = density_air*Lv*csQ*self.wind*(qz-q0)
+                Qs = density_air*CP_AIR*csT*wind_2m*(self.tempC - surftemp)
+                Ql = density_air*Lv*csQ*wind_2m*(qz-q0)
 
                 # recalculate L
                 if np.abs(Qs) < 1e-5:
@@ -338,8 +340,8 @@ class energyBalance():
 
                 Qs_last = Qs
         elif eb_prms.method_turbulent in ['BulkRichardson']:   
-            if self.wind != 0:
-                RICHARDSON = GRAVITY/self.tempK*(self.tempC-surftemp)*(z-z0)/self.wind**2
+            if wind_2m != 0:
+                RICHARDSON = GRAVITY/self.tempK*(self.tempC-surftemp)*(z-z0)/wind_2m**2
             else:
                 RICHARDSON = 0
             csT = KARMAN**2/(np.log(z/z0) * np.log(z/z0t))
@@ -352,8 +354,8 @@ class energyBalance():
                 phi = 0
             
             # calculate fluxes
-            Qs = density_air*CP_AIR*csT*phi*self.wind*(self.tempC - surftemp)
-            Ql = density_air*Lv*csQ*phi*self.wind*(qz-q0)
+            Qs = density_air*CP_AIR*csT*phi*wind_2m*(self.tempC - surftemp)
+            Ql = density_air*Lv*csQ*phi*wind_2m*(qz-q0)
         else:
             assert 1==0, 'Choose turbulent method from MO-similarity or BulkRichardson'
         

@@ -92,7 +92,7 @@ def initialize_model(glac_no,args):
         Class object from climate.py
     """
     # check for known glacier properties
-    data_fp = os.getcwd()+'/pygem_eb/sample_data/'
+    data_fp = os.getcwd()+'/data/'
     if eb_prms.glac_name in os.listdir(data_fp):
         site = args.site if args.site != 'AWS' else 'B'
         site_fp = os.path.join(data_fp,eb_prms.glac_name+'/site_constants.csv')
@@ -104,12 +104,15 @@ def initialize_model(glac_no,args):
         args.initial_snow_depth = site_df.loc[site]['snowdepth']
         args.initial_firn_depth = site_df.loc[site]['firndepth']
         eb_prms.shading_fp = os.getcwd() + f'/shading/out/{eb_prms.glac_name}{site}_shade.csv'
-        if site not in ['AB','ABB','BD','T']:
-            eb_prms.initial_density_fp = f'pygem_eb/sample_data/Gulkana/gulkana{site}meandensity.csv'
-        elif site == 'T':
-            eb_prms.initial_density_fp = f'pygem_eb/sample_data/Gulkana/gulkanaDdensity.csv'
-        elif site == 'BD':
-            eb_prms.initial_density_fp = f'pygem_eb/sample_data/Gulkana/gulkanaBdensity.csv'
+        if site not in ['AB','ABB','BD']:
+            if pd.to_datetime(args.startdate) > pd.to_datetime('2023-12-31'):
+                eb_prms.initial_density_fp = f'data/Gulkana/gulkana{site}density24.csv'
+            else:
+                eb_prms.initial_density_fp = f'data/Gulkana/gulkana{site}meandensity.csv'
+        elif site in ['ABB','BD']:
+            eb_prms.initial_density_fp = 'data/Gulkana/gulkanaBdensity24.csv'
+        elif site in ['AB']:
+            eb_prms.initial_density_fp = 'data/Gulkana/gulkanaAUdensity24.csv'
         if site not in eb_prms.output_name:
             eb_prms.output_name += f'{site}_'    
 

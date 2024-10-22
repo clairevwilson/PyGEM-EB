@@ -1,5 +1,4 @@
 # Built-in libraries
-import os
 import time
 import copy
 # External libraries
@@ -12,7 +11,7 @@ import pygem_eb.massbalance as mb
 # User info
 sites = ['AB','B','D'] # Sites to run in parallel
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
-params_fn = '../Output/params/10_21.csv'
+params_fn = '../Output/params/10_08.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
 
 # Read command line args

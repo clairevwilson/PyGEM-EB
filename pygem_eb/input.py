@@ -79,10 +79,10 @@ grainsize_fp = main_directory + '/data/grainsize/drygrainsize(SSAin=60).nc'
 # SNICAR inputs
 snicar_input_fp = main_directory + '/biosnicar-py/biosnicar/inputs.yaml'
 # Initial conditions
-initial_temp_fp = main_directory + '/pygem_eb/sample_data/sample_initial_temp.csv'
-initial_density_fp = main_directory + '/pygem_eb/sample_data/sample_initial_density.csv'
-initial_grains_fp = main_directory + '/pygem_eb/sample_data/sample_initial_grains.csv'
-initial_LAP_fp = main_directory + f'/pygem_eb/sample_data/sample_initial_laps.csv' # f'/../Data/Nagorski/May_Mend-2_BC.csv'
+initial_temp_fp = main_directory + '/data/sample_initial_temp.csv'
+initial_density_fp = main_directory + '/data/sample_initial_density.csv'
+initial_grains_fp = main_directory + '/data/sample_initial_grains.csv'
+initial_LAP_fp = main_directory + f'/data/sample_initial_laps.csv' # f'/../Data/Nagorski/May_Mend-2_BC.csv'
 # Shading
 shading_fp = main_directory + f'/shading/out/{glac_name}{site}_shade.csv'
 # Output filepaths
@@ -193,16 +193,16 @@ snow_threshold_low = 0      # lower threshold for linear snow-rain scaling [C]
 snow_threshold_high = 1     # upper threshold for linear snow-rain scaling [C]
 precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
-roughness_ice = 50          # surface roughness length for ice [mm] (Moelg et al. 2012, TC)
+roughness_ice = 10          # surface roughness length for ice [mm] (Moelg et al. 2012, TC)
 roughness_fresh_snow = 0.24 # surface roughness length for fresh snow [mm] (Moelg et al. 2012, TC)
 roughness_aged_snow = 15    # surface roughness length for aged snow [mm] (MADE UP - sastrugi?)
 roughness_firn = 4          # surface roughness length for firn [mm] (Moelg et al. 2012, TC)
-roughness_aging_rate = 5    # rate in mm/day fresh --> aged snow (60 days from 0.24 to 4.0 => 0.06267)
+roughness_aging_rate = 0.1  # rate in mm/day fresh --> aged snow (60 days from 0.24 to 4.0 => 0.06267)
 albedo_TOD = [14]           # List of time(s) of day to calculate albedo [hr] 
 initSSA = 80                # initial estimate of Specific Surface Area of fresh snowfall (interpolation tables)
-BC_freshsnow = 1e-7         # concentration of BC in fresh snow [kg m-3]
-dust_freshsnow = 1e-4       # concentration of dust in fresh snow [kg m-3]
-ksp_BC = 0.5                # 0.1-0.2 meltwater scavenging efficiency of BC (from CLM5)
+BC_freshsnow = 9e-7         # concentration of BC in fresh snow [kg m-3]
+dust_freshsnow = 6e-4       # concentration of dust in fresh snow [kg m-3]
+ksp_BC = 0.4                # 0.1-0.2 meltwater scavenging efficiency of BC (from CLM5)
 ksp_dust = 0.2              # 0.015 meltwater scavenging efficiency of dust (from CLM5)
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
 

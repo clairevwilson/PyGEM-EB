@@ -220,9 +220,9 @@ def cumulative_mass_balance(data_fp,ds,method='MAE',plot=False):
         ax.set_xlim(start,end)
         ax.set_ylabel('Surface height change (m)',fontsize=14)
         if error < 1:
-            ax.set_title(f'{method} = {error:.3f}')
+            ax.set_title(f'{method} = {error:.3f} m')
         else:
-            ax.set_title(f'{method} = {error:.3e}')
+            ax.set_title(f'{method} = {error:.3e} m')
         return fig, ax
 
     return error
@@ -335,8 +335,8 @@ def snow_temperature(data_fp,ds,method='RMSE',plot=False,plot_heights=[0.5]):
             ax.set_title(f'Initial height: {plot_heights[i]}',loc='right')
             ax.set_xlim(start,time[-1])
         ax.legend()
-        fig.supylabel('Snow Temperature (C)',fontsize=12)
-        fig.suptitle(f'{method} = {error:.3e}')
+        fig.supylabel('Snow Temperature ($^{\circ}$C)',fontsize=12)
+        fig.suptitle(f'{method} = {error:.3e} '+'$^{\circ}$C')
         plt.show()
 
     return error
