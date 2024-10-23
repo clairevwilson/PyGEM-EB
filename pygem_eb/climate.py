@@ -220,6 +220,8 @@ class Climate():
         # TEMPERATURE: correct according to lapserate
         temp_elev = self.AWS_elev if 'temp' in self.measured_vars else self.reanalysis_elev
         new_temp = self.cds.temp.values + LAPSE_RATE*(self.elev - temp_elev)
+        if self.args.site == 'T':
+            new_temp -= 1.5
 
         # PRECIP: correct according to lapserate, precipitation factor
         tp_elev = self.AWS_elev if 'tp' in self.measured_vars else self.reanalysis_elev
@@ -228,7 +230,7 @@ class Climate():
         # SURFACE PRESSURE: correct according to barometric law
         sp_elev = self.AWS_elev if 'sp' in self.measured_vars else self.reanalysis_elev
         temp_sp_elev = new_temp + LAPSE_RATE*(sp_elev - self.elev) + 273.15
-        ratio = ((new_temp + 273.15) / temp_sp_elev) ** (GRAVITY*MM_AIR/(R_GAS*LAPSE_RATE))
+        ratio = ((new_temp + 273.15) / temp_sp_elev) ** (-GRAVITY*MM_AIR/(R_GAS*LAPSE_RATE))
         new_sp = self.cds.sp.values * ratio
 
         # Store

@@ -1131,7 +1131,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
         elif var in ['layerwater']:
             bounds = [-1,6]
         elif var in ['layertemp']:
-            bounds = [-25,0]
+            bounds = [-10,0]
         elif var in ['layergrainsize']:
             bounds = [50,1500]
         dens_lim = 890 if plot_firn else 600

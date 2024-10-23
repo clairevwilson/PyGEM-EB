@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 import sys, os
-sys.path.append(os.getcwd()+'/biosnicar-py/')
 import yaml
 import suncalc
+sys.path.append(os.getcwd()+'/biosnicar-py/')
 
 class Surface():
     """
@@ -298,6 +298,7 @@ class Surface():
         lheight = layers.lheight[idx].astype(float).tolist()
         ldensity = layers.ldensity[idx].astype(float).tolist()
         lgrainsize = layers.grainsize[idx].astype(int)
+        lwater = layers.lwater[idx] / (layers.ldrymass[idx]+layers.lwater[idx])
 
         # Grain size files are every 1um till 1500um, then every 500
         idx_1500 = lgrainsize>1500
@@ -352,10 +353,12 @@ class Surface():
         list_doc['ICE']['DZ'] = lheight
         list_doc['ICE']['RHO'] = ldensity
         list_doc['ICE']['RDS'] = lgrainsize
+        # list_doc['ICE']['LWC'] = lwater.tolist()
+        list_doc['ICE']['LWC'] = [0]*nlayers
 
         # The following variables are constants for the n layers
         ice_variables = ['LAYER_TYPE','SHP','HEX_SIDE','HEX_LENGTH',
-                         'SHP_FCTR','WATER','AR','CDOM']
+                         'SHP_FCTR','WATER_COATING','AR','CDOM']
         for var in ice_variables:
             list_doc['ICE'][var] = [list_doc['ICE'][var][0]] * nlayers
 
@@ -376,13 +379,14 @@ class Surface():
         # Get albedo from biosnicar
         with HiddenPrints():
             albedo,spectral_weights = get_albedo.get('adding-doubling',plot=False,validate=False)
-        # I adjusted SNICAR code to return spectral albedo and spectral weights for viewing purposes
+        # I adjusted SNICAR code to return spectral weights for viewing purposes, rather than BBA
         
         # band_albedo = []
         # Calculate albedo in the specified bands
         # for idx in eb_prms.band_indices.values():
         #     band_albedo.append(np.sum(solar[idx]*albedo[idx]) / np.sum(solar[idx]))
         self.bba = np.sum(albedo * spectral_weights) / np.sum(spectral_weights)
+        # assert 1==0, str(self.bba)+' '+self.snicar_fn
         return albedo,spectral_weights
     
     def reset_SNICAR(self,fp):

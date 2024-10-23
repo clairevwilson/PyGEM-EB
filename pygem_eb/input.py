@@ -19,7 +19,7 @@ use_AWS = False          # Use AWS data? (or just reanalysis)
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/gulkana_22yrs.csv'}, 
+                            'AWS_fn':'Preprocessed/gulkana2024.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -125,7 +125,7 @@ else:
 # ========== MODEL OPTIONS ========== 
 # INITIALIATION
 initialize_temp = 'interpolate'     # 'interpolate' or 'ripe'
-initialize_LAPs = 'interpolate'     # 'interpolate' or 'clean' 
+initialize_LAPs = 'clean'           # 'interpolate' or 'clean' 
 surftemp_guess =  -10               # guess for surface temperature of first timestep
 if 6 < startdate.month < 9:         # initialize without snow
     initial_snowdepth = 0
@@ -179,7 +179,7 @@ kp = 1
 # play with
 dep_factor = 1              # multiplicative factor to adjust MERRA-2 deposition
 wind_factor = 1             # multiplicative wind scaling factor
-albedo_ice = 0.4            # albedo of ice [-] 
+albedo_ice = 0.47            # albedo of ice [-] 
 kcond_ice = 2               # thermal conductivity of ice
 kcond_snow = 'Sturm'        # thermal conductivity of snow
 Boone_c1 = 2.7e-6           # s-1 (2.7e-6) --> 2.7e-4
@@ -195,14 +195,14 @@ precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 roughness_ice = 10          # surface roughness length for ice [mm] (Moelg et al. 2012, TC)
 roughness_fresh_snow = 0.24 # surface roughness length for fresh snow [mm] (Moelg et al. 2012, TC)
-roughness_aged_snow = 15    # surface roughness length for aged snow [mm] (MADE UP - sastrugi?)
+roughness_aged_snow = 4     # surface roughness length for aged snow [mm]
 roughness_firn = 4          # surface roughness length for firn [mm] (Moelg et al. 2012, TC)
 roughness_aging_rate = 0.1  # rate in mm/day fresh --> aged snow (60 days from 0.24 to 4.0 => 0.06267)
 albedo_TOD = [14]           # List of time(s) of day to calculate albedo [hr] 
 initSSA = 80                # initial estimate of Specific Surface Area of fresh snowfall (interpolation tables)
-BC_freshsnow = 9e-7         # concentration of BC in fresh snow [kg m-3]
-dust_freshsnow = 6e-4       # concentration of dust in fresh snow [kg m-3]
-ksp_BC = 0.4                # 0.1-0.2 meltwater scavenging efficiency of BC (from CLM5)
+BC_freshsnow = 0            # concentration of BC in fresh snow for initialization [kg m-3]
+dust_freshsnow = 0          # concentration of dust in fresh snow for initilization [kg m-3]
+ksp_BC = 0.5                # 0.1-0.2 meltwater scavenging efficiency of BC (from CLM5)
 ksp_dust = 0.2              # 0.015 meltwater scavenging efficiency of dust (from CLM5)
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
 
@@ -236,7 +236,7 @@ rfz_grainsize = 1500        # Grainsize of refrozen snow [um]
 Sr = 0.033                  # for irreducible water content flow method
 rainBC = BC_freshsnow       # concentration of BC in rain
 raindust = dust_freshsnow   # concentration of dust in rain
-temp_temp = -5              # temperature of temperate ice [C]
+temp_temp = -3              # temperature of temperate ice [C]
 temp_depth = 100            # depth of temperate ice [m]
 albedo_fresh_snow = 0.9     # Albedo of fresh snow [-] (Moelg et al. 2012, TC - 0.85)
 albedo_firn = 0.5           # Albedo of firn [-]
