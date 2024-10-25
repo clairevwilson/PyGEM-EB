@@ -35,7 +35,7 @@ class energyBalance():
         self.tempC = climateds_now['temp'].values
         self.tp = climateds_now['tp'].values
         self.sp = climateds_now['sp'].values
-        self.rH = climateds_now['rh'].values
+        self.rh = climateds_now['rh'].values
         self.wind = climateds_now['wind'].values
         self.tcc = climateds_now['tcc'].values
         self.SWin_ds = climateds_now['SWin'].values
@@ -54,7 +54,7 @@ class energyBalance():
         self.dt = dt
         self.climateds = climate.cds
         self.time = time
-        self.rH = 100 if self.rH > 100 else self.rH
+        self.rh = 100 if self.rh > 100 else self.rh
 
         # Adjust calibrated values
         self.wind *= args.kw
@@ -297,7 +297,7 @@ class energyBalance():
         # Transform humidity into mixing ratio (q), get air density from PV=nRT
         Ewz = self.vapor_pressure(self.tempC)  # vapor pressure at 2m
         Ew0 = self.vapor_pressure(surftemp) # vapor pressure at the surface
-        qz = (self.rH/100)*0.622*(Ewz/(self.sp-Ewz))
+        qz = (self.rh/100)*0.622*(Ewz/(self.sp-Ewz))
         q0 = 1.0*0.622*(Ew0/(self.sp-Ew0))
         density_air = self.sp/R_GAS/self.tempK*MM_AIR
 

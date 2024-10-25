@@ -199,7 +199,7 @@ class Climate():
                 var = 'vwind'
             else:
                 varname = var
-            self.cds[varname].values = all_data[var].flatten()
+            self.cds[varname].values = all_data[var].ravel()
         return
 
     def adjust_to_elevation(self):
@@ -220,9 +220,10 @@ class Climate():
         # TEMPERATURE: correct according to lapserate
         temp_elev = self.AWS_elev if 'temp' in self.measured_vars else self.reanalysis_elev
         new_temp = self.cds.temp.values + LAPSE_RATE*(self.elev - temp_elev)
-        if self.args.site == 'T':
-            new_temp -= 1.5
-
+        # if self.args.site == 'T':
+        #     new_temp -= 1
+        #     print('REDUCING T TEMP')
+            
         # PRECIP: correct according to lapserate, precipitation factor
         tp_elev = self.AWS_elev if 'tp' in self.measured_vars else self.reanalysis_elev
         new_tp = self.cds.tp.values*(1+PREC_GRAD*(self.elev-tp_elev))
@@ -233,14 +234,14 @@ class Climate():
         ratio = ((new_temp + 273.15) / temp_sp_elev) ** (-GRAVITY*MM_AIR/(R_GAS*LAPSE_RATE))
         new_sp = self.cds.sp.values * ratio
 
-        # Store
+        # Store adjusted values
         self.cds.temp.values = new_temp.ravel()
         self.cds.tp.values = new_tp.ravel()
         self.cds.sp.values = new_sp.ravel()
         return
     
     def check_ds(self):
-        # need to get wind from u/v components in reanalysis data      
+        # If using reanalysis wind, get wind from u/v components  
         wind = self.cds['wind'].values
         if np.all(np.isnan(wind)):
             uwind = self.cds['uwind'].values
@@ -250,32 +251,32 @@ class Climate():
             self.cds['wind'].values = wind
             self.cds['winddir'].values = winddir
 
-        # add MERRA-2 temperature bias
+        # Add MERRA-2 temperature bias
         temp_filled = True if not self.args.use_AWS else 'temp' in self.need_vars
         if eb_prms.temp_bias_adjust and temp_filled:
             self.adjust_temp_bias()
 
-        # adjust elevation dependence
+        # Adjust elevation dependence
         self.adjust_to_elevation()
         
-        # adjust MERRA-2 deposition by reduction coefficient
+        # Adjust MERRA-2 deposition by reduction coefficient
         if eb_prms.reanalysis == 'MERRA2':
             self.adjust_dep()
 
-        # check all variables are there
+        # Check all variables are there
         failed = []
         for var in self.all_vars:
             data = self.cds[var].values
-            if np.all(np.isnan(data)):
+            if np.any(np.isnan(data)):
                 failed.append(var)
-        # can input net radiation instead of incoming longwave
+        # Can input net radiation instead of incoming longwave
         if 'LWin' in failed and 'NR' in self.measured_vars:
-            failed.drop('LWin')
+            failed.remove('LWin')
         if len(failed) > 0:
-            print('Missing data:',failed)
+            print('Missing data from',failed)
             quit()
 
-        # store the dataset as a netCDF
+        # Store the dataset as a netCDF
         if eb_prms.store_climate:
             out_fp = eb_prms.output_filepath + self.args.out + 'climate'
             self.cds.to_netcdf(out_fp+'.nc')
@@ -325,7 +326,7 @@ class Climate():
         fn = self.reanalysis_fp + 'merra2_to_ukesm_conversion_map_MERRAgrid.nc'
         ds_f = xr.open_dataarray(fn)
         ds_f = ds_f.sel({self.lat_vn:self.lat,self.lon_vn:self.lon},method='nearest')
-        f = ds_f.mean('time').values.flatten()[0]
+        f = ds_f.mean('time').values.ravel()[0]
         # To do time-moving monthly factors:
         # for date in ds_f.time.values:
         #     # select the reduction coefficient of the current month
@@ -472,7 +473,7 @@ class Climate():
         
     #     # form meshgrid and corresponding y for model input
     #     TT,pp,ddTT = np.meshgrid(T,p,dTdz)
-    #     X = np.array([TT.flatten(),pp.flatten(),ddTT.flatten()]).T
+    #     X = np.array([TT.ravel(),pp.ravel(),ddTT.ravel()]).T
     #     y = []
     #     for tpd in X:
     #         tsel = tpd[0]
@@ -499,7 +500,7 @@ class Climate():
 
     #     # train rain forest model
     #     rf = RandomForestRegressor(max_depth=15,n_estimators=10)
-    #     y_train = y_train.flatten()
+    #     y_train = y_train.ravel()
     #     rf.fit(X_train,y_train)
     #     trainloss = self.RMSE(y_train,rf.predict(X_train))
     #     valloss = self.RMSE(y_val,rf.predict(X_val))

@@ -20,7 +20,7 @@ All functions use the following notation for the arguments:
 
 @author: clairevwilson
 """
-import xarray as xr
+import os
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
@@ -55,13 +55,13 @@ def seasonal_mass_balance(data_fp,ds,site='B',method='MAE',plot=False):
     Name of the USGS site.
     """
     # Load dataset
-    mb_df = pd.read_csv(data_fp)
-    mb_df = mb_df.loc[mb_df['site_name'] == site]
-    mb_df.index = mb_df['Year']
+    df_mb = pd.read_csv(data_fp)
+    df_mb = df_mb.loc[df_mb['site_name'] == site]
+    df_mb.index = df_mb['Year']
 
     # Get overlapping years
     years_model = np.unique(pd.to_datetime(ds.time.values).year)
-    years_measure = np.unique(mb_df.index)
+    years_measure = np.unique(df_mb.index)
     years = np.sort(list(set(years_model) & set(years_measure)))[1:]
 
     # Retrieve the model data
@@ -91,11 +91,11 @@ def seasonal_mass_balance(data_fp,ds,site='B',method='MAE',plot=False):
         mb_dict['s+'].append(sds.accum.values)
 
     # Index mass balance data
-    mb_df = mb_df.loc[years]
-    winter_data = mb_df['bw']
-    summer_data = mb_df['ba'] - mb_df['bw']
-    wabl_data = mb_df['winter_ablation']
-    sacc_data = mb_df['summer_accumulation']
+    df_mb = df_mb.loc[years]
+    winter_data = df_mb['bw']
+    summer_data = df_mb['ba'] - df_mb['bw']
+    wabl_data = df_mb['winter_ablation']
+    sacc_data = df_mb['summer_accumulation']
 
     # Clean up arrays
     winter_model = np.array(mb_dict['bw'])
@@ -147,7 +147,7 @@ def seasonal_mass_balance(data_fp,ds,site='B',method='MAE',plot=False):
         return winter_error, summer_error
 
 # ========== 2. CUMULATIVE MASS BALANCE ==========
-def cumulative_mass_balance(data_fp,ds,method='MAE',plot=False):
+def cumulative_mass_balance(site,ds,method='MAE',plot=False):
     """
     Compares cumulative mass balance measurements from
     a stake to a model output. 
@@ -156,76 +156,106 @@ def cumulative_mass_balance(data_fp,ds,method='MAE',plot=False):
     columns: 'Date' and 'CMB' where 'CMB' is the surface 
     height change in meters.
     """
-    # Load dataset
-    df_mb_daily = pd.read_csv(data_fp)
-    df_mb_daily.index = pd.to_datetime(df_mb_daily['Date'])
-    df_mb_daily['CMB'] -= df_mb_daily['CMB'].iloc[0]
-    df_mb_daily = df_mb_daily.sort_index()
+    GNSSIR_fp = f'../MB_data/Stakes/gulkana{site}24_GNSSIR.csv'
+    USGS_fp = f'../MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
 
-    # Retrieve the dates
-    start = df_mb_daily.index[0]
-    end = df_mb_daily.index[-1]
-    assert ds.time.values[0] < end, 'Model run begins after field date period'
-    assert ds.time.values[-1] > start, 'Model run ends before field date period'
-    if start < ds.time.values[0]:
-        start = pd.to_datetime(ds.time.values[0])
-    if end > ds.time.values[-1]:
-        end = pd.to_datetime(ds.time.values[-1])
+    # Load GNSSIR daily MB
+    if os.path.exists(GNSSIR_fp):
+        df_mb_daily = pd.read_csv(GNSSIR_fp)
+        df_mb_daily.index = pd.to_datetime(df_mb_daily['Date'])
+        df_mb_daily['CMB'] -= df_mb_daily['CMB'].iloc[0]
+        df_mb_daily = df_mb_daily.sort_index()
 
-    # Index state data
-    df_mb_daily = df_mb_daily.loc[start:end]
-    idx_data = []
-    for i,date in enumerate(pd.date_range(start,end)):
-        if date in df_mb_daily.index:
-            idx_data.append(i)
-            
-    # Index model data
-    if pd.to_datetime(ds.time.values[0]).minute == 30:
-        if start.minute != pd.to_datetime(ds.time.values[0]).minute:
-            start += pd.Timedelta(minutes=30)
-        if end.minute != pd.to_datetime(ds.time.values[0]).minute:
-            end -= pd.Timedelta(minutes=30)
-    ds = ds.sel(time=pd.date_range(start,end,freq='h'))
-    ds = ds.dh.cumsum() - ds.dh.isel(time=0)
-    ds = ds.sel(time=pd.date_range(start,end))
+    # Load USGS seasonal MB
+    if site not in ['ABB','BD']:
+        year = pd.to_datetime(ds.time.values[0]).year
+        df_mb = pd.read_csv(USGS_fp)
+        df_mb = df_mb.loc[df_mb['site_name'] == site]
+        mba = df_mb.loc[df_mb['Year'] == year,'ba'].values[0]
+        mbw = df_mb.loc[df_mb['Year'] == year,'bw'].values[0]
+        mbs_measured = mba - mbw
 
-    # Clean up arrays
-    model = ds.values[idx_data]
-    data = df_mb_daily['CMB'].values
-    assert model.shape == data.shape
+        # Retrieve modeled summer MB
+        spring_date = str(year)+'-04-20 00:00'
+        fall_date = str(year)+'-08-20 00:00'
+        melt_dates = pd.date_range(spring_date,fall_date,freq='h')
+        ds_summer = ds.sel(time=melt_dates)
+        mbs_modeled = ds_summer.accum + ds_summer.refreeze - ds_summer.melt
+        internal_acc = np.sum(ds_summer.isel(time=-1).columnrefreeze.values)
+        if internal_acc > 0:
+            print(f'Internal acc: {internal_acc:.3f} m w.e.')
+        mbs_modeled = mbs_modeled.sum().values - internal_acc
 
-    # Assess error
-    error = objective(model,data,method)
+    if os.path.exists(GNSSIR_fp):
+        # Retrieve the dates
+        start = df_mb_daily.index[0]
+        end = df_mb_daily.index[-1]
+        assert ds.time.values[0] < end, 'Model run begins after field date period'
+        assert ds.time.values[-1] > start, 'Model run ends before field date period'
+        if start < ds.time.values[0]:
+            start = pd.to_datetime(ds.time.values[0])
+        if end > ds.time.values[-1]:
+            end = pd.to_datetime(ds.time.values[-1])
 
-    # Plot
-    if plot:
-        fig,ax = plt.subplots(figsize=(3,6))
-        # df_stake_daily = pd.read_csv(data_fp.replace('GNSSIR','stake'),index_col=0)
-        # df_stake_daily.index = pd.to_datetime(df_stake_daily.index)
-        # df_stake_daily['CMB'] -= df_stake_daily['CMB'].iloc[0]
-        # df_stake_daily = df_stake_daily.sort_index().loc[start:end]
-        # ax.plot(df_stake_daily.index,df_stake_daily['CMB'],label='Stake',linestyle=':',color='gray')
+        # Index state data
+        df_mb_daily = df_mb_daily.loc[start:end]
+        idx_data = []
+        for i,date in enumerate(pd.date_range(start,end)):
+            if date in df_mb_daily.index:
+                idx_data.append(i)
+                
+        # Index model data
+        if pd.to_datetime(ds.time.values[0]).minute == 30:
+            if start.minute != pd.to_datetime(ds.time.values[0]).minute:
+                start += pd.Timedelta(minutes=30)
+            if end.minute != pd.to_datetime(ds.time.values[0]).minute:
+                end -= pd.Timedelta(minutes=30)
+        ds = ds.sel(time=pd.date_range(start,end,freq='h'))
+        ds = ds.dh.cumsum() - ds.dh.isel(time=0)
+        ds = ds.sel(time=pd.date_range(start,end))
 
-        # plot gnssir
-        ax.plot(df_mb_daily.index,df_mb_daily['CMB'],label='GNSS-IR',linestyle='--',color='black')
-        ax.plot(ds.time.values,ds.values,label='Model',color='crimson')
-        # error bounds
-        lower = df_mb_daily['CMB'] - df_mb_daily['sigma']
-        upper = df_mb_daily['CMB'] + df_mb_daily['sigma']
-        ax.fill_between(df_mb_daily.index,lower,upper,alpha=0.2,color='gray')
-        ax.legend(fontsize=12)
-        ax.xaxis.set_major_formatter(date_form)
-        ax.set_xticks(pd.date_range(start,end,freq='MS'))
-        ax.tick_params(labelsize=12,length=5,width=1)
-        ax.set_xlim(start,end)
-        ax.set_ylabel('Surface height change (m)',fontsize=14)
-        if error < 1:
-            ax.set_title(f'{method} = {error:.3f} m')
+        # Clean up arrays
+        model = ds.values[idx_data]
+        data = df_mb_daily['CMB'].values
+        assert model.shape == data.shape
+
+        # Assess error
+        error = objective(model,data,method)
+
+        # Plot
+        if plot:
+            fig,ax = plt.subplots(figsize=(3,6))
+            # df_stake_daily = pd.read_csv(data_fp.replace('GNSSIR','stake'),index_col=0)
+            # df_stake_daily.index = pd.to_datetime(df_stake_daily.index)
+            # df_stake_daily['CMB'] -= df_stake_daily['CMB'].iloc[0]
+            # df_stake_daily = df_stake_daily.sort_index().loc[start:end]
+            # ax.plot(df_stake_daily.index,df_stake_daily['CMB'],label='Stake',linestyle=':',color='gray')
+
+            # plot gnssir
+            ax.plot(df_mb_daily.index,df_mb_daily['CMB'],label='GNSS-IR',linestyle='--',color='black')
+            ax.plot(ds.time.values,ds.values,label='Model',color='crimson')
+            # error bounds
+            lower = df_mb_daily['CMB'] - df_mb_daily['sigma']
+            upper = df_mb_daily['CMB'] + df_mb_daily['sigma']
+            ax.fill_between(df_mb_daily.index,lower,upper,alpha=0.2,color='gray')
+            ax.legend(fontsize=12)
+            ax.xaxis.set_major_formatter(date_form)
+            ax.set_xticks(pd.date_range(start,end,freq='MS'))
+            ax.tick_params(labelsize=12,length=5,width=1)
+            ax.set_xlim(start,end)
+            ax.set_ylabel('Surface height change (m)',fontsize=14)
+            if error < 1:
+                ax_title = f'{method} = {error:.3f} m'
+            else:
+                ax_title = f'{method} = {error:.3e} m'
+            if site not in ['ABB','BD']:
+                ax_title += f'\nModeled MB: {mbs_modeled:.3f} m w.e.\nMeasured MB: {mbs_measured:.3f} m w.e.'
+            ax.set_title(ax_title,y=1.03)
+            return fig, ax
         else:
-            ax.set_title(f'{method} = {error:.3e} m')
-        return fig, ax
-
-    return error
+            return error
+    else:
+        print(f'Modeled MB: {mbs_modeled} m w.e.\nMeasured MB: {mbs_measured} m w.e.')
 
 # ========== 3. SNOW TEMPERATURES ==========
 def snow_temperature(data_fp,ds,method='RMSE',plot=False,plot_heights=[0.5]):

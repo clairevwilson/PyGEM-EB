@@ -353,12 +353,17 @@ class Surface():
         list_doc['ICE']['DZ'] = lheight
         list_doc['ICE']['RHO'] = ldensity
         list_doc['ICE']['RDS'] = lgrainsize
-        # list_doc['ICE']['LWC'] = lwater.tolist()
-        list_doc['ICE']['LWC'] = [0]*nlayers
+        if eb_prms.include_LWC_SNICAR:
+            list_doc['ICE']['KAYER_TYPE'][0] = 4
+            list_doc['ICE']['LWC'] = lwater.tolist()
+        else:
+            list_doc['ICE']['LWC'] = [0]*nlayers
 
         # The following variables are constants for the n layers
         ice_variables = ['LAYER_TYPE','SHP','HEX_SIDE','HEX_LENGTH',
                          'SHP_FCTR','WATER_COATING','AR','CDOM']
+        # Option to change shape in inputs
+        list_doc['ICE']['SHP'][0] = eb_prms.grainshape_SNICAR
         for var in ice_variables:
             list_doc['ICE'][var] = [list_doc['ICE'][var][0]] * nlayers
 
@@ -376,17 +381,12 @@ class Surface():
         with open(self.snicar_fn, 'w') as f:
             yaml.dump(list_doc,f)
         
-        # Get albedo from biosnicar
+        # Run get_albedo from SNICAR
         with HiddenPrints():
             albedo,spectral_weights = get_albedo.get('adding-doubling',plot=False,validate=False)
-        # I adjusted SNICAR code to return spectral weights for viewing purposes, rather than BBA
-        
-        # band_albedo = []
-        # Calculate albedo in the specified bands
-        # for idx in eb_prms.band_indices.values():
-        #     band_albedo.append(np.sum(solar[idx]*albedo[idx]) / np.sum(solar[idx]))
+        # I adjusted SNICAR code to return spectral weights, rather than BBA
+
         self.bba = np.sum(albedo * spectral_weights) / np.sum(spectral_weights)
-        # assert 1==0, str(self.bba)+' '+self.snicar_fn
         return albedo,spectral_weights
     
     def reset_SNICAR(self,fp):

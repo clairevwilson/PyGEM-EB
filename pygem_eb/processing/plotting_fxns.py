@@ -21,26 +21,27 @@ glac_props = {'01.00570':{'name':'Gulkana',
             '16.02444':{'name':'Artesonraju',
                             'AWS_fn':'Preprocessed/artesonraju/Artesonraju_hourly.csv'}}
 
-varprops = {'surftemp':{'label':'Surface temp','type':'Temperature','units':'C'},
-            'airtemp':{'label':'Air temp','type':'Temperature','units':'C'},
-           'melt':{'label':'Cum. Melt','type':'MB','units':'m w.e.'},
-           'runoff':{'label':'Cum. Runoff','type':'MB','units':'m w.e.'},
-           'accum':{'label':'Cum. Accumulation','type':'MB','units':'m w.e.'},
-           'refreeze':{'label':'Cum. Refreeze','type':'MB','units':'m w.e.'},
-           'meltenergy':{'label':'Melt Energy','type':'Flux','units':'W m$^{-2}$'},
-           'SWin':{'label':'Shortwave In','type':'Flux','units':'W m$^{-2}$'},
-           'SWout':{'label':'Shortwave Out','type':'Flux','units':'W m$^{-2}$'},
-           'SWin_sky':{'label':'Sky Shortwave In','type':'Flux','units':'W m$^{-2}$'},
-           'SWin_terr':{'label':'Terrain Shortwave In','type':'Flux','units':'W m$^{-2}$'},
-           'LWin':{'label':'Longwave In','type':'Flux','units':'W m$^{-2}$'},
-           'LWout':{'label':'Longwave Out','type':'Flux','units':'W m$^{-2}$'},
-           'SWnet':{'label':'Net Shortwave','type':'Flux','units':'W m$^{-2}$'},
-           'LWnet':{'label':'Net Longwave','type':'Flux','units':'W m$^{-2}$'},
-           'NetRad':{'label':'Net Radiation','type':'Flux','units':'W m$^{-2}$'},
-           'sensible':{'label':'Sensible Heat','type':'Flux','units':'W m$^{-2}$'},
-           'latent':{'label':'Latent Heat','type':'Flux','units':'W m$^{-2}$'},
-           'rain':{'label':'Rain Energy','type':'Flux','units':'W m$^{-2}$'},
-           'ground':{'label':'Ground Energy','type':'Flux','units':'W m$^{-2}$'},
+varprops = {'surftemp':{'label':'Temperature','type':'Temperature','units':'C'},
+            'airtemp':{'label':'Temperature','type':'Temperature','units':'C'},
+           'melt':{'label':'Mass balance','type':'MB','units':'m w.e.'},
+           'runoff':{'label':'Mass balance','type':'MB','units':'m w.e.'},
+           'accum':{'label':'Mass balance','type':'MB','units':'m w.e.'},
+           'refreeze':{'label':'Mass balance','type':'MB','units':'m w.e.'},
+           'MB':{'label':'Mass balance','type':'MB','units':'m w.e.'},
+           'meltenergy':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'SWin':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'SWout':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'SWin_sky':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'SWin_terr':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'LWin':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'LWout':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'SWnet':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'LWnet':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'NetRad':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'sensible':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'latent':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'rain':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'ground':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
            'layertemp':{'label':'Temperature','type':'Layers','units':'C'},
            'layerdensity':{'label':'Density','type':'Layers','units':'kg m$^{-3}$'},
            'layerwater':{'label':'Water content','type':'Layers','units':'kg m$^{-2}$'},
@@ -48,6 +49,7 @@ varprops = {'surftemp':{'label':'Surface temp','type':'Temperature','units':'C'}
            'layerdust':{'label':'Dust','type':'Layers','units':'ppm'},
            'layergrainsize':{'label':'Grain size','type':'Layers','units':'um'},
            'layerheight':{'label':'Layer height','type':'Layers','units':'m'},
+           'layerrefreeze':{'label':'Layer refreeze','type':'Layers','units':'kg m-2'},
            'snowdepth':{'label':'Snow depth','type':'MB','units':'m'},
            'dh':{'label':'Surface height change','type':'MB','units':'m$'},
            'albedo':{'label':'Albedo','type':'Albedo','units':'-'},}
@@ -89,8 +91,8 @@ def simple_plot(ds,time,vars,res='d',t='',cumMB=True,
     new_y : list-like
         List of variables in vars that should be plotted on a new y-axis
     """
-    h = 1.5 if skinny else 3
-    fig,axes = plt.subplots(len(vars),1,figsize=(7,h*len(vars)),sharex=True,layout='constrained')
+    h = 2 if skinny else 4
+    fig,axes = plt.subplots(len(vars),1,figsize=(8,h*len(vars)),sharex=True,layout='constrained')
 
     if len(time) == 2:
         start = pd.to_datetime(time[0])
@@ -114,7 +116,7 @@ def simple_plot(ds,time,vars,res='d',t='',cumMB=True,
                 c_iter = iter([plt.cm.Dark2(i) for i in range(8)])
                 c = next(c_iter)
         
-            if var in ['melt','runoff','accum','refreeze','dh'] and cumMB:
+            if var in ['melt','runoff','accum','refreeze','dh','MB'] and cumMB:
                 var_to_plot = ds_sum[var].cumsum()
             elif 'layer' in var:
                 var_to_plot = ds_mean[var].isel(layer=0)
@@ -135,8 +137,10 @@ def simple_plot(ds,time,vars,res='d',t='',cumMB=True,
     date_form = mpl.dates.DateFormatter('%d %b')
     axis.xaxis.set_major_formatter(date_form)
     fig.suptitle(t)
+    axis.set_xlim(start,end)
     if save_fig:
         plt.savefig(save_fig,dpi=150)
+    return fig, axes
 
 def plot_hours(ds,time,vars,skinny=True,t='Hourly EB Outputs'):
     h = 1.5 if skinny else 3
@@ -1134,6 +1138,8 @@ def visualize_layers(ds,dates,vars,force_layers=False,
             bounds = [-10,0]
         elif var in ['layergrainsize']:
             bounds = [50,1500]
+        elif var in ['layerrefreeze']:
+            bounds = [0,10]
         dens_lim = 890 if plot_firn else 600
         dens_lim = 1000 if plot_ice else dens_lim
         assert 'layer' in var, 'choose layer variable'
@@ -1166,7 +1172,8 @@ def visualize_layers(ds,dates,vars,force_layers=False,
 
             bottom = 0
             ctypes = {'layerBC':'Greys','layerdust':'Oranges','layertemp':'viridis',
-                'layerdensity':'Greens','layerwater':'Blues','layergrainsize':'Purples'}
+                'layerdensity':'Greens','layerwater':'Blues','layergrainsize':'Purples',
+                'layerrefreeze':'Reds'}
             ctype = ctypes[var]
             if np.sum(height) < 0.05 and first and not last and step.month<9:
                 last = step
@@ -1183,7 +1190,8 @@ def visualize_layers(ds,dates,vars,force_layers=False,
             #     ax.axvline(step,lw=0.7,color='red')
         # Add colorbar
         units = {'layerBC':'ppb','layerdust':'ppm','layertemp':'$^{\circ}$C',
-                'layerdensity':'kg m$^{-3}$','layerwater':'%','layergrainsize':'um'}
+                'layerdensity':'kg m$^{-3}$','layerwater':'%','layergrainsize':'um',
+                'layerrefreeze':'kg m-2'}
         sm = mpl.cm.ScalarMappable(cmap=ctype,norm=plt.Normalize(bounds[0],bounds[1]))
         leg = plt.colorbar(sm,ax=ax,aspect=7)
         leg.ax.tick_params(labelsize=9)

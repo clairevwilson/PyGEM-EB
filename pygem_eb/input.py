@@ -19,7 +19,7 @@ use_AWS = False          # Use AWS data? (or just reanalysis)
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/gulkana2024.csv'}, 
+                            'AWS_fn':'Preprocessed/gulkana_22yrs.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -100,7 +100,7 @@ wind_ref_height = 10 if reanalysis in ['ERA5-hourly'] else 2
 if use_AWS:
     assert os.path.exists(AWS_fn), 'Check AWS filepath or glac_no in input.py'
 
-dates_from_data = False
+dates_from_data = True
 if dates_from_data:
     cdf = pd.read_csv(AWS_fn,index_col=0)
     cdf = cdf.set_index(pd.to_datetime(cdf.index))
@@ -138,9 +138,10 @@ store_climate = False   # Store climate dataset .nc
 # TIMESTEP
 dt = 3600                   # Model timestep [s]
 dt_heateq = 3600/5          # Time resolution of heat eq [s], should be integer multiple of 3600s so data can be stored on the hour
+end_summer = '2024-08-20'   # Date to consider the end of summer (year is irrelevant) (snow -> firn)
 
 # METHODS
-method_turbulent = 'MO-similarity'      # 'MO-similarity' or 'BulkRichardson' 
+method_turbulent = 'BulkRichardson'     # 'MO-similarity' or 'BulkRichardson' 
 method_heateq = 'Crank-Nicholson'       # 'Crank-Nicholson'
 method_densification = 'Boone'          # 'Boone', 'HerronLangway', 'Kojima'
 method_cooling = 'iterative'            # 'minimize' (slow) or 'iterative' (fast)
@@ -148,9 +149,9 @@ method_ground = 'MolgHardy'             # 'MolgHardy'
 method_conductivity = 'Sturm'           # 'Sturm','Douville','Jansson','OstinAndersson','VanDusen'
 
 # CONSTANT SWITCHES
-constant_snowfall_density = False        # False or density in kg m-3
+constant_snowfall_density = False       # False or density in kg m-3
 constant_freshgrainsize = 54.5          # False or grain size in um (54.5 is standard)
-constant_drdry = False                   # False or dry metamorphism grain size growth rate [um s-1] (1e-4 seems reasonable)
+constant_drdry = False                  # False or dry metamorphism grain size growth rate [um s-1] (1e-4 seems reasonable)
 
 # ALBEDO SWITCHES
 switch_snow = 1             # 0 to turn off fresh snow feedback; 1 to include it
@@ -164,6 +165,8 @@ if switch_snow + switch_melt + switch_LAPs < 4:
         LAPs_on = melt_on = 'ON (DECAY)'
     print(f'SWITCH RUN WITH SNOW {snow_on}, MELT {melt_on} and LAPs {LAPs_on}')
     output_name = f'{output_filepath}EB/{glac_name}_{model_run_date}_{switch_snow}{switch_melt}{switch_LAPs}'
+include_LWC_SNICAR = False
+grainshape_SNICAR = 0  # 0: sphere, 1: spheroid, 2: hexagonal plate, 3: koch snowflake, 4: hexagonal prisms
 
 # ALBEDO BANDS
 wvs = np.round(np.arange(0.2,5,0.01),2) # 480 bands used by SNICAR
@@ -179,13 +182,13 @@ kp = 1
 # play with
 dep_factor = 1              # multiplicative factor to adjust MERRA-2 deposition
 wind_factor = 1             # multiplicative wind scaling factor
-albedo_ice = 0.47            # albedo of ice [-] 
+albedo_ice = 0.47           # albedo of ice [-] 
 kcond_ice = 2               # thermal conductivity of ice
 kcond_snow = 'Sturm'        # thermal conductivity of snow
 Boone_c1 = 2.7e-6           # s-1 (2.7e-6) --> 2.7e-4
 Boone_c5 = 0.018            # m3 kg-1 (0.018) --> 0.07
 firn_grainsize = 2000       # firn grain size in um
-ice_grainsize = 5000        # ice grain size in um (placeholder)
+ice_grainsize = 5000        # ice grain size in um (placeholder -- unused)
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
 layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
 # leave
@@ -237,7 +240,7 @@ Sr = 0.033                  # for irreducible water content flow method
 rainBC = BC_freshsnow       # concentration of BC in rain
 raindust = dust_freshsnow   # concentration of dust in rain
 temp_temp = -3              # temperature of temperate ice [C]
-temp_depth = 100            # depth of temperate ice [m]
+temp_depth = 50             # depth of temperate ice [m]
 albedo_fresh_snow = 0.9     # Albedo of fresh snow [-] (Moelg et al. 2012, TC - 0.85)
 albedo_firn = 0.5           # Albedo of firn [-]
 albedo_ground = 0.2         # Albedo of ground [-]

@@ -69,7 +69,8 @@ class Layers():
         self.update_layer_props()
         self.lrefreeze = np.zeros_like(self.ltemp)   # LAYER MASS OF REFREEZE [kg m-2]
         self.lnewsnow = np.zeros_like(self.ltemp)    # LAYER MASS OF NEW SNOW [kg m-2]
-        
+        self.cumrefreeze = np.zeros_like(self.ltemp) # TRACK CUM. REFREEZE [kg m-2]
+
         # Initialize bucket for 'delayed snow' and running max snow mass
         self.delayed_snow = 0
         self.max_snow = np.sum(self.ldrymass[self.snow_idx])
@@ -264,13 +265,15 @@ class Layers():
         self.lheight = np.append(layers_to_add.loc['h'].values,self.lheight).astype(float)
         self.ltype = np.append(layers_to_add.loc['t'].values,self.ltype)
         self.ldrymass = np.append(layers_to_add.loc['m'].values,self.ldrymass).astype(float)
-        self.lrefreeze = np.append(0,self.lrefreeze) # new layers start with 0 refreeze
         self.lnewsnow = np.append(layers_to_add.loc['new'].values,self.lnewsnow).astype(float)
         self.grainsize = np.append(layers_to_add.loc['g'].values,self.grainsize).astype(float)
         new_layer_BC = layers_to_add.loc['BC'].values.astype(float)*self.lheight[0]
         self.lBC = np.append(new_layer_BC,self.lBC)
         new_layer_dust = layers_to_add.loc['dust'].values.astype(float)*self.lheight[0]
         self.ldust = np.append(new_layer_dust,self.ldust)
+        # new layers start with 0 refreeze
+        self.lrefreeze = np.append(0,self.lrefreeze) 
+        self.cumrefreeze = np.append(0,self.cumrefreeze)
         self.update_layer_props()
         return
     
@@ -290,6 +293,7 @@ class Layers():
         self.ltype = np.delete(self.ltype,layer_to_remove)
         self.ldrymass = np.delete(self.ldrymass,layer_to_remove)
         self.lrefreeze = np.delete(self.lrefreeze,layer_to_remove)
+        self.cumrefreeze = np.delete(self.cumrefreeze,layer_to_remove)
         self.lnewsnow = np.delete(self.lnewsnow,layer_to_remove)
         self.grainsize = np.delete(self.grainsize,layer_to_remove)
         self.lBC = np.delete(self.lBC,layer_to_remove)
@@ -316,6 +320,8 @@ class Layers():
             self.ldrymass = np.insert(self.ldrymass,l,self.ldrymass[l])
             self.lrefreeze[l] = self.lrefreeze[l]/2
             self.lrefreeze = np.insert(self.lrefreeze,l,self.lrefreeze[l])
+            self.cumrefreeze[l] = self.cumrefreeze[l]/2
+            self.cumrefreeze = np.insert(self.cumrefreeze,l,self.cumrefreeze[l])
             self.lnewsnow[l] = self.lnewsnow[l]/2
             self.lnewsnow = np.insert(self.lnewsnow,l,self.lnewsnow[l])
             self.lBC[l] = self.lBC[l]/2
@@ -338,6 +344,7 @@ class Layers():
         self.lheight[l+1] = np.sum(self.lheight[l:l+2])
         self.ldrymass[l+1] = np.sum(self.ldrymass[l:l+2])
         self.lrefreeze[l+1] = np.sum(self.lrefreeze[l:l+2])
+        self.cumrefreeze[l+1] = np.sum(self.cumrefreeze[l:l+2])
         self.lnewsnow[l+1] = np.sum(self.lnewsnow[l:l+2])
         self.grainsize[l+1] = np.mean(self.grainsize[l:l+2])
         self.lBC[l+1] = np.sum(self.lBC[l:l+2])
@@ -379,16 +386,14 @@ class Layers():
             if not layer_split:
                 layer += 1
 
-        # END OF SUMMER SNOW --> FIRN *****
-        # if time.day_of_year == 0 and time.hour == 0:
-        #     begin_winter = False
-        # if time.day_of_year == 244 and time.hour == 0:
-        #     # conditions for first snowfall of winter: merge snow into single firn layer
-        #     merge_count = max(0,len(self.snow_idx) - 2)
-        #     for _ in range(merge_count):
-        #         self.merge_layers(0)
-        #         self.ltype[0] = 'firn'
-        #     print(merge_count+1,'layers merged into firn')
+        # End of summer: transform old snow into firn
+        if time.day_of_year == pd.to_datetime(eb_prms.end_summer).day_of_year and time.hour == 23:
+            # merge snow into single firn layer
+            merge_count = max(0,len(self.snow_idx) - 2)
+            for _ in range(merge_count):
+                self.merge_layers(0)
+                self.ltype[0] = 'firn'
+            print(merge_count+1,'layers merged into firn')
         return
     
     def update_layer_props(self,do=['depth','density']):
@@ -424,20 +429,20 @@ class Layers():
         layer = 0
         while layer < self.nlayers:
             dens = self.ldensity[layer]
-            # New FIRN
-            if dens >= DENSITY_FIRN and self.ltype[layer] == 'snow':
-                # Don't want superimposed firn/ice, treat as snow
-                if self.ltype[layer+1] != 'snow':
-                    self.ltype[layer] = 'firn'
+            # # New FIRN
+            # if dens >= DENSITY_FIRN and self.ltype[layer] == 'snow':
+            #     # Don't want superimposed firn/ice, treat as snow
+            #     if self.ltype[layer+1] != 'snow':
+            #         self.ltype[layer] = 'firn'
                     
-                    # Merge layers if there is firn under the new firn layer
-                    if self.ltype[layer+1] in ['firn']: 
-                        self.merge_layers(layer)
+            #         # Merge layers if there is firn under the new firn layer
+            #         if self.ltype[layer+1] in ['firn']: 
+            #             self.merge_layers(layer)
 
-                else:
-                    layer += 1
+            #     else:
+            #         layer += 1
             # New ICE
-            elif dens >= DENSITY_ICE and self.ltype[layer] == 'firn':
+            if self.ldensity[layer] >= DENSITY_ICE and self.ltype[layer] == 'firn':
                 self.ltype[layer] = 'ice'
                 self.ldensity[layer] = DENSITY_ICE
                 # Merge into ice below
@@ -473,7 +478,6 @@ class Layers():
 
         if self.args.switch_snow == 0:
             # Snow falls with the same properties as the current top layer
-            # **** What to do when top layer is ice?
             new_density = self.ldensity[0]
             new_height = snowfall/new_density
             new_grainsize = self.grainsize[0]

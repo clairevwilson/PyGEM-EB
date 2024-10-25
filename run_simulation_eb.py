@@ -18,19 +18,23 @@ start_time = time.time()
 # ===== INITIALIZE UTILITIES =====
 def get_args(parse=True):
     parser = argparse.ArgumentParser(description='pygem-eb model runs')
-    # add arguments
+    # GLACIER INFORMATION
     parser.add_argument('-glac_no', action='store', default=eb_prms.glac_no,
                         help='',nargs='+')
     parser.add_argument('-elev',action='store',default=eb_prms.elev,type=float,
                         help='Elevation in m a.s.l.')
     parser.add_argument('-site',action='store',default=eb_prms.site,type=str,
                         help='Site name')
+    
+    # MODEL TIME
     parser.add_argument('-start','--startdate', action='store', type=str, 
                         default=eb_prms.startdate,
                         help='pass str like datetime of model run start')
     parser.add_argument('-end','--enddate', action='store', type=str,
                         default=eb_prms.enddate,
                         help='pass str like datetime of model run end')
+    
+    # USER OPTIONS
     parser.add_argument('-use_AWS', action='store_true',
                         default=eb_prms.use_AWS,help='use AWS or just reanalysis?')
     parser.add_argument('-use_threads', action='store_true',
@@ -43,12 +47,18 @@ def get_args(parse=True):
                         default=eb_prms.new_file, help='')
     parser.add_argument('-debug', action='store_true', 
                         default=eb_prms.debug, help='')
+    
+    # ALBEDO SWITCHES
     parser.add_argument('-switch_LAPs',action='store', type=int,
                         default=eb_prms.switch_LAPs, help='')
     parser.add_argument('-switch_melt',action='store', type=int, 
                         default=eb_prms.switch_melt, help='')
     parser.add_argument('-switch_snow',action='store', type=int,
                         default=eb_prms.switch_snow, help='')
+    
+    # CALIBRATED PARAMETERS
+    parser.add_argument('-params_fn',action='store',default='None',
+                        help='Filepath to params .txt file')
     parser.add_argument('-k_snow',default=eb_prms.kcond_snow,action='store',
                         help='Thermal conductivity of snow')
     parser.add_argument('-a_ice',default=eb_prms.albedo_ice,action='store',type=float,
@@ -57,12 +67,14 @@ def get_args(parse=True):
                         help='Multiplicative wind factor')
     parser.add_argument('-kp',default=eb_prms.kp,action='store',type=float,
                         help='Multiplicative precipitation factor')
+    
+    # PARALLELIZATION
     parser.add_argument('-n','--n_simultaneous_processes',default=1,type=int,
                         help='Number of parallel processes to run')
     parser.add_argument('-task_id',default=-1,type=int,
                         help='Task ID if submitted as batch job')
-    parser.add_argument('-params_fn',action='store',default='None',
-                        help='Filepath to params .txt file')
+    
+    # INITIALIZATION
     parser.add_argument('-initial_snow_depth',action='store',type=float,
                         default=eb_prms.initial_snow_depth,
                         help='Snow depth in m')
@@ -70,6 +82,7 @@ def get_args(parse=True):
                         default=eb_prms.initial_firn_depth,
                         help='Firn depth in m')
     parser.add_argument('-f', '--fff', help='Dummy arg to fool ipython', default='1')
+
     if parse:
         args = parser.parse_args()
         return args
@@ -137,6 +150,7 @@ def initialize_model(glac_no,args):
         climate.get_reanalysis(climate.all_vars)
     climate.check_ds()
 
+    # Print out model start line
     start = pd.to_datetime(args.startdate)
     end = pd.to_datetime(args.enddate)
     n_months = np.round((end-start)/pd.Timedelta(days=30))
