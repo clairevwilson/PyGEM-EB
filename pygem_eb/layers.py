@@ -67,13 +67,16 @@ class Layers():
         
         # Additional layer properties
         self.update_layer_props()
-        self.lrefreeze = np.zeros_like(self.ltemp)   # LAYER MASS OF REFREEZE [kg m-2]
+        self.drefreeze = np.zeros_like(self.ltemp)   # LAYER MASS OF REFREEZE [kg m-2]
         self.lnewsnow = np.zeros_like(self.ltemp)    # LAYER MASS OF NEW SNOW [kg m-2]
         self.cumrefreeze = np.zeros_like(self.ltemp) # TRACK CUM. REFREEZE [kg m-2]
 
         # Initialize bucket for 'delayed snow' and running max snow mass
         self.delayed_snow = 0
         self.max_snow = np.sum(self.ldrymass[self.snow_idx])
+
+        # Define day of year to merge snow into firn
+        self.firn_doy = pd.to_datetime(eb_prms.end_summer).day_of_year
         
         if args.debug:
             print(f'{self.nlayers} layers initialized')
@@ -272,7 +275,7 @@ class Layers():
         new_layer_dust = layers_to_add.loc['dust'].values.astype(float)*self.lheight[0]
         self.ldust = np.append(new_layer_dust,self.ldust)
         # new layers start with 0 refreeze
-        self.lrefreeze = np.append(0,self.lrefreeze) 
+        self.drefreeze = np.append(0,self.drefreeze) 
         self.cumrefreeze = np.append(0,self.cumrefreeze)
         self.update_layer_props()
         return
@@ -292,7 +295,7 @@ class Layers():
         self.lheight = np.delete(self.lheight,layer_to_remove)
         self.ltype = np.delete(self.ltype,layer_to_remove)
         self.ldrymass = np.delete(self.ldrymass,layer_to_remove)
-        self.lrefreeze = np.delete(self.lrefreeze,layer_to_remove)
+        self.drefreeze = np.delete(self.drefreeze,layer_to_remove)
         self.cumrefreeze = np.delete(self.cumrefreeze,layer_to_remove)
         self.lnewsnow = np.delete(self.lnewsnow,layer_to_remove)
         self.grainsize = np.delete(self.grainsize,layer_to_remove)
@@ -305,29 +308,31 @@ class Layers():
         """
         Splits a single layer into two layers with half the height, mass, and water content.
         """
-        if (self.nlayers+1) < eb_prms.max_nlayers:
-            l = layer_to_split
-            self.nlayers += 1
-            self.ltemp = np.insert(self.ltemp,l,self.ltemp[l])
-            self.ltype = np.insert(self.ltype,l,self.ltype[l])
-            self.grainsize = np.insert(self.grainsize,l,self.grainsize[l])
+        if (self.nlayers+1) > eb_prms.max_nlayers:
+            print(f'Need bigger max_nlayers: currently have {self.nlayers+1} layers')
+            quit()
+        l = layer_to_split
+        self.nlayers += 1
+        self.ltemp = np.insert(self.ltemp,l,self.ltemp[l])
+        self.ltype = np.insert(self.ltype,l,self.ltype[l])
+        self.grainsize = np.insert(self.grainsize,l,self.grainsize[l])
 
-            self.lwater[l] = self.lwater[l]/2
-            self.lwater = np.insert(self.lwater,l,self.lwater[l])
-            self.lheight[l] = self.lheight[l]/2
-            self.lheight = np.insert(self.lheight,l,self.lheight[l])
-            self.ldrymass[l] = self.ldrymass[l]/2
-            self.ldrymass = np.insert(self.ldrymass,l,self.ldrymass[l])
-            self.lrefreeze[l] = self.lrefreeze[l]/2
-            self.lrefreeze = np.insert(self.lrefreeze,l,self.lrefreeze[l])
-            self.cumrefreeze[l] = self.cumrefreeze[l]/2
-            self.cumrefreeze = np.insert(self.cumrefreeze,l,self.cumrefreeze[l])
-            self.lnewsnow[l] = self.lnewsnow[l]/2
-            self.lnewsnow = np.insert(self.lnewsnow,l,self.lnewsnow[l])
-            self.lBC[l] = self.lBC[l]/2
-            self.lBC = np.insert(self.lBC,l,self.lBC[l])
-            self.ldust[l] = self.ldust[l]/2
-            self.ldust = np.insert(self.ldust,l,self.ldust[l])
+        self.lwater[l] = self.lwater[l]/2
+        self.lwater = np.insert(self.lwater,l,self.lwater[l])
+        self.lheight[l] = self.lheight[l]/2
+        self.lheight = np.insert(self.lheight,l,self.lheight[l])
+        self.ldrymass[l] = self.ldrymass[l]/2
+        self.ldrymass = np.insert(self.ldrymass,l,self.ldrymass[l])
+        self.drefreeze[l] = self.drefreeze[l]/2
+        self.drefreeze = np.insert(self.drefreeze,l,self.drefreeze[l])
+        self.cumrefreeze[l] = self.cumrefreeze[l]/2
+        self.cumrefreeze = np.insert(self.cumrefreeze,l,self.cumrefreeze[l])
+        self.lnewsnow[l] = self.lnewsnow[l]/2
+        self.lnewsnow = np.insert(self.lnewsnow,l,self.lnewsnow[l])
+        self.lBC[l] = self.lBC[l]/2
+        self.lBC = np.insert(self.lBC,l,self.lBC[l])
+        self.ldust[l] = self.ldust[l]/2
+        self.ldust = np.insert(self.ldust,l,self.ldust[l])
         self.update_layer_props()
         return
 
@@ -343,7 +348,7 @@ class Layers():
         self.ltemp[l+1] = np.mean(self.ltemp[l:l+2])
         self.lheight[l+1] = np.sum(self.lheight[l:l+2])
         self.ldrymass[l+1] = np.sum(self.ldrymass[l:l+2])
-        self.lrefreeze[l+1] = np.sum(self.lrefreeze[l:l+2])
+        self.drefreeze[l+1] = np.sum(self.drefreeze[l:l+2])
         self.cumrefreeze[l+1] = np.sum(self.cumrefreeze[l:l+2])
         self.lnewsnow[l+1] = np.sum(self.lnewsnow[l:l+2])
         self.grainsize[l+1] = np.mean(self.grainsize[l:l+2])
@@ -387,13 +392,15 @@ class Layers():
                 layer += 1
 
         # End of summer: transform old snow into firn
-        if time.day_of_year == pd.to_datetime(eb_prms.end_summer).day_of_year and time.hour == 23:
-            # merge snow into single firn layer
-            merge_count = max(0,len(self.snow_idx) - 2)
-            for _ in range(merge_count):
-                self.merge_layers(0)
-                self.ltype[0] = 'firn'
-            print(merge_count+1,'layers merged into firn')
+        if time.day_of_year == self.firn_doy and time.hour == 23:
+            if len(self.snow_idx) > 0:
+                # merge snow into single firn layer
+                merge_count = max(0,len(self.snow_idx) - 1)
+                for _ in range(merge_count):
+                    self.merge_layers(0)
+                    self.ltype[0] = 'firn'
+                if self.args.debug:
+                    print(merge_count+1,'layers merged into firn')
         return
     
     def update_layer_props(self,do=['depth','density']):
@@ -472,7 +479,7 @@ class Layers():
         """
         snowfall += self.delayed_snow
         if snowfall == 0.:
-            return
+            return 0
         
         initial_mass = np.sum(self.ldrymass + self.lwater)
 
@@ -518,7 +525,7 @@ class Layers():
             if snowfall/new_density < 1e-4:
                 # Delay small amounts of snowfall: avoids computational issues
                 self.delayed_snow = snowfall
-                return
+                return 0
             else:
                 new_layer = pd.DataFrame([enbal.tempC,0,snowfall/new_density,'snow',snowfall,
                                       new_grainsize,new_BC,new_dust,new_snow],
@@ -545,7 +552,7 @@ class Layers():
         assert np.abs(change - snowfall) < eb_prms.mb_threshold
 
         self.update_layer_props()
-        return 
+        return snowfall
 
     def get_grain_size(self,airtemp,surftemp,time):
         """
@@ -570,7 +577,7 @@ class Layers():
             n = len(idx)
             
             # Get fractions of refreeze, new snow and old snow
-            refreeze = self.lrefreeze[idx]
+            refreeze = self.drefreeze[idx]
             new_snow = self.lnewsnow[idx]
             old_snow = self.ldrymass[idx] - refreeze - new_snow
             f_old = old_snow / self.ldrymass[idx]

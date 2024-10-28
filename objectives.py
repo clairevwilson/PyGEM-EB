@@ -180,11 +180,11 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False):
         fall_date = str(year)+'-08-20 00:00'
         melt_dates = pd.date_range(spring_date,fall_date,freq='h')
         ds_summer = ds.sel(time=melt_dates)
-        mbs_modeled = ds_summer.accum + ds_summer.refreeze - ds_summer.melt
+        mbs_ds = ds_summer.accum + ds_summer.refreeze - ds_summer.melt
         internal_acc = np.sum(ds_summer.isel(time=-1).columnrefreeze.values)
         if internal_acc > 0:
             print(f'Internal acc: {internal_acc:.3f} m w.e.')
-        mbs_modeled = mbs_modeled.sum().values - internal_acc
+        mbs_modeled = mbs_ds.sum().values - internal_acc
 
     if os.path.exists(GNSSIR_fp):
         # Retrieve the dates
@@ -211,8 +211,39 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False):
             if end.minute != pd.to_datetime(ds.time.values[0]).minute:
                 end -= pd.Timedelta(minutes=30)
         ds = ds.sel(time=pd.date_range(start,end,freq='h'))
-        ds = ds.dh.cumsum() - ds.dh.isel(time=0)
-        ds = ds.sel(time=pd.date_range(start,end))
+
+        fh = ds.dh.cumsum() - ds.dh.isel(time=0)
+        # Accumulation area sites: need only dh above stake depth
+        if site in ['D','T']:
+            dh = []
+            stake_depth = 9
+            for hour in pd.date_range(start,end,freq='h'):
+                ds_now = ds.sel(time=hour)
+                lheight = ds_now.layerheight.values 
+                ldepth = np.array([np.sum(lheight[:i+1])-(lheight[i]/2) for i in range(len(lheight))])
+                layers = np.where(ldepth < stake_depth)[0]
+                height_now = np.sum(lheight[layers])
+                if hour == start:
+                    height_before = height_now
+                i = -1
+                while np.abs(height_now - height_before) > 0.5:
+                    height_now = np.sum(lheight[layers[:i]])
+                    i -= 1
+                    if len(layers[:i])<1:
+                        break
+                i = 1
+                while np.abs(height_now - height_before) > 0.5:
+                    height_now = np.sum(lheight[:layers[-1]+i])
+                    i += 1
+                    assert i < 20
+                dh.append(height_now - height_before)
+                height_before = height_now
+                stake_depth += ds_now.dh.values
+            ds['dh'].values = dh
+        # Cumululative sum
+        ds['dh'].values = ds.dh.cumsum().values - ds.dh.isel(time=0).values
+        # Select data daily
+        ds = ds.sel(time=pd.date_range(start,end)).dh
 
         # Clean up arrays
         model = ds.values[idx_data]
@@ -233,7 +264,7 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False):
 
             # plot gnssir
             ax.plot(df_mb_daily.index,df_mb_daily['CMB'],label='GNSS-IR',linestyle='--',color='black')
-            ax.plot(ds.time.values,ds.values,label='Model',color='crimson')
+            ax.plot(ds.time.values,ds.values,label='5m initial firn',color=plt.cm.Dark2(0))
             # error bounds
             lower = df_mb_daily['CMB'] - df_mb_daily['sigma']
             upper = df_mb_daily['CMB'] + df_mb_daily['sigma']
@@ -254,11 +285,11 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False):
             return fig, ax
         else:
             return error
-    else:
-        print(f'Modeled MB: {mbs_modeled} m w.e.\nMeasured MB: {mbs_measured} m w.e.')
+    
+    print(f'Modeled MB: {mbs_modeled} m w.e.\nMeasured MB: {mbs_measured} m w.e.')
 
 # ========== 3. SNOW TEMPERATURES ==========
-def snow_temperature(data_fp,ds,method='RMSE',plot=False,plot_heights=[0.5]):
+def snow_temperature(site,ds,method='RMSE',plot=False,plot_heights=[0.5]):
     """
     Compares modeled snow temperatures to measurements from
     iButton temperature sensors.
@@ -275,6 +306,8 @@ def snow_temperature(data_fp,ds,method='RMSE',plot=False,plot_heights=[0.5]):
     List of heights above the ice in meters to plot the timeseries.
     """
     # Load dataset
+    year = pd.to_datetime(ds.time.values[0]).year
+    data_fp = f'../Data/iButtons/iButtons_{year}_{site}.csv'
     temp_df = pd.read_csv(data_fp,index_col=0)
     temp_df.index = pd.to_datetime(temp_df.index)
     temp_df = temp_df.resample('30min').interpolate()
@@ -352,19 +385,22 @@ def snow_temperature(data_fp,ds,method='RMSE',plot=False,plot_heights=[0.5]):
         model_plot = np.array(store['model_plot'])
 
         # initialize plots
-        n_plots = len(plot_heights)
-        fig,axes = plt.subplots(n_plots,figsize=(6,1.5*n_plots),dpi=200,
+        n = len(plot_heights)
+        fig,ax = plt.subplots(figsize=(6,4),dpi=200,
                             layout='constrained',sharex=True,sharey=True)
-        if n_plots == 1:
-            axes = [axes]
-        for i,ax in enumerate(axes):
-            ax.plot(time,measure_plot[:,i],color='black',linestyle='--',label='iButtons')
-            ax.plot(time,model_plot[:,i],label='Model')
+        norm = mpl.colors.Normalize(vmin=0, vmax=n)
+        cmap = mpl.cm.get_cmap('viridis')
+        for i in range(n):
+            ax.plot(time,measure_plot[:,i],linestyle='--',color=cmap(norm(i)))
+            ax.plot(time,model_plot[:,i],color=cmap(norm(i)))
             ax.xaxis.set_major_formatter(date_form)
             ax.tick_params(length=5,labelsize=11)
             ax.set_title(f'Initial height: {plot_heights[i]}',loc='right')
             ax.set_xlim(start,time[-1])
-        ax.legend()
+            ax.plot(np.nan,np.nan,color=cmap(norm(i)),label=f'{plot_heights[i]}')
+        ax.plot(np.nan,np.nan,linestyle='--',color='gray',label='Measured')
+        ax.plot(np.nan,np.nan,color='gray',label='Modeled')
+        ax.legend(title='Initial height above ice (m)')
         fig.supylabel('Snow Temperature ($^{\circ}$C)',fontsize=12)
         fig.suptitle(f'{method} = {error:.3e} '+'$^{\circ}$C')
         plt.show()

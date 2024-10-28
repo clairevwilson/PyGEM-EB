@@ -463,9 +463,9 @@ class energyBalance():
  
     def stable_PhiM(self,z,L):
         zeta = z/L
-        if zeta > 1.:
+        if zeta > 1:
             phim = -4*(1+np.log(zeta)) - zeta
-        elif zeta > 0.:
+        elif zeta > 0:
             phim = -5*zeta
         else:
             phim = 0

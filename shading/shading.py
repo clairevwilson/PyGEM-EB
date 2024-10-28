@@ -76,7 +76,7 @@ solar_fp = '/home/claire/research/climate_data/AWS/CNR4/cnr4_2023.csv'
 # optional: shapefile of glacier outline for plotting
 shp_fp = 'in/shapefile/Gulkana.shp'
 # optional: if choosing lat/lon by site, need site constants
-site_fp = '../pygem_eb/sample_data/Gulkana/site_constants.csv'
+site_fp = '../data/Gulkana/site_constants.csv'
 # optional: slope/aspect .tif (can also be calculated from DEM)
 aspect_fp = None     # 'in/gulkana/Gulkana_Aspect_20m.tif'
 slope_fp = None      # 'in/gulkana/Gulkana_Slope_20m.tif'

@@ -426,8 +426,8 @@ def compare_runs(ds_list,time,labels,var,res='d',t=''):
             elif 'layer' in var:
                 to_plot = ds[var].sel(time=time,layer=0)
             else:
-                to_plot = ds[var].sel(time=time)
-        ax.plot(to_plot.time,to_plot,label=labels[i],color=c,alpha=0.6,linewidth=0.8)
+                to_plot = ds[var].sel(time=time)     
+        ax.plot(to_plot.time,to_plot,label=labels[i],color=c)
         ax.set_ylim(np.min(to_plot),np.max(to_plot)+0.01*np.max(to_plot))
     date_form = mpl.dates.DateFormatter('%d %b')
     ax.xaxis.set_major_formatter(date_form)
@@ -1139,7 +1139,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
         elif var in ['layergrainsize']:
             bounds = [50,1500]
         elif var in ['layerrefreeze']:
-            bounds = [0,10]
+            bounds = [0,0.05]
         dens_lim = 890 if plot_firn else 600
         dens_lim = 1000 if plot_ice else dens_lim
         assert 'layer' in var, 'choose layer variable'
@@ -1167,6 +1167,8 @@ def visualize_layers(ds,dates,vars,force_layers=False,
             vardata = np.flip(vardata[layers_to_plot])
             if var in ['layerwater']:
                 vardata = vardata / height / 1000 * 100
+            if var in ['layerrefreeze']:
+                vardata = vardata
             # if plot_ice:
             #     height = np.log(height)
 
