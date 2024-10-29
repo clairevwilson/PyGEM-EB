@@ -127,14 +127,19 @@ class Surface():
                     Qm_check = enbal.surface_EB(self.stemp,layers,self,
                                                self.days_since_snowfall)
                     # warm top layer
-                    temp_change = Qm_check*dt/(HEAT_CAPACITY_ICE*layers.ldrymass[0])
+                    temp_change = Qm_check*dt/(HEAT_CAPACITY_ICE*layers.lice[0])
                     layers.ltemp[0] += temp_change
 
                     # temp change can raise layer above melting point
                     if layers.ltemp[0] > 0.:
                         # leave excess energy in the melt energy
-                        Qm = layers.ltemp[0]*HEAT_CAPACITY_ICE*layers.ldrymass[0]/dt
+                        Qm = layers.ltemp[0]*HEAT_CAPACITY_ICE*layers.lice[0]/dt
                         layers.ltemp[0] = 0.
+
+                        # if that layer will be fully melted, warm the lower layer
+                        if Qm*dt/eb_prms.Lh_rf > layers.lice[0] and layers.ltemp[1] < 0.:
+                            leftover = Qm*dt/eb_prms.Lh_rf - layers.lice[0]
+                            layers.ltemp[1] += leftover*dt/(HEAT_CAPACITY_ICE*layers.lice[1])
                     else:
                         Qm = 0
 
@@ -181,6 +186,7 @@ class Surface():
                                 if result.x > -60:
                                     self.stemp = result.x[0]
                             break
+
                 # If cooling, Qm must be 0
                 Qm = 0
 
@@ -281,6 +287,7 @@ class Surface():
         # CONSTANTS
         AVG_GRAINSIZE = eb_prms.average_grainsize
         DIFFUSE_CLOUD_LIMIT = eb_prms.diffuse_cloud_limit
+        DENSITY_FIRN = eb_prms.density_firn
 
         # Get layers to include in the calculation
         if not nlayers and max_depth:
@@ -290,15 +297,15 @@ class Surface():
         elif not nlayers and not max_depth:
             # Default case if neither is specified: only includes top 1m or non-ice layers
             nlayers = np.where(layers.ldepth > 1)[0][0] + 1
-            if layers.ldensity[nlayers-1] > eb_prms.density_firn:
+            if layers.ldensity[nlayers-1] > DENSITY_FIRN:
                 nlayers = np.where(layers.ltype != 'ice')[0][-1] + 1
         idx = np.arange(nlayers)
 
         # Unpack layer variables (need to be stored as lists)
         lheight = layers.lheight[idx].astype(float).tolist()
         ldensity = layers.ldensity[idx].astype(float).tolist()
-        lgrainsize = layers.grainsize[idx].astype(int)
-        lwater = layers.lwater[idx] / (layers.ldrymass[idx]+layers.lwater[idx])
+        lgrainsize = layers.lgrainsize[idx].astype(int)
+        lwater = layers.lwater[idx] / (layers.lice[idx]+layers.lwater[idx])
 
         # Grain size files are every 1um till 1500um, then every 500
         idx_1500 = lgrainsize>1500
@@ -407,7 +414,7 @@ class Surface():
         if time.month + time.day + time.hour < 1:
             layers.max_snow = 0
         # check if max_snow has been exceeded
-        current_snow = np.sum(layers.ldrymass[layers.snow_idx])
+        current_snow = np.sum(layers.lice[layers.snow_idx])
         layers.max_snow = max(current_snow, layers.max_snow)
         # scale surrounding albedo based on snowdepth
         albedo_surr = np.interp(current_snow,

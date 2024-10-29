@@ -43,7 +43,7 @@ def objective(model,data,method):
         return np.mean(model - data)
     
 # ========== 1. SEASONAL MASS BALANCE ==========
-def seasonal_mass_balance(data_fp,ds,site='B',method='MAE',plot=False):
+def seasonal_mass_balance(site,ds,method='MAE',plot=False):
     """
     Compares seasonal mass balance measurements from
     USGS stake surveys to a model output.
@@ -55,6 +55,7 @@ def seasonal_mass_balance(data_fp,ds,site='B',method='MAE',plot=False):
     Name of the USGS site.
     """
     # Load dataset
+    data_fp = '/home/claire/research/MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
     df_mb = pd.read_csv(data_fp)
     df_mb = df_mb.loc[df_mb['site_name'] == site]
     df_mb.index = df_mb['Year']
@@ -212,7 +213,6 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False):
                 end -= pd.Timedelta(minutes=30)
         ds = ds.sel(time=pd.date_range(start,end,freq='h'))
 
-        fh = ds.dh.cumsum() - ds.dh.isel(time=0)
         # Accumulation area sites: need only dh above stake depth
         if site in ['D','T']:
             dh = []
@@ -264,7 +264,7 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False):
 
             # plot gnssir
             ax.plot(df_mb_daily.index,df_mb_daily['CMB'],label='GNSS-IR',linestyle='--',color='black')
-            ax.plot(ds.time.values,ds.values,label='5m initial firn',color=plt.cm.Dark2(0))
+            ax.plot(ds.time.values,ds.values,label='Model',color=plt.cm.Dark2(0))
             # error bounds
             lower = df_mb_daily['CMB'] - df_mb_daily['sigma']
             upper = df_mb_daily['CMB'] + df_mb_daily['sigma']
@@ -395,7 +395,7 @@ def snow_temperature(site,ds,method='RMSE',plot=False,plot_heights=[0.5]):
             ax.plot(time,model_plot[:,i],color=cmap(norm(i)))
             ax.xaxis.set_major_formatter(date_form)
             ax.tick_params(length=5,labelsize=11)
-            ax.set_title(f'Initial height: {plot_heights[i]}',loc='right')
+            # ax.set_title(f'Initial height: {plot_heights[i]}',loc='right')
             ax.set_xlim(start,time[-1])
             ax.plot(np.nan,np.nan,color=cmap(norm(i)),label=f'{plot_heights[i]}')
         ax.plot(np.nan,np.nan,linestyle='--',color='gray',label='Measured')

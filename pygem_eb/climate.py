@@ -48,10 +48,11 @@ class Climate():
         self.cds = xr.Dataset(data_vars = dict(
                 SWin = (['time'],nans,{'units':'J m-2'}),
                 SWout = (['time'],nans,{'units':'J m-2'}),
+                albedo = (['time'],nans,{'units':'-'}),
                 LWin = (['time'],nans,{'units':'J m-2'}),
                 LWout = (['time'],nans,{'units':'J m-2'}),
                 NR = (['time'],nans,{'units':'J m-2'}),
-                tcc = (['time'],nans,{'units':'1'}),
+                tcc = (['time'],nans,{'units':'-'}),
                 rh = (['time'],nans,{'units':'%'}),
                 uwind = (['time'],nans,{'units':'m s-1'}),
                 vwind = (['time'],nans,{'units':'m s-1'}),
@@ -93,7 +94,7 @@ class Climate():
         self.AWS_elev = df.iloc[0]['z']
 
         # get the available variables
-        all_AWS_vars = ['temp','tp','rh','wind','sp','SWin','SWout','NR',
+        all_AWS_vars = ['temp','tp','rh','wind','sp','SWin','SWout','albedo','NR',
                     'LWin','LWout','bcwet','bcdry','dustwet','dustdry']
         AWS_vars = df.columns
         self.measured_vars = list(set(all_AWS_vars) & set(AWS_vars))
@@ -287,7 +288,7 @@ class Climate():
         # Define the units the model needs
         model_units = {'temp':'C','uwind':'m s-1','vwind':'m s-1',
                        'rh':'%','sp':'Pa','tp':'m s-1','elev':'m',
-                       'SWin':'J m-2', 'LWin':'J m-2', 'tcc':'1',
+                       'SWin':'J m-2', 'LWin':'J m-2', 'tcc':'-',
                        'bcdry':'kg m-2 s-1', 'bcwet':'kg m-2 s-1',
                        'dustdry':'kg m-2 s-1', 'dustwet':'kg m-2 s-1'}
         
@@ -299,7 +300,7 @@ class Climate():
         if units_in != units_out:
             if var == 'temp' and units_in == 'K':
                 ds = ds - 273.15
-            elif var == 'rh' and units_in in ['1','0-1']:
+            elif var == 'rh' and units_in in ['-','0-1']:
                 ds  = ds * 100
             elif var == 'tp':
                 if units_in == 'kg m-2 s-1':

@@ -40,6 +40,7 @@ class energyBalance():
         self.tcc = climateds_now['tcc'].values
         self.SWin_ds = climateds_now['SWin'].values
         self.SWout_ds = climateds_now['SWout'].values
+        self.albedo_ds = climateds_now['albedo'].values
         self.LWin_ds = climateds_now['LWin'].values
         self.LWout_ds = climateds_now['LWout'].values
         self.NR_ds = climateds_now['NR'].values
@@ -66,6 +67,7 @@ class energyBalance():
         self.nanSWout = True if np.isnan(self.SWout_ds) else False
         self.nanLWout = True if np.isnan(self.LWout_ds) else False
         self.nanNR = True if np.isnan(self.NR_ds) else False
+        self.nanalbedo = True if np.isnan(self.albedo_ds) else False
         return
 
     def surface_EB(self,surftemp,layers,albedo,days_since_snowfall,mode='sum'):
@@ -170,9 +172,13 @@ class energyBalance():
             self.SWin_terr = SWin_terrain
 
         # get reflected radiation
-        if self.nanSWout:
+        if self.nanSWout and self.nanalbedo:
             albedo = albedo[0] if len(spectral_weights) < 2 else albedo
             SWout = -np.sum(SWin*spectral_weights*albedo)
+        elif not self.nanalbedo:
+            albedo = self.albedo_ds
+            surface.bba = albedo
+            SWout = -SWin*albedo
         else:
             SWout = -self.SWout_ds/self.dt
             # store albedo

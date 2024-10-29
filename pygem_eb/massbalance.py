@@ -43,7 +43,7 @@ class massBalance():
         self.output = Output(self.time_list,args)
 
         # Initialize mass balance check variable
-        self.previous_mass = np.sum(self.layers.ldrymass + self.layers.lwater)
+        self.previous_mass = np.sum(self.layers.lice + self.layers.lwater)
         return
     
     def main(self):
@@ -91,10 +91,10 @@ class massBalance():
 
             # Calculate subsurface heating from penetrating SW
             SWin,SWout = enbal.get_SW(surface)
-            subsurf_melt = self.penetrating_SW(layers,SWin+SWout)
+            subsurf_melt = self.subsurface_heating(layers,SWin+SWout)
             
             # Calculate column melt including the surface
-            layermelt = self.melt_layers(layers,subsurf_melt)
+            layermelt = self.melting(layers,subsurf_melt)
             # Sum melt for output
             melt = np.sum(layermelt)
             if self.melted_layers != 0:
@@ -190,7 +190,7 @@ class massBalance():
         
         return rain,snow  # kg m-2
 
-    def penetrating_SW(self,layers,surface_SW):
+    def subsurface_heating(self,layers,surface_SW):
         """
         Calculates melt in subsurface layers (excluding layer 0) 
         due to penetrating shortwave radiation.
@@ -216,7 +216,7 @@ class massBalance():
         lt = layers.ltype.copy()
         ld = layers.ldepth.copy()
         lT = layers.ltemp.copy()
-        ldm = layers.ldrymass.copy()
+        lm = layers.lice.copy()
 
         # Fraction of radiation absorbed at the surface depends on surface type
         FRAC_ABSRAD = 0.9 if lt[0] in ['snow'] else 0.8
@@ -230,7 +230,7 @@ class massBalance():
         pen_SW = surface_SW*(1-FRAC_ABSRAD)*np.exp(-EXTINCT_COEF*ld)/self.dt
 
         # recalculate layer temperatures, leaving out the surface (calculated separately)
-        lT[1:] = lT[1:] + pen_SW[1:]/(ldm[1:]*HEAT_CAPACITY_ICE)*self.dt
+        lT[1:] = lT[1:] + pen_SW[1:]/(lm[1:]*HEAT_CAPACITY_ICE)*self.dt
 
         # calculate melt from temperatures above 0
         layermelt = np.zeros(layers.nlayers)
@@ -238,7 +238,7 @@ class massBalance():
             # check if temperature is above 0
             if temp > 0.:
                 # calculate melt from the energy that raised the temperature above 0
-                melt = (temp-0.)*ldm[layer]*HEAT_CAPACITY_ICE/LH_RF
+                melt = (temp-0.)*lm[layer]*HEAT_CAPACITY_ICE/LH_RF
                 lT[layer] = 0.
             else:
                 melt = 0
@@ -248,7 +248,7 @@ class massBalance():
         layers.ltemp = lT
         return layermelt
 
-    def melt_layers(self,layers,subsurf_melt):
+    def melting(self,layers,subsurf_melt):
         """
         For cases when layers are melting. Can melt multiple surface layers
         at once if Qm is sufficiently high. Otherwise, adds the surface
@@ -280,29 +280,29 @@ class massBalance():
         LH_RF = eb_prms.Lh_rf
 
         # LAYERS IN
-        ldm = layers.ldrymass.copy()
+        lm = layers.lice.copy()
         lw = layers.lwater.copy()
         layermelt = subsurf_melt.copy()       # mass of melt due to penetrating SW [kg m-2]
         surface_melt = self.surface.Qm*self.dt/LH_RF     # mass of melt due to SEB [kg m-2]
-        initial_mass = np.sum(layers.ldrymass + layers.lwater)
+        initial_mass = np.sum(layers.lice + layers.lwater)
 
-        if surface_melt > ldm[0]: # melt by surface energy balance completely melts surface layer
+        if surface_melt > lm[0]: # melt by surface energy balance completely melts surface layer
             # check if it melts further layers
-            fully_melted = np.where(np.cumsum(ldm) <= surface_melt)[0]
+            fully_melted = np.where(np.cumsum(lm) <= surface_melt)[0]
 
             # calculate how much more melt occurs in the first layer not fully melted
-            newsurface_melt = surface_melt - np.sum(ldm[fully_melted])
+            newsurface_melt = surface_melt - np.sum(lm[fully_melted])
             newsurface_idx = fully_melted[-1] + 1
 
             # possible to fully melt that layer too when combined with penetrating SW melt:
-            if newsurface_melt + layermelt[newsurface_idx] > ldm[newsurface_idx]:
+            if newsurface_melt + layermelt[newsurface_idx] > lm[newsurface_idx]:
                 fully_melted = np.append(fully_melted,newsurface_idx)
                 # push new surface to the next layer down
-                newsurface_melt -= ldm[newsurface_idx]
+                newsurface_melt -= lm[newsurface_idx]
                 newsurface_idx += 1
 
             # set melt amounts from surface melt into melt array
-            layermelt[fully_melted] = ldm[fully_melted] + lw[fully_melted]
+            layermelt[fully_melted] = lm[fully_melted] + lw[fully_melted]
             layermelt[newsurface_idx] += newsurface_melt 
         else:
             # only surface layer is melting
@@ -325,7 +325,7 @@ class massBalance():
             removed += 1 
 
         # CHECK MASS CONSERVATION
-        change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
+        change = np.sum(layers.lice + layers.lwater) - initial_mass
         if len(fully_melted) > 0:
             change += np.sum(self.melted_layers.mass)
         assert np.abs(change) < eb_prms.mb_threshold, 'melt_layers failed mass conservation'
@@ -369,14 +369,14 @@ class massBalance():
                 snow_firn_idx = []
         
         # LAYERS IN
-        ldm = layers.ldrymass.copy()[snow_firn_idx]
+        lm = layers.lice.copy()[snow_firn_idx]
         lw = layers.lwater.copy()[snow_firn_idx]
         lh = layers.lheight.copy()[snow_firn_idx]
         layermelt_sf = layermelt[snow_firn_idx]
 
         # Initialize variables
-        initial_mass = np.sum(layers.ldrymass + layers.lwater)
-        ldmi,lwi = (layers.ldrymass,layers.lwater)
+        initial_mass = np.sum(layers.lice + layers.lwater)
+        lmi,lwi = (layers.lice,layers.lwater)
         rain_bool = rainfall > 0
         runoff = 0  # Any flow that leaves the point laterally
 
@@ -389,12 +389,12 @@ class massBalance():
         if len(snow_firn_idx) > 1:
             # Calculate volumetric fractions (theta)
             theta_liq = lw / (lh*DENSITY_WATER)
-            theta_ice = ldm / (lh*DENSITY_ICE)
+            theta_ice = lm / (lh*DENSITY_ICE)
             porosity = 1 - theta_ice
             theta_liq[theta_liq > porosity] = porosity[theta_liq > porosity]
 
             # Remove / move snow melt to layer water
-            ldm -= layermelt_sf
+            lm -= layermelt_sf
             lh -= layermelt_sf / layers.ldensity[snow_firn_idx]
             lw += layermelt_sf
 
@@ -437,7 +437,7 @@ class massBalance():
                 q_out_store.append(q_out)
 
                 # layer cannot contain more water than there is pore space
-                layer_porosity = 1 - ldm[layer] / (lh[layer]*DENSITY_ICE)
+                layer_porosity = 1 - lm[layer] / (lh[layer]*DENSITY_ICE)
                 water_lim = lh[layer]*layer_porosity*DENSITY_WATER
                 if lw[layer] > water_lim: # excess runs off
                     runoff += lw[layer] - water_lim
@@ -446,12 +446,12 @@ class massBalance():
             # LAYERS OUT
             layers.lheight[snow_firn_idx] = lh
             layers.lwater[snow_firn_idx] = lw
-            layers.ldrymass[snow_firn_idx] = ldm
+            layers.lice[snow_firn_idx] = lm
             runoff += q_out*dt + np.sum(layermelt[layers.ice_idx])
 
             # Separately remove melted ice mass
             for layer in layers.ice_idx:
-                layers.ldrymass[layer] -= layermelt[layer]
+                layers.lice[layer] -= layermelt[layer]
 
             # Diffuse LAPs 
             if self.args.switch_LAPs == 1:
@@ -460,18 +460,18 @@ class massBalance():
                                   snow_firn_idx)
         else:
             # No percolation, but need to move melt to runoff
-            layers.ldrymass -= layermelt
+            layers.lice -= layermelt
             layers.lheight -= layermelt / layers.ldensity
             runoff += water_in + np.sum(layermelt)
         
         # CHECK MASS CONSERVATION
         ins = water_in
         outs = runoff
-        change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
+        change = np.sum(layers.lice + layers.lwater) - initial_mass
         if np.abs(change - (ins-outs)) >= eb_prms.mb_threshold:
-            print('percolation ins',water_in,'outs',runoff,'now',np.sum(layers.ldrymass + layers.lwater),'initial',initial_mass)
-            print('now',layers.ldrymass,layers.lwater)
-            print('initial',ldmi,lwi)
+            print('percolation ins',water_in,'outs',runoff,'now',np.sum(layers.lice + layers.lwater),'initial',initial_mass)
+            print('now',layers.lice,layers.lwater)
+            print('initial',lmi,lwi)
         assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, 'percolation failed mass conservation'
         return runoff
         
@@ -499,7 +499,7 @@ class massBalance():
 
         # LAYERS IN
         lw = layers.lwater[snow_firn_idx]
-        ldm = layers.ldrymass[snow_firn_idx]
+        lm = layers.lice[snow_firn_idx]
 
         # Layer mass of each species in kg m-2
         mBC = layers.lBC[snow_firn_idx]
@@ -511,8 +511,8 @@ class massBalance():
             mdust[0] += enbal.dustwet * eb_prms.ratio_DU3_DUtot * dt
 
         # Layer mass mixing ratio in kg kg-1
-        cBC = mBC / (lw + ldm)
-        cdust = mdust / (lw + ldm)
+        cBC = mBC / (lw + lm)
+        cdust = mdust / (lw + lm)
 
         # Add LAPs from fully melted layers
         if self.melted_layers != 0:
@@ -569,17 +569,17 @@ class massBalance():
         snow_firn_idx = np.concatenate([layers.snow_idx,layers.firn_idx])
         lT = layers.ltemp.copy()[snow_firn_idx]
         lw = layers.lwater.copy()[snow_firn_idx]
-        ldm = layers.ldrymass.copy()[snow_firn_idx]
+        lm = layers.lice.copy()[snow_firn_idx]
         lh = layers.lheight.copy()[snow_firn_idx]
 
-        initial_mass = np.sum(layers.ldrymass + layers.lwater)
+        initial_mass = np.sum(layers.lice + layers.lwater)
         refreeze = np.zeros(len(snow_firn_idx))
         for layer, T in enumerate(lT):
             if T < 0. and lw[layer] > 0:
                 # calculate potential for refreeze [J m-2]
-                E_cold = np.abs(T)*ldm[layer]*HEAT_CAPACITY_ICE  # cold content available 
+                E_cold = np.abs(T)*lm[layer]*HEAT_CAPACITY_ICE  # cold content available 
                 E_water = lw[layer]*LH_RF  # amount of water to freeze
-                E_pore = (DENSITY_ICE*lh[layer]-ldm[layer])*LH_RF # pore space available
+                E_pore = (DENSITY_ICE*lh[layer]-lm[layer])*LH_RF # pore space available
                 
                 # calculate amount of refreeze in kg m-2
                 dm_ref = np.min([abs(E_cold),abs(E_water),abs(E_pore)])/LH_RF
@@ -588,9 +588,9 @@ class massBalance():
                 refreeze[layer] = dm_ref
 
                 # add refreeze to layer ice mass
-                ldm[layer] += dm_ref
+                lm[layer] += dm_ref
                 # update layer temperature from latent heat
-                lT[layer] = min(0,-(E_cold-dm_ref*LH_RF)/(HEAT_CAPACITY_ICE*ldm[layer]))
+                lT[layer] = min(0,-(E_cold-dm_ref*LH_RF)/(HEAT_CAPACITY_ICE*lm[layer]))
 
                 # update water content
                 lw[layer] = max(0,lw[layer]-dm_ref)
@@ -602,14 +602,14 @@ class massBalance():
         # LAYERS OUT
         layers.ltemp[snow_firn_idx] = lT
         layers.lwater[snow_firn_idx] = lw
-        layers.ldrymass[snow_firn_idx] = ldm
+        layers.lice[snow_firn_idx] = lm
         layers.lheight[snow_firn_idx] = lh
         layers.update_layer_props()
 
         # CHECK MASS CONSERVATION
-        change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
+        change = np.sum(layers.lice + layers.lwater) - initial_mass
         if np.abs(change) >= eb_prms.mb_threshold:
-            print('rfz change',change, 'initial',initial_mass,'dry, water',layers.ldrymass, layers.lwater)
+            print('rfz change',change, 'initial',initial_mass,'dry, water',layers.lice, layers.lwater)
         assert np.abs(change) < eb_prms.mb_threshold, 'refreezing failed mass conservation'
         return np.sum(refreeze)
     
@@ -635,10 +635,10 @@ class massBalance():
         snowfirn_idx = np.append(layers.snow_idx,layers.firn_idx)
         lp = layers.ldensity.copy()
         lT = layers.ltemp.copy()
-        ldm = layers.ldrymass.copy()
+        lm = layers.lice.copy()
         lw = layers.lwater.copy()
 
-        initial_mass = np.sum(layers.ldrymass + layers.lwater)
+        initial_mass = np.sum(layers.lice + layers.lwater)
 
         if eb_prms.method_densification in ['Boone']:
             # EMPIRICAL PARAMETERS
@@ -649,7 +649,7 @@ class massBalance():
             c5 = eb_prms.Boone_c5      # m3 kg-1 (0.018) --> 0.07
 
             for layer in snowfirn_idx:
-                weight_above = GRAVITY*np.sum(ldm[:layer]+lw[:layer])
+                weight_above = GRAVITY*np.sum(lm[:layer]+lw[:layer])
                 if c4*(0.-lT[layer])+c5*lp[layer] > 1234:
                     print(f'!! Overflow error from lT {lT[layer]} lp {lp[layer]} c4,c5: {c4}, {c5}')
                 viscosity = VISCOSITY_SNOW*np.exp(c4*(0.-lT[layer])+c5*lp[layer])
@@ -663,7 +663,7 @@ class massBalance():
 
             # LAYERS OUT
             layers.ldensity = lp
-            layers.lheight = ldm / lp
+            layers.lheight = lm / lp
             layers.update_layer_props('depth')
 
         # Herron Langway (1980) method
@@ -685,7 +685,7 @@ class massBalance():
 
             # LAYERS OUT
             layers.ldensity = lp
-            layers.lheight = ldm / lp
+            layers.lheight = lm / lp
             layers.update_layer_props('depth')
 
         # Kojima (1967) method (JULES)
@@ -695,7 +695,7 @@ class massBalance():
             k_S = 4000      # K
             T_m = 0. + 273.15
             for layer in snowfirn_idx:
-                weight_above = GRAVITY*np.sum(ldm[:layer]+lw[:layer])
+                weight_above = GRAVITY*np.sum(lm[:layer]+lw[:layer])
 
                 # get change in density
                 T_K = lT[layer] + 273.15
@@ -705,14 +705,14 @@ class massBalance():
 
             # LAYERS OUT
             layers.ldensity = lp
-            layers.lheight = ldm / lp
+            layers.lheight = lm / lp
             layers.update_layer_props('depth')
 
         # Check if new firn or ice layers were created
         layers.update_layer_types()
 
         # CHECK MASS CONSERVATION
-        change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
+        change = np.sum(layers.lice + layers.lwater) - initial_mass
         assert np.abs(change) < eb_prms.mb_threshold, 'densification failed mass conservation'
         return
     
@@ -722,7 +722,7 @@ class massBalance():
         LV_SUB = eb_prms.Lv_sub
         LV_VAP = eb_prms.Lv_evap
 
-        initial_mass = np.sum(layers.ldrymass + layers.lwater)
+        initial_mass = np.sum(layers.lice + layers.lwater)
 
         # Get mass fluxes from latent heat
         if surface.stemp < 0.:
@@ -731,7 +731,7 @@ class massBalance():
             deposition = max(dm,0)
             evaporation = 0
             condensation = 0
-            layers.ldrymass[0] += dm
+            layers.lice[0] += dm
         else:
             dm = enbal.lat*self.dt/(DENSITY_WATER*LV_VAP)
             sublimation = 0
@@ -753,7 +753,7 @@ class massBalance():
         # CHECK MASS CONSERVATION
         ins = deposition + condensation
         outs = sublimation + evaporation
-        change = np.sum(layers.ldrymass + layers.lwater) - initial_mass
+        change = np.sum(layers.lice + layers.lwater) - initial_mass
         assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, 'phase change failed mass conservation'
         return
       
@@ -819,28 +819,30 @@ class massBalance():
 
         if nl > 2:
             # heights of imaginary average bins between layers
-            up_height = np.array([np.mean(lh[i:i+2]) for i in range(nl-2)])  # upper layer 
-            dn_height = np.array([np.mean(lh[i+1:i+3]) for i in range(nl-2)])  # lower layer
+            up_lh = np.array([np.mean(lh[i:i+2]) for i in range(nl-2)])  # upper layer 
+            dn_lh = np.array([np.mean(lh[i+1:i+3]) for i in range(nl-2)])  # lower layer
 
             # conductivity
-            up_cond = np.array([np.mean(lcond[i:i+2]*lh[i:i+2]) for i in range(nl-2)]) / up_height
-            dn_cond = np.array([np.mean(lcond[i+1:i+3]*lh[i+1:i+3]) for i in range(nl-2)]) / dn_height
+            up_kcond = np.array([np.mean(lcond[i:i+2]*lh[i:i+2]) for i in range(nl-2)]) / up_lh
+            dn_kcond = np.array([np.mean(lcond[i+1:i+3]*lh[i+1:i+3]) for i in range(nl-2)]) / dn_lh
 
             # density
-            up_dens = np.array([np.mean(lp[i:i+2]) for i in range(nl-2)]) / up_height
-            dn_dens = np.array([np.mean(lp[i+1:i+3]) for i in range(nl-2)]) / dn_height
+            up_dens = np.array([np.mean(lp[i:i+2]) for i in range(nl-2)]) / up_lh
+            dn_dens = np.array([np.mean(lp[i+1:i+3]) for i in range(nl-2)]) / dn_lh
 
-            # find temperature of top layer from surftemp boundary condition
-            surf_cond = up_cond[0]*2/(up_dens[0]*up_height[0])*(surftemp-lT_old[0])
-            subsurf_cond = dn_cond[0]/(up_dens[0]*up_height[0])*(lT_old[0]-lT_old[1])
-            lT[0] = lT_old[0] + dt_heat/(CP_ICE*lh[0])*(surf_cond - subsurf_cond)
+            # Top layer uses surftemp boundary condition
+            surf_heat_0 = up_kcond[0]*2/(up_dens[0]*lh[0])*(surftemp-lT_old[0])
+            subsurf_heat_0 = dn_kcond[0]/(up_dens[0]*up_lh[0])*(lT_old[0]-lT_old[1])
+            lT[0] = lT_old[0] + (surf_heat_0 - subsurf_heat_0)*dt_heat/(CP_ICE*lh[0])
+            # print('dT0',dt_heat*(surf_heat_0 - subsurf_heat_0)/(CP_ICE*lh[0]),lT[0])
             # If top layer of snow is very thin on top of ice, it can break this calculation
             if lT[0] > 0 or lT[0] < -50: 
                 lT[0] = np.mean([surftemp,lT_old[1]])
 
-            surf_cond = up_cond/(up_dens*up_height)*(lT_old[:-2]-lT_old[1:-1])
-            subsurf_cond = dn_cond/(dn_dens*dn_height)*(lT_old[1:-1]-lT_old[2:])
-            lT[1:-1] = lT_old[1:-1] + dt_heat/(CP_ICE*lh[1:-1])*(surf_cond - subsurf_cond)
+            # Middle layers solve heat equation
+            surf_heat = up_kcond/(up_dens*up_lh)*(lT_old[:-2]-lT_old[1:-1])
+            subsurf_heat = dn_kcond/(dn_dens*dn_lh)*(lT_old[1:-1]-lT_old[2:])
+            lT[1:-1] = lT_old[1:-1] + (surf_heat - subsurf_heat)*dt_heat/(CP_ICE*lh[1:-1])
 
         elif nl > 1:
             lT = np.array([surftemp/2,0])
@@ -882,7 +884,7 @@ class massBalance():
             print(f'--------------------layer {l}---------------------')
             print(f'     T = {layers.ltemp[l]:.1f} C                 h = {layers.lheight[l]:.3f} m ')
             print(f'                 p = {layers.ldensity[l]:.0f} kg/m3')
-            print(f'Water Mass : {layers.lwater[l]:.2f} kg/m2   Dry Mass : {layers.ldrymass[l]:.2f} kg/m2')
+            print(f'Water Mass : {layers.lwater[l]:.2f} kg/m2   Dry Mass : {layers.lice[l]:.2f} kg/m2')
         print('================================================')
         return
     
@@ -893,7 +895,7 @@ class massBalance():
         mass_out:   sum of runoff (kg m-2)
         """
          # Difference in mass since the last timestep
-        current_mass = np.sum(self.layers.ldrymass + self.layers.lwater)
+        current_mass = np.sum(self.layers.lice + self.layers.lwater)
         diff = current_mass - self.previous_mass
         in_out = mass_in - mass_out
         assert np.abs(diff - in_out) < eb_prms.mb_threshold, f'Timestep {self.time} failed mass conservation'
@@ -1047,8 +1049,8 @@ class Output():
         self.layerdensity_output[step] = layers.ldensity.copy()
         self.layerBC_output[step] = layers.lBC / layers.lheight * 1e6
         self.layerdust_output[step] = layers.ldust / layers.lheight * 1e3
-        self.layergrainsize_output[step] = layers.grainsize.copy()
-        self.layerrefreeze_output[step] = layers.drefreeze.copy()
+        self.layergrainsize_output[step] = layers.lgrainsize.copy()
+        self.layerrefreeze_output[step] = layers.cumrefreeze.copy()
 
     def store_data(self):
         # Load output dataset

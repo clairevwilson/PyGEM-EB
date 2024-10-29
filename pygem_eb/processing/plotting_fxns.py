@@ -1173,7 +1173,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
             #     height = np.log(height)
 
             bottom = 0
-            ctypes = {'layerBC':'Greys','layerdust':'Oranges','layertemp':'viridis',
+            ctypes = {'layerBC':'Greys','layerdust':'Oranges','layertemp':'plasma',
                 'layerdensity':'Greens','layerwater':'Blues','layergrainsize':'Purples',
                 'layerrefreeze':'Reds'}
             ctype = ctypes[var]

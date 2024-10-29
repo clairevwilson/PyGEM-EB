@@ -46,9 +46,9 @@ class Layers():
         ltemp,ldensity,lwater,lgrainsize = self.initialize_layers(snow,firn)
         self.ltemp = ltemp                  # LAYER TEMPERATURE [C]
         self.ldensity = ldensity            # LAYER DENSITY [kg m-3]
-        self.ldrymass = ldensity*lheight    # LAYER DRY (SOLID) MASS [kg m-2]
-        self.lwater = lwater                # LAYER WATER CONTENT [kg m-2]
-        self.grainsize = lgrainsize         # LAYER GRAIN SIZE [um]
+        self.lice = ldensity*lheight        # LAYER ICE (SOLID) MASS [kg m-2]
+        self.lwater = lwater                # LAYER WATER (LIQUID) MASS [kg m-2]
+        self.lgrainsize = lgrainsize         # LAYER GRAIN SIZE [um]
 
         # Initialize LAPs (black carbon and dust)
         if eb_prms.switch_LAPs == 1:
@@ -73,7 +73,7 @@ class Layers():
 
         # Initialize bucket for 'delayed snow' and running max snow mass
         self.delayed_snow = 0
-        self.max_snow = np.sum(self.ldrymass[self.snow_idx])
+        self.max_snow = np.sum(self.lice[self.snow_idx])
 
         # Define day of year to merge snow into firn
         self.firn_doy = pd.to_datetime(eb_prms.end_summer).day_of_year
@@ -118,6 +118,12 @@ class Layers():
             current_depth = np.sum(lheight)
         if snow_height > 0:
             lheight[-1] = lheight[-1] - (current_depth-snow_height)
+            # Can end up with a small bottom layer: merge it
+            if lheight[-1] < lheight[-2] / 2:
+                lheight[-2] += lheight[-1]
+                lheight = lheight[:-1]
+                ltype = ltype[:-1]
+                layer -= 1
     
         # Add firn layers
         if firn_height > 0.75:
@@ -258,8 +264,8 @@ class Layers():
         Parameters
         ----------
         layers_to_add : pd.Dataframe
-            Contains temperature 'T', water content 'w', height 'h', 
-            type 't', dry mass 'm', mass of new snow 'new',
+            Contains temperature 'T', water mass 'w', solid mass 'm', 
+            height 'h', type 't', mass of new snow 'new',
             grain size 'g', and impurities 'BC' and 'dust'
         """
         self.nlayers += len(layers_to_add.loc['T'].values)
@@ -267,9 +273,9 @@ class Layers():
         self.lwater = np.append(layers_to_add.loc['w'].values,self.lwater).astype(float)
         self.lheight = np.append(layers_to_add.loc['h'].values,self.lheight).astype(float)
         self.ltype = np.append(layers_to_add.loc['t'].values,self.ltype)
-        self.ldrymass = np.append(layers_to_add.loc['m'].values,self.ldrymass).astype(float)
+        self.lice = np.append(layers_to_add.loc['m'].values,self.lice).astype(float)
         self.lnewsnow = np.append(layers_to_add.loc['new'].values,self.lnewsnow).astype(float)
-        self.grainsize = np.append(layers_to_add.loc['g'].values,self.grainsize).astype(float)
+        self.lgrainsize = np.append(layers_to_add.loc['g'].values,self.lgrainsize).astype(float)
         new_layer_BC = layers_to_add.loc['BC'].values.astype(float)*self.lheight[0]
         self.lBC = np.append(new_layer_BC,self.lBC)
         new_layer_dust = layers_to_add.loc['dust'].values.astype(float)*self.lheight[0]
@@ -294,11 +300,11 @@ class Layers():
         self.lwater = np.delete(self.lwater,layer_to_remove)
         self.lheight = np.delete(self.lheight,layer_to_remove)
         self.ltype = np.delete(self.ltype,layer_to_remove)
-        self.ldrymass = np.delete(self.ldrymass,layer_to_remove)
+        self.lice = np.delete(self.lice,layer_to_remove)
         self.drefreeze = np.delete(self.drefreeze,layer_to_remove)
         self.cumrefreeze = np.delete(self.cumrefreeze,layer_to_remove)
         self.lnewsnow = np.delete(self.lnewsnow,layer_to_remove)
-        self.grainsize = np.delete(self.grainsize,layer_to_remove)
+        self.lgrainsize = np.delete(self.lgrainsize,layer_to_remove)
         self.lBC = np.delete(self.lBC,layer_to_remove)
         self.ldust = np.delete(self.ldust,layer_to_remove)
         self.update_layer_props()
@@ -315,14 +321,13 @@ class Layers():
         self.nlayers += 1
         self.ltemp = np.insert(self.ltemp,l,self.ltemp[l])
         self.ltype = np.insert(self.ltype,l,self.ltype[l])
-        self.grainsize = np.insert(self.grainsize,l,self.grainsize[l])
-
+        self.lgrainsize = np.insert(self.lgrainsize,l,self.lgrainsize[l])
         self.lwater[l] = self.lwater[l]/2
         self.lwater = np.insert(self.lwater,l,self.lwater[l])
         self.lheight[l] = self.lheight[l]/2
         self.lheight = np.insert(self.lheight,l,self.lheight[l])
-        self.ldrymass[l] = self.ldrymass[l]/2
-        self.ldrymass = np.insert(self.ldrymass,l,self.ldrymass[l])
+        self.lice[l] = self.lice[l]/2
+        self.lice = np.insert(self.lice,l,self.lice[l])
         self.drefreeze[l] = self.drefreeze[l]/2
         self.drefreeze = np.insert(self.drefreeze,l,self.drefreeze[l])
         self.cumrefreeze[l] = self.cumrefreeze[l]/2
@@ -343,15 +348,15 @@ class Layers():
         passed with the layer below (index+1)
         """
         l = layer_to_merge
-        self.ldensity[l+1] = np.sum(self.ldensity[l:l+2]*self.ldrymass[l:l+2])/np.sum(self.ldrymass[l:l+2])
+        self.ldensity[l+1] = np.sum(self.ldensity[l:l+2]*self.lice[l:l+2])/np.sum(self.lice[l:l+2])
         self.lwater[l+1] = np.sum(self.lwater[l:l+2])
         self.ltemp[l+1] = np.mean(self.ltemp[l:l+2])
         self.lheight[l+1] = np.sum(self.lheight[l:l+2])
-        self.ldrymass[l+1] = np.sum(self.ldrymass[l:l+2])
+        self.lice[l+1] = np.sum(self.lice[l:l+2])
         self.drefreeze[l+1] = np.sum(self.drefreeze[l:l+2])
         self.cumrefreeze[l+1] = np.sum(self.cumrefreeze[l:l+2])
         self.lnewsnow[l+1] = np.sum(self.lnewsnow[l:l+2])
-        self.grainsize[l+1] = np.mean(self.grainsize[l:l+2])
+        self.lgrainsize[l+1] = np.mean(self.lgrainsize[l:l+2])
         self.lBC[l+1] = np.sum(self.lBC[l:l+2])
         self.ldust[l+1] = np.sum(self.ldust[l:l+2])
         self.remove_layer(l)
@@ -422,7 +427,7 @@ class Layers():
         if 'depth' in do:
             self.ldepth = np.array([np.sum(lh[:i+1])-(lh[i]/2) for i in range(self.nlayers)])
         if 'density' in do:
-            self.ldensity = self.ldrymass / self.lheight
+            self.ldensity = self.lice / self.lheight
         return
     
     def update_layer_types(self):
@@ -481,13 +486,13 @@ class Layers():
         if snowfall == 0.:
             return 0
         
-        initial_mass = np.sum(self.ldrymass + self.lwater)
+        initial_mass = np.sum(self.lice + self.lwater)
 
         if self.args.switch_snow == 0:
             # Snow falls with the same properties as the current top layer
             new_density = self.ldensity[0]
             new_height = snowfall/new_density
-            new_grainsize = self.grainsize[0]
+            new_grainsize = self.lgrainsize[0]
             new_BC = self.lBC[0]/self.lheight[0]*new_height
             new_dust = self.ldust[0]/self.lheight[0]*new_height
             new_snow = 0
@@ -535,12 +540,12 @@ class Layers():
         else:
             # take weighted average of density and temperature of surface layer and new snow
             self.delayed_snow = 0
-            new_layermass = self.ldrymass[0] + snowfall
+            new_layermass = self.lice[0] + snowfall
             self.lnewsnow[0] = snowfall if eb_prms.switch_snow == 1 else 0
-            self.ldensity[0] = (self.ldensity[0]*self.ldrymass[0] + new_density*snowfall)/(new_layermass)
-            self.ltemp[0] = (self.ltemp[0]*self.ldrymass[0] + enbal.tempC*snowfall)/(new_layermass)
-            self.grainsize[0] = (self.grainsize[0]*self.ldrymass[0] + new_grainsize*snowfall)/(new_layermass)
-            self.ldrymass[0] = new_layermass
+            self.ldensity[0] = (self.ldensity[0]*self.lice[0] + new_density*snowfall)/(new_layermass)
+            self.ltemp[0] = (self.ltemp[0]*self.lice[0] + enbal.tempC*snowfall)/(new_layermass)
+            self.lgrainsize[0] = (self.lgrainsize[0]*self.lice[0] + new_grainsize*snowfall)/(new_layermass)
+            self.lice[0] = new_layermass
             self.lheight[0] += snowfall/new_density
             self.lBC[0] = self.lBC[0] + new_BC
             self.ldust[0] = self.ldust[0] + new_dust
@@ -548,7 +553,7 @@ class Layers():
                 self.split_layer(0)
     
         # CHECK MASS CONSERVATION
-        change = np.sum(self.ldrymass + self.lwater) - initial_mass
+        change = np.sum(self.lice + self.lwater) - initial_mass
         assert np.abs(change - snowfall) < eb_prms.mb_threshold
 
         self.update_layer_props()
@@ -579,17 +584,17 @@ class Layers():
             # Get fractions of refreeze, new snow and old snow
             refreeze = self.drefreeze[idx]
             new_snow = self.lnewsnow[idx]
-            old_snow = self.ldrymass[idx] - refreeze - new_snow
-            f_old = old_snow / self.ldrymass[idx]
-            f_new = new_snow / self.ldrymass[idx]
-            f_rfz = refreeze / self.ldrymass[idx]
-            f_liq = self.lwater[idx] / (self.lwater[idx] + self.ldrymass[idx])
+            old_snow = self.lice[idx] - refreeze - new_snow
+            f_old = old_snow / self.lice[idx]
+            f_new = new_snow / self.lice[idx]
+            f_rfz = refreeze / self.lice[idx]
+            f_liq = self.lwater[idx] / (self.lwater[idx] + self.lice[idx])
 
             dz = self.lheight.copy()[idx]
             T = self.ltemp.copy()[idx] + 273.15
             surftempK = surftemp + 273.15
             p = self.ldensity.copy()[idx]
-            grainsize = self.grainsize.copy()[idx]
+            grainsize = self.lgrainsize.copy()[idx]
 
             # Dry metamorphism
             if eb_prms.constant_drdry:
@@ -660,13 +665,13 @@ class Layers():
 
             # Enforce maximum grainsize
             grainsize[np.where(grainsize > FIRN_GRAINSIZE)[0]] = FIRN_GRAINSIZE
-            self.grainsize[idx] = grainsize
-            self.grainsize[self.firn_idx] = FIRN_GRAINSIZE 
-            self.grainsize[self.ice_idx] = ICE_GRAINSIZE
+            self.lgrainsize[idx] = grainsize
+            self.lgrainsize[self.firn_idx] = FIRN_GRAINSIZE 
+            self.lgrainsize[self.ice_idx] = ICE_GRAINSIZE
         elif len(self.firn_idx) > 0: # no snow, but there is firn
-            self.grainsize[self.firn_idx] = FIRN_GRAINSIZE
-            self.grainsize[self.ice_idx] = ICE_GRAINSIZE
+            self.lgrainsize[self.firn_idx] = FIRN_GRAINSIZE
+            self.lgrainsize[self.ice_idx] = ICE_GRAINSIZE
         else: # no snow or firn, just ice
-            self.grainsize[self.ice_idx] = ICE_GRAINSIZE
+            self.lgrainsize[self.ice_idx] = ICE_GRAINSIZE
         
         return 

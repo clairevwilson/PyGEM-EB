@@ -19,7 +19,7 @@ use_AWS = False          # Use AWS data? (or just reanalysis)
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/gulkana_22yrs.csv'}, 
+                            'AWS_fn':'Preprocessed/gulkana2024.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -176,9 +176,9 @@ for i in np.arange(0,480):
 grainsize_ds = xr.open_dataset(grainsize_fp)
 
 # ========== PARAMETERS ==========
-# site specific?
+# site specific
 sky_view = 0.936
-kp = 1
+kp = 3.2
 # play with
 dep_factor = 1              # multiplicative factor to adjust MERRA-2 deposition
 wind_factor = 1             # multiplicative wind scaling factor
