@@ -7,9 +7,10 @@ from multiprocessing import Pool
 # Internal libraries
 import run_simulation_eb as sim
 import pygem_eb.massbalance as mb
+import pygem_eb.input as eb_prms
 
 # User info
-sites = ['B','D'] # Sites to run in parallel
+sites = ['A','D'] # Sites to run in parallel
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
 params_fn = '../Output/params/10_08.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
@@ -22,6 +23,8 @@ args.enddate = '2022-04-20 12:00'
 args.store_data = True              # Ensures output is stored
 args.debug = False
 args.use_AWS = True
+args.glac_no = ['01.00570']
+eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana_22yrs.csv'
 
 # Determine number of runs for each process
 n_processes = len(sites)
