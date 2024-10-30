@@ -27,6 +27,7 @@ import pandas as pd
 import geopandas as gpd
 import argparse
 import suncalc
+import os
 from pyproj import Transformer
 from numpy import pi, cos, sin, arctan
 
@@ -60,9 +61,9 @@ buffer = 20             # min num of gridcells away from which horizon can be fo
 # in
 dem_fp = 'in/gulkana/Gulkana_DEM_20m.tif'   # DEM containing glacier + surroundings
 # if using get_diffuse, need a solar radiation file
-solar_fp = '/home/claire/research/climate_data/AWS/CNR4/cnr4_2023.csv'
+solar_fp = None # '/home/claire/research/climate_data/AWS/CNR4/cnr4_2023.csv'
 # optional: shapefile of glacier outline for plotting
-shp_fp = 'in/shapefile/Gulkana.shp'
+shp_fp = None # 'in/shapefile/Gulkana.shp'
 # optional: if choosing lat/lon by site, need site constants
 site_fp = '../data/Gulkana/site_constants.csv'
 # optional: slope/aspect .tif (can also be calculated from DEM)
@@ -118,6 +119,20 @@ class Shading():
         # out
         self.args = args
         return
+
+    def parse_args(self):
+        # =================== PARSE ARGS ===================
+        parser = argparse.ArgumentParser(description='pygem-eb shading model')
+        parser.add_argument('-latitude','--lat',action='store',default=lat)
+        parser.add_argument('-longitude','--lon',action='store',default=lon)
+        parser.add_argument('-site',action='store',default=site)
+        parser.add_argument('-site_name',action='store',default=glacier_name)
+        parser.add_argument('-site_by',action='store',default=site_by)
+        parser.add_argument('-plot',action='store',default=plot)
+        parser.add_argument('-store',action='store',default=store)
+        args = parser.parse_args()
+        args.site_name += args.site
+        return args
     
     def main(self):
         """
@@ -226,7 +241,7 @@ class Shading():
         self.x_res = dem.rio.resolution()[0]
         self.y_res = dem.rio.resolution()[1]
 
-        if 'search' in self.args.plot:
+        if 'search' in self.args.plot and shp_fp:
             # load shapefile and ensure same coordinates
             shapefile = gpd.read_file(shp_fp).set_crs(epsg=4326)
             shapefile = shapefile.to_crs(dem.rio.crs)
@@ -314,10 +329,13 @@ class Shading():
     def find_horizon(self):
         args = self.args
         # plot DEM as background
-        if 'search' in args.plot:
+        if 'search' in args.plot and shp_fp:
             fig,ax = plt.subplots(figsize=(6,6))
             self.dem.plot(ax=ax,cmap='viridis')
             self.shapefile.plot(ax=ax,color='none',edgecolor='black',linewidth=1.5)
+            plt.axis('equal')
+        elif 'search' in args.plot:
+            fig,ax = plt.subplots(figsize=(6,6))
             plt.axis('equal')
 
         # loop through angles
@@ -549,20 +567,6 @@ class Shading():
         self.site_df.loc[args.site,'elevation'] = int(self.point_elev)
         self.site_df.to_csv(site_fp)
         print(f'Saved sky view, slope, aspect and elevation to {site_fp}')
-    
-    def parse_args(self):
-        # =================== PARSE ARGS ===================
-        parser = argparse.ArgumentParser(description='pygem-eb shading model')
-        parser.add_argument('-latitude','--lat',action='store',default=lat)
-        parser.add_argument('-longitude','--lon',action='store',default=lon)
-        parser.add_argument('-site',action='store',default=site)
-        parser.add_argument('-site_name',action='store',default=glacier_name)
-        parser.add_argument('-site_by',action='store',default=site_by)
-        parser.add_argument('-plot',action='store',default=plot)
-        parser.add_argument('-store',action='store',default=store)
-        args = parser.parse_args()
-        args.site_name += args.site
-        return args
 
 # RUN MODEL
 if __name__ == '__main__':

@@ -15,12 +15,12 @@ import pygem_eb.massbalance as mb
 from objectives import *
 
 # ===== USER OPTIONS =====
-sites = ['AB','B','D']
+sites = ['A','AU','B','D']
 n_spc_runs_ahead = 0    # Step if you're going to run this script more than once
 
 # Summer parameter bounds and guesses by site
-summer_info = {'A':{'param':'a_ice','bounds':[0.2,0.4],'x0':0.2,'step':0.05},
-               'AB':{'param':'kw','bounds':[0.2,5],'x0':2.5,'step':0.5},
+summer_info = {'A':{'param':'kw','bounds':[0.2,5],'x0':2.5,'step':0.5},
+               'AU':{'param':'kw','bounds':[0.2,5],'x0':2.5,'step':0.5},
                 'B':{'param':'kw','bounds':[0.2,5],'x0':2.5,'step':0.5},
                 # 'AB':{'param':'a_ice','bounds':[0.2,0.4],'x0':0.2,'step':0.05},
                 # 'B':{'param':'a_ice','bounds':[0.4,0.55],'x0':0.4,'step':0.02},
@@ -66,7 +66,9 @@ for site in sites:
 args.store_data = True              # Ensures output is stored
 args.use_AWS = True                 # Use available AWS data
 if not args.use_AWS:
-    print('use AWS is false')
+    print('Using only MERRA-2 data')
+args.a_ice = 0.4
+print('Forcing ice albedo to 0.4')
 eb_prms.store_vars = ['MB']         # Only store basic results
 
 # Initialize model
@@ -137,14 +139,7 @@ def objective(parameters):
 
         # Parse the input parameter
         kp = parameters[site]['kp']
-        # if site == 'D':
-        #     kw = parameters[site]['kw']
-        #     a_ice = 0.4
-        # else:
-        #     a_ice = parameters[site]['a_ice']
-        #     kw = 1
         kw = parameters[site]['kw']
-        a_ice = 0.25 if site == 'AB' else 0.4
         
         for k_snow in params_parallel['k_snow']:
             # Get args for the current run
@@ -154,14 +149,14 @@ def objective(parameters):
             args_run.k_snow = k_snow
             args_run.kw = kw
             args_run.kp = kp
-            args_run.a_ice = a_ice
+            # args_run.a_ice = a_ice
             args_run.site = site
 
             # Set output filename
             args_run.out = base_fn.replace('#',str(all_runs_counter))
 
             # Specify attributes for output file
-            store_attrs = {'k_snow':str(k_snow),'a_ice':str(a_ice),
+            store_attrs = {'k_snow':str(k_snow), # 'a_ice':str(a_ice),
                             'kw':str(kw),'kp':str(kp),'site':site}
 
             # Check if moving to the next set of runs

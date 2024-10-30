@@ -11,6 +11,7 @@ import pygem_eb.input as eb_prms
 import pygem_eb.massbalance as mb
 import pygem.pygem_modelsetup as modelsetup
 import pygem_eb.climate as climutils
+import shading.shading as shading
 
 # Start timer
 start_time = time.time()
@@ -23,7 +24,7 @@ def get_args(parse=True):
                         help='',nargs='+')
     parser.add_argument('-elev',action='store',default=eb_prms.elev,type=float,
                         help='Elevation in m a.s.l.')
-    parser.add_argument('-site',action='store',default=eb_prms.site,type=str,
+    parser.add_argument('-site',action='store',default='',type=str,
                         help='Site name')
     
     # MODEL TIME
@@ -59,7 +60,7 @@ def get_args(parse=True):
     # CALIBRATED PARAMETERS
     parser.add_argument('-params_fn',action='store',default='None',
                         help='Filepath to params .txt file')
-    parser.add_argument('-k_snow',default=eb_prms.kcond_snow,action='store',
+    parser.add_argument('-k_snow',default=eb_prms.method_conductivity,action='store',
                         help='Thermal conductivity of snow')
     parser.add_argument('-a_ice',default=eb_prms.albedo_ice,action='store',type=float,
                         help='Broadband albedo of ice')
@@ -88,6 +89,34 @@ def get_args(parse=True):
         return args
     else:
         return parser
+    
+def check_inputs(dem_fp,args):
+    model = shading.Shading()
+
+    name = eb_prms.glac_name
+    if len(args.site) > 0:
+        eb_prms.shading_fp = f'shading/out/{name}{args.site}_shade.csv'
+    
+    # if not os.path.exists(eb_prms.shading_fp):
+    #     if os.path.exists(f'data/{name}/site_constants.csv'):
+    #         site_df = pd.read_csv(f'data/{name}/site_constants.csv')
+    #         for site in site_df['site_name']:
+    #             if not os.path.exists(f'shading/out/{name}{site}_shade.csv'):
+    #                 model.main()
+    #                 model.store_site_info()
+
+    
+    # else:
+    #     eb_prms.shading_fp = 
+
+    if not os.path.exists(eb_prms.shading_fp):
+        print(f'No shading file for',eb_prms.shading_fp)
+        # check DEM exists
+        # if os.path.exists(dem_fp):
+        print('running bin search...')
+    
+    return
+
 
 def initialize_model(glac_no,args):
     """
@@ -142,13 +171,17 @@ def initialize_model(glac_no,args):
                     rgi_regionsO1=eb_prms.rgi_regionsO1)
     climate = climutils.Climate(args,glacier_table)
 
-    # load in available AWS data
+    # load in available AWS data, then reanalysis
     if args.use_AWS:
         need_vars = climate.get_AWS(eb_prms.AWS_fn)
         climate.get_reanalysis(need_vars)
     else:
         climate.get_reanalysis(climate.all_vars)
+    # Check the dataset is ready to go
     climate.check_ds()
+
+    # Check shading
+    # check_inputs(eb_prms.dem_fp,args,climate)
 
     # Print out model start line
     start = pd.to_datetime(args.startdate)
