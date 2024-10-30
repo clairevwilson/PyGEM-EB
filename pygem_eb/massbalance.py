@@ -411,12 +411,8 @@ class massBalance():
                 q_in = q_out
 
                 # Calculate flow out of layer i
-                try:
-                    q_out = DENSITY_WATER*lh[layer]/dt * (
+                q_out = DENSITY_WATER*lh[layer]/dt * (
                         theta_liq[layer]-FRAC_IRREDUC*porosity[layer])
-                except:
-                    print(lh,snow_firn_idx,layers.ldensity[snow_firn_idx])
-                    assert 1==0
                 
                 # Check limits on flow out (q_out)
                 # check limit of qi based on underlying layer holding capacity
@@ -642,16 +638,14 @@ class massBalance():
 
         if eb_prms.method_densification in ['Boone']:
             # EMPIRICAL PARAMETERS
-            c1 = eb_prms.Boone_c1    # s-1 (2.7e-6) --> 2.7e-4
+            c1 = 2.7e-6     # s-1 (2.7e-6)
             c2 = 0.042      # K-1 (0.042)
             c3 = 0.046      # m3 kg-1 (0.046)
             c4 = 0.081      # K-1 (0.081)
-            c5 = eb_prms.Boone_c5      # m3 kg-1 (0.018) --> 0.07
+            c5 = eb_prms.Boone_c5      # m3 kg-1 (0.018) --> adjust in input
 
             for layer in snowfirn_idx:
                 weight_above = GRAVITY*np.sum(lm[:layer]+lw[:layer])
-                if c4*(0.-lT[layer])+c5*lp[layer] > 1234:
-                    print(f'!! Overflow error from lT {lT[layer]} lp {lp[layer]} c4,c5: {c4}, {c5}')
                 viscosity = VISCOSITY_SNOW*np.exp(c4*(0.-lT[layer])+c5*lp[layer])
 
                 # get change in density

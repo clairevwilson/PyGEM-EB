@@ -10,21 +10,20 @@ import pygem_eb.massbalance as mb
 import pygem_eb.input as eb_prms
 
 # User info
-sites = ['ABB','B','BD','T'] # Sites to run in parallel   
+sites = ['B'] # Sites to run in parallel   'ABB','B','BD','T'
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
-params_fn = '../Output/params/10_21.csv'
+params_fn = '../Output/params/10_30.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[5:10]
 n_runs_ahead = 0    # Step if you're going to run the model more than once at a time
 
 # Read command line args
 args = sim.get_args()
-args.startdate = '2024-04-20 00:00'
+args.startdate = '2024-04-17 18:00'
 args.enddate = '2024-08-20 00:00'
 args.store_data = True              # Ensures output is stored
 args.debug = False                  # Don't need debug prints
 args.use_AWS = True                 # Use AWS and set filepath
 eb_prms.glac_no = ['01.00570']
-eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana2024_walbedo.csv'
 
 # Determine number of runs for each process
 n_processes = len(sites)
@@ -37,6 +36,14 @@ for site in sites:
     # Get current site args
     args_run = copy.deepcopy(args)
     args_run.site = site
+
+    # Set AWS filename
+    # if site == 'B':
+    #     eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana2024.csv'
+    #     eb_prms.albedo_TOD = []
+    # else:
+    #     eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana2024_noalbedo.csv'
+    eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana2024_reducedearlyT.csv'    
 
     # Set parameters filename (relative to PyGEM-EB/)
     if params_fn:

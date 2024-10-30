@@ -100,7 +100,7 @@ wind_ref_height = 10 if reanalysis in ['ERA5-hourly'] else 2
 if use_AWS:
     assert os.path.exists(AWS_fn), 'Check AWS filepath or glac_no in input.py'
 
-dates_from_data = True
+dates_from_data = False
 if dates_from_data:
     cdf = pd.read_csv(AWS_fn,index_col=0)
     cdf = cdf.set_index(pd.to_datetime(cdf.index))
@@ -137,6 +137,7 @@ store_climate = False   # Store climate dataset .nc
 
 # TIMESTEP
 dt = 3600                   # Model timestep [s]
+daily_dt = 3600*24          # Seconds in a day [s]
 dt_heateq = 3600/5          # Time resolution of heat eq [s], should be integer multiple of 3600s so data can be stored on the hour
 end_summer = '2024-08-20'   # Date to consider the end of summer (year is irrelevant) (snow -> firn)
 
@@ -185,8 +186,7 @@ wind_factor = 1             # multiplicative wind scaling factor
 albedo_ice = 0.47           # albedo of ice [-] 
 kcond_ice = 2.25            # thermal conductivity of ice
 kcond_snow = 'Sturm'        # thermal conductivity of snow
-Boone_c1 = 2.7e-6           # s-1 (2.7e-6) --> 2.7e-4
-Boone_c5 = 0.018            # m3 kg-1 (0.018) --> 0.07
+Boone_c5 = 0.05             # m3 kg-1 (0.018)
 firn_grainsize = 2000       # firn grain size in um
 ice_grainsize = 5000        # ice grain size in um (placeholder -- unused)
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
@@ -208,42 +208,50 @@ dust_freshsnow = 0          # concentration of dust in fresh snow for initilizat
 ksp_BC = 0.5                # 0.1-0.2 meltwater scavenging efficiency of BC (from CLM5)
 ksp_dust = 0.2              # 0.015 meltwater scavenging efficiency of dust (from CLM5)
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
+mb_threshold = 0.1          # Threshold to consider not conserving mass (kg m-2 = mm w.e.)
+
 
 # ========== CONSTANTS ===========
-daily_dt = 3600*24          # Seconds in a day [s]
+# Discretization
+max_nlayers = 50            # Maximum number of vertical layers allowed
+max_dz = 1                  # Max layer height
+# Boundary conditions
+temp_temp = -2              # temperature of temperate ice [C]
+temp_depth = 100            # depth of temperate ice [m]
+# Physical properties of snow, ice, water and air
 density_ice = 900           # Density of ice [kg m-3] (or Gt / 1000 km3)
 density_water = 1000        # Density of water [kg m-3]
 density_firn = 700          # Density threshold for firn
 k_air = 0.023               # Thermal conductivity of air [W K-1 m-1] (Mellor, 1997)
-Lh_rf = 333550              # Latent heat of fusion of ice [J kg-1]
-gravity = 9.81              # Gravity [m s-2]
-pressure_std = 101325       # Standard pressure [Pa]
-temp_std = 293.15           # Standard temperature [K]
-R_gas = 8.3144598           # Universal gas constant [J mol-1 K-1]
-molarmass_air = 0.0289644   # Molar mass of Earth's air [kg mol-1]
 Cp_water = 4184             # Isobaric heat capacity of water [J kg-1 K-1]
 Cp_air = 1005               # Isobaric heat capacity of air [J kg-1 K-1]
 Cp_ice = 2050               # Isobaric heat capacity of ice [J kg-1 K-1]
-Lv_evap = 2.514e6           # latent heat of evaporation [J kg-1]
-Lv_sub = 2.849e6            # latent heat of sublimation [J kg-1]
-karman = 0.4                # von Karman's constant
-density_std = 1.225         # Air density at sea level [kg m-3]
-viscosity_snow = 3.7e7      # Viscosity of snow [Pa-s] 
+Lv_evap = 2514000           # latent heat of evaporation [J kg-1]
+Lv_sub = 2849000            # latent heat of sublimation [J kg-1]
+Lh_rf = 333550              # Latent heat of fusion of ice [J kg-1]
+viscosity_snow = 3.7e7      # Viscosity of snow [Pa-s]
+# Universal constants
+gravity = 9.81              # Gravity [m s-2]
+karman = 0.4                # von Karman's constant [-]
 sigma_SB = 5.67037e-8       # Stefan-Boltzmann constant [W m-2 K-4]
-max_nlayers = 50            # Maximum number of vertical layers allowed
-max_dz = 1                  # Max layer height
+# Ideal gas law
+R_gas = 8.3144598           # Universal gas constant [J mol-1 K-1]
+molarmass_air = 0.0289644   # Molar mass of Earth's air [kg mol-1]
+pressure_std = 101325       # Standard pressure [Pa]
+temp_std = 293.15           # Standard temperature [K]
+density_std = 1.225         # Air density at sea level [kg m-3]
+# Model parameterizations
 albedo_deg_rate = 15        # Rate of exponential decay of albedo
 wet_snow_C = 4.22e-13       # Constant for wet snow metamorphosis [m3 s-1]
-average_grainsize = 1000    # Grainsize to treat as constant if switch_melt is 0 [um]
 rfz_grainsize = 1500        # Grainsize of refrozen snow [um]
-Sr = 0.033                  # for irreducible water content flow method
-rainBC = BC_freshsnow       # concentration of BC in rain
-raindust = dust_freshsnow   # concentration of dust in rain
-temp_temp = -2              # temperature of temperate ice [C]
-temp_depth = 100            # depth of temperate ice [m]
-albedo_fresh_snow = 0.9     # Albedo of fresh snow [-] (Moelg et al. 2012, TC - 0.85)
+Sr = 0.033                  # Fraction of irreducible water content for percolation [-]
+diffuse_cloud_limit = 0.6   # Threshold to consider cloudy vs clear-sky in SNICAR [-]
+# Constants for switch runs
+average_grainsize = 1000    # Grainsize to treat as constant if switch_melt is 0 [um]
+albedo_fresh_snow = 0.85    # Albedo of fresh snow [-] (Moelg et al. 2012, TC)
 albedo_firn = 0.5           # Albedo of firn [-]
 albedo_ground = 0.2         # Albedo of ground [-]
+# MERRA-2: LAP binning
 ratio_BC2_BCtot = 2.08      # Ratio to transform BC bin 2 deposition to total BC
 ratio_DU3_DUtot = 3         # Ratio to transform dust bin 3 deposition to total dust
 ratio_DU_bin1 = 0.0751      # Ratio to transform total dust to SNICAR Bin 1 (0.05-0.5um)
@@ -251,10 +259,9 @@ ratio_DU_bin2 = 0.20535     # " SNICAR Bin 2 (0.5-1.25um)
 ratio_DU_bin3 = 0.481675    # " SNICAR Bin 3 (1.25-2.5um)
 ratio_DU_bin4 = 0.203775    # " SNICAR Bin 4 (2.5-5um)
 ratio_DU_bin5 = 0.034       # " SNICAR Bin 5 (5-50um)
-diffuse_cloud_limit = 0.6   # Threshold to consider cloudy vs clear-sky in SNICAR
-mb_threshold = 0.1          # Threshold to consider not conserving mass (kg m-2 = mm w.e.)
-temp_bias_slope = 0.72801
-temp_bias_intercept = 2.234
+# MERRA-2: temperature bias
+temp_bias_slope = 0.72801   # Slope of linear regression of MERRA-2 --> AWS
+temp_bias_intercept = 2.234 # Intercept of linear regression MERRA-2 --> AWS
 
 # ========== OTHER PYGEM INPUTS ========== 
 rgi_regionsO1 = [1]

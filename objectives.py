@@ -148,7 +148,7 @@ def seasonal_mass_balance(site,ds,method='MAE',plot=False):
         return winter_error, summer_error
 
 # ========== 2. CUMULATIVE MASS BALANCE ==========
-def cumulative_mass_balance(site,ds,method='MAE',plot=False):
+def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
     """
     Compares cumulative mass balance measurements from
     a stake to a model output. 
@@ -255,7 +255,10 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False):
 
         # Plot
         if plot:
-            fig,ax = plt.subplots(figsize=(3,6))
+            if not plot_ax:
+                fig,ax = plt.subplots(figsize=(3,6))
+            else:
+                ax = plot_ax
             # df_stake_daily = pd.read_csv(data_fp.replace('GNSSIR','stake'),index_col=0)
             # df_stake_daily.index = pd.to_datetime(df_stake_daily.index)
             # df_stake_daily['CMB'] -= df_stake_daily['CMB'].iloc[0]
@@ -281,8 +284,13 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False):
                 ax_title = f'{method} = {error:.3e} m'
             if site not in ['ABB','BD']:
                 ax_title += f'\nModeled MB: {mbs_modeled:.3f} m w.e.\nMeasured MB: {mbs_measured:.3f} m w.e.'
+            else:
+                ax_title = ax_title + '\n\n' 
             ax.set_title(ax_title,y=1.03)
-            return fig, ax
+            if not plot_ax:
+                return fig, ax
+            else:
+                return ax
         else:
             return error
     

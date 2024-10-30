@@ -60,6 +60,7 @@ class Surface():
                 self.reset_SNICAR(self.snicar_fn)
         else:
             self.snicar_fn = eb_prms.snicar_input_fp
+        self.tcc = 0.5
         return
     
     def daily_updates(self,layers,airtemp,surftemp,time):
