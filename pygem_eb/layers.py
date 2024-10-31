@@ -406,6 +406,8 @@ class Layers():
                     self.ltype[0] = 'firn'
                 if self.args.debug:
                     print(merge_count+1,'layers merged into firn')
+            # reset cumulative refreeze
+            self.cumrefreeze *= 0
         return
     
     def update_layer_props(self,do=['depth','density']):

@@ -16,12 +16,12 @@ from objectives import *
 
 # ===== USER OPTIONS =====
 sites = ['A','AU','B','D']
-n_spc_runs_ahead = 0    # Step if you're going to run this script more than once
+n_spc_runs_ahead = 1    # Step if you're going to run this script more than once
 
 # Summer parameter bounds and guesses by site
-summer_info = {'A':{'param':'kw','bounds':[0.2,5],'x0':2.5,'step':0.5},
-               'AU':{'param':'kw','bounds':[0.2,5],'x0':2.5,'step':0.5},
-                'B':{'param':'kw','bounds':[0.2,5],'x0':2.5,'step':0.5},
+summer_info = {'A':{'param':'kw','bounds':[0.2,5],'x0':1,'step':0.5},
+               'AU':{'param':'kw','bounds':[0.2,5],'x0':1,'step':0.5},
+                'B':{'param':'kw','bounds':[0.2,5],'x0':1,'step':0.5},
                 # 'AB':{'param':'a_ice','bounds':[0.2,0.4],'x0':0.2,'step':0.05},
                 # 'B':{'param':'a_ice','bounds':[0.4,0.55],'x0':0.4,'step':0.02},
                 'D':{'param':'kw','bounds':[0.2,5],'x0':1.5,'step':0.5}}
@@ -41,7 +41,6 @@ for site in sites:
 print(f'                       and winter mass balance using kp with bounds [0.5, 4]')
 
 # ===== FILEPATHS =====
-data_fp = os.getcwd() + '/../MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
 today = str(pd.Timestamp.today()).replace('-','_')[5:10]
 base_fn = f'calibration_{today}_run#_'
 n_today = 0
@@ -64,10 +63,11 @@ for site in sites:
 
 # Force some args
 args.store_data = True              # Ensures output is stored
-args.use_AWS = True                 # Use available AWS data
+args.use_AWS = False                 # Use available AWS data
 if not args.use_AWS:
     print('Using only MERRA-2 data')
 args.a_ice = 0.4
+eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana_22yrs.csv'
 print('Forcing ice albedo to 0.4')
 eb_prms.store_vars = ['MB']         # Only store basic results
 
@@ -194,7 +194,7 @@ def objective(parameters):
 
         # Evaluate loss
         site_run = ds.attrs['site']
-        loss = seasonal_mass_balance(data_fp,ds,site=site_run)
+        loss = seasonal_mass_balance(site_run,ds)
         all_runs[site_run]['loss'].append(np.mean(loss)) # average winter and summer loss
         all_runs[site_run]['fns'].append(out)
 
@@ -238,7 +238,7 @@ def update_params(param_storage,iter):
         previous_winter = [ps[site][winter_param] for ps in param_storage]
 
         # Calculate the bias in the best run
-        winter_bias,summer_bias = seasonal_mass_balance(data_fp,ds,site=site,method='ME')
+        winter_bias,summer_bias = seasonal_mass_balance(site,ds,method='ME')
         print(f'For site {site} with k_snow = {k_snow}, {summer_param} = {summer_value}, {winter_param} = {winter_value}')
         print(f'      Winter bias: {winter_bias} m w.e.    Summer bias: {summer_bias} m w.e.')
 

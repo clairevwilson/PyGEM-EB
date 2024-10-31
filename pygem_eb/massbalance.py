@@ -311,7 +311,11 @@ class massBalance():
         
         class MeltedLayers():
             def __init__(self):
-                self.mass = layermelt[fully_melted]
+                try:
+                    self.mass = layermelt[fully_melted]
+                except:
+                    print(fully_melted)
+                    self.mass = layermelt[0]
                 self.BC = layers.lBC[fully_melted]
                 self.dust = layers.ldust[fully_melted]
 
@@ -925,7 +929,7 @@ class Output():
         vn_dict = {'EB':['SWin','SWout','LWin','LWout','rain','ground',
                          'sensible','latent','meltenergy','albedo',
                          'SWin_sky','SWin_terr'],
-                   'MB':['melt','refreeze','runoff','accum','snowdepth','dh'],
+                   'MB':['melt','refreeze','runoff','accum','snowdepth','cumrefreeze','dh'],
                    'temp':['airtemp','surftemp'],
                    'layers':['layertemp','layerdensity','layerwater','layerheight',
                              'layerBC','layerdust','layergrainsize','layerrefreeze']}
@@ -946,6 +950,7 @@ class Output():
                 albedo = (['time'],zeros[:,0],{'units':'0-1'}),
                 melt = (['time'],zeros[:,0],{'units':'m w.e.'}),
                 refreeze = (['time'],zeros[:,0],{'units':'m w.e.'}),
+                cumrefreeze = (['time'],zeros[:,0],{'units':'m w.e.'}),
                 runoff = (['time'],zeros[:,0],{'units':'m w.e.'}),
                 accum = (['time'],zeros[:,0],{'units':'m w.e.'}),
                 airtemp = (['time'],zeros[:,0],{'units':'C'}),
@@ -993,6 +998,7 @@ class Output():
         self.snowdepth_output = []  # depth of snow [m]
         self.melt_output = []       # melt by timestep [m w.e.]
         self.refreeze_output = []   # refreeze by timestep [m w.e.]
+        self.cumrefreeze_output = []   # cumulative refreeze by timestep [m w.e.]
         self.accum_output = []      # accumulation by timestep [m w.e.]
         self.runoff_output = []     # runoff by timestep [m w.e.]
         self.dh_output = []         # surface height change by timestep [m]
@@ -1028,6 +1034,7 @@ class Output():
 
         self.melt_output.append(float(massbal.melt))
         self.refreeze_output.append(float(massbal.refreeze))
+        self.cumrefreeze_output.append(float(np.sum(layers.cumrefreeze))/eb_prms.density_water)
         self.runoff_output.append(float(massbal.runoff))
         self.accum_output.append(float(massbal.accum))
         self.snowdepth_output.append(np.sum(layers.lheight[layers.snow_idx]))
@@ -1071,6 +1078,7 @@ class Output():
                 ds['accum'].values = self.accum_output
                 ds['snowdepth'].values = self.snowdepth_output
                 ds['dh'].values = self.dh_output
+                ds['cumrefreeze'].values = self.cumrefreeze_output
             if 'temp' in eb_prms.store_vars:
                 ds['airtemp'].values = self.airtemp_output
                 ds['surftemp'].values = self.surftemp_output
@@ -1136,10 +1144,6 @@ class Output():
                 # add summed mass balance term
                 MB = ds['accum'] + ds['refreeze'] - ds['melt']
                 ds['MB'] = (['time'],MB.values,{'units':'m w.e.'})
-
-                # add cumulative refreeze terms
-                cumrfz = ds['layerrefreeze'].sum('layer') / eb_prms.density_water
-                ds['columnrefreeze'] = (['time'],cumrfz.values,{'units':'m w.e.'})
             ds.to_netcdf(self.out_fn)
         return
     

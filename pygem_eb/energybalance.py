@@ -255,7 +255,7 @@ class energyBalance():
         surftemp : float
             Surface temperature of snowpack/ice [C]
         """
-        k_ice = eb_prms.kcond_ice
+        k_ice = eb_prms.k_ice
         if eb_prms.method_ground in ['MolgHardy']:
             Qg = -k_ice * (surftemp - eb_prms.temp_temp) / eb_prms.temp_depth
         else:

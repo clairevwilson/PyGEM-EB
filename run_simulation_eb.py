@@ -11,7 +11,7 @@ import pygem_eb.input as eb_prms
 import pygem_eb.massbalance as mb
 import pygem.pygem_modelsetup as modelsetup
 import pygem_eb.climate as climutils
-import shading.shading as shading
+# import shading.shading as shading
 
 # Start timer
 start_time = time.time()

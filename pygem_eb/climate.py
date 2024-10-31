@@ -378,7 +378,7 @@ class Climate():
         tag = eb_prms.MERRA2_filetag if eb_prms.MERRA2_filetag else f'{flat}_{flon}'
 
         # Update filenames for MERRA-2 (need grid lat/lon)
-        self.reanalysis_fp = eb_prms.main_directory + '/../climate_data/'
+        self.reanalysis_fp = '../climate_data/'
         self.var_dict = {'temp':{'fn':[],'vn':[]},
             'rh':{'fn':[],'vn':[]},'sp':{'fn':[],'vn':[]},
             'tp':{'fn':[],'vn':[]},'tcc':{'fn':[],'vn':[]},
