@@ -31,7 +31,7 @@ winter_info = {'param':'kp','bounds':[0.5,4],'x0':3,'step':0.1}
 
 # Optimization choices
 tolerance = 1e-1          # Tolerance for MAE we are looking for
-max_n_iters = 15          # Max number of iterations to run
+max_n_iters = 16          # Max number of iterations to run
 
 # ===== INITIAL PRINTS =====
 print(f'Starting calibration on {len(sites)} sites:')

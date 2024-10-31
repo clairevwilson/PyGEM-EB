@@ -10,7 +10,7 @@ import pygem_eb.massbalance as mb
 import pygem_eb.input as eb_prms
 
 # User info
-sites = ['B'] # Sites to run in parallel   'ABB','B','BD','T'
+sites = ['AB','ABB','B','BD','D','T'] # Sites to run in parallel   
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
 params_fn = '../Output/params/10_30.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[5:10]
@@ -43,12 +43,26 @@ for site in sites:
     #     eb_prms.albedo_TOD = []
     # else:
     #     eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana2024_noalbedo.csv'
-    eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana2024_reducedearlyT.csv'    
+    eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana2024_-T_noalbedo.csv'    
 
     # Set parameters filename (relative to PyGEM-EB/)
     if params_fn:
         args_run.params_fn = params_fn
-        store_attrs = {'params_fn':params_fn,'site':site}
+        params = pd.read_csv(params_fn,index_col=0)
+        kp = params.loc['kp',args_run.site].astype(float)
+        kw = params.loc['kw',args_run.site].astype(float)
+        a_ice = params.loc['a_ice',args_run.site].astype(float)
+        # Command line args override params input
+        if args_run.kp == eb_prms.kp:
+            args_run.kp = kp
+        if args_run.kw == eb_prms.wind_factor:
+            args_run.kw = kw
+        if args_run.a_ice == eb_prms.albedo_ice:
+            args_run.a_ice = a_ice
+        store_attrs = {'params_fn':params_fn,'site':site,
+                       'kp':str(args_run.kp),'kw':str(args_run.kw),
+                        'AWS':eb_prms.AWS_fn}
+        
     else:
         store_attrs = {'site':site}
 

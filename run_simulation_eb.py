@@ -91,7 +91,7 @@ def get_args(parse=True):
         return parser
     
 def check_inputs(dem_fp,args):
-    model = shading.Shading()
+    # model = shading.Shading()
 
     name = eb_prms.glac_name
     if len(args.site) > 0:
@@ -161,9 +161,16 @@ def initialize_model(glac_no,args):
     # CHECK FOR PARAMS INPUT FILE
     if args.params_fn != 'None':
         params = pd.read_csv(args.params_fn,index_col=0)
-        args.kp = params.loc['kp',args.site].astype(float)
-        args.kw = params.loc['kw',args.site].astype(float)
-        args.a_ice = params.loc['a_ice',args.site].astype(float)
+        kp = params.loc['kp',args.site].astype(float)
+        kw = params.loc['kw',args.site].astype(float)
+        a_ice = params.loc['a_ice',args.site].astype(float)
+        # Command line args override params input
+        if args.kp == eb_prms.kp:
+            args.kp = kp
+        if args.kw == eb_prms.wind_factor:
+            args.kw = kw
+        if args.a_ice == eb_prms.albedo_ice:
+            args.a_ice = a_ice
 
     # ===== GET GLACIER CLIMATE =====
     # get glacier properties and initialize the climate class

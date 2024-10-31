@@ -59,7 +59,6 @@ class energyBalance():
 
         # Adjust calibrated values
         self.wind *= args.kw
-        self.tp *= args.kp
 
         # Radiation terms
         self.measured_SWin = 'SWin' in climate.measured_vars

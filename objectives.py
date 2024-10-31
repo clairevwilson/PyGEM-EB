@@ -30,6 +30,8 @@ import itertools
 # User options
 date_form = mpl.dates.DateFormatter('%b %d')
 mpl.style.use('seaborn-v0_8-white')
+GNSSIR_fp = '../MB_data/Stakes/gulkanaSITE24_GNSSIR.csv'
+USGS_fp = '../MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
 
 # Objective function
 def objective(model,data,method):
@@ -55,8 +57,7 @@ def seasonal_mass_balance(site,ds,method='MAE',plot=False):
     Name of the USGS site.
     """
     # Load dataset
-    data_fp = '/home/claire/research/MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
-    df_mb = pd.read_csv(data_fp)
+    df_mb = pd.read_csv(USGS_fp)
     df_mb = df_mb.loc[df_mb['site_name'] == site]
     df_mb.index = df_mb['Year']
 
@@ -158,14 +159,22 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
     columns: 'Date' and 'CMB' where 'CMB' is the surface 
     height change in meters.
     """
-    GNSSIR_fp = f'../MB_data/Stakes/gulkana{site}24_GNSSIR.csv'
-    USGS_fp = f'../MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
+    if site == 'AB':
+        plotds = ds.dh.cumsum() - ds.dh.isel(time=0)
+
+    # Update filepath
+    fp_gnssir = GNSSIR_fp.replace('SITE',site)
+    fp_stake = fp_gnssir.replace('GNSSIR','stake')
 
     # Load GNSSIR daily MB
-    if os.path.exists(GNSSIR_fp):
-        df_mb_daily = pd.read_csv(GNSSIR_fp)
+    if os.path.exists(fp_gnssir):
+        df_mb_daily = pd.read_csv(fp_gnssir)
         df_mb_daily.index = pd.to_datetime(df_mb_daily['Date'])
         df_mb_daily['CMB'] -= df_mb_daily['CMB'].iloc[0]
+        df_mb_daily = df_mb_daily.sort_index()
+    elif os.path.exists(fp_stake):
+        df_mb_daily = pd.read_csv(fp_stake)
+        df_mb_daily.index = pd.to_datetime(df_mb_daily['Date'])
         df_mb_daily = df_mb_daily.sort_index()
 
     # Load USGS seasonal MB
@@ -183,12 +192,12 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
         melt_dates = pd.date_range(spring_date,fall_date,freq='h')
         ds_summer = ds.sel(time=melt_dates)
         mbs_ds = ds_summer.accum + ds_summer.refreeze - ds_summer.melt
-        internal_acc = np.sum(ds_summer.isel(time=-1).columnrefreeze.values)
-        if internal_acc > 0:
-            print(f'Internal acc: {internal_acc:.3f} m w.e.')
+        internal_acc = ds.sel(time=melt_dates[-2]).cumrefreeze.values
+        if internal_acc > 1e-5:
+            print(f'Site {site} internal acc: {internal_acc:.5f} m w.e.')
         mbs_modeled = mbs_ds.sum().values - internal_acc
 
-    if os.path.exists(GNSSIR_fp):
+    if os.path.exists(fp_gnssir) or os.path.exists(fp_stake):
         # Retrieve the dates
         start = df_mb_daily.index[0]
         end = df_mb_daily.index[-1]
@@ -201,10 +210,13 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
 
         # Index state data
         df_mb_daily = df_mb_daily.loc[start:end]
+        df_mb_daily.index = pd.to_datetime(df_mb_daily.index)
         idx_data = []
         for i,date in enumerate(pd.date_range(start,end)):
+            date = pd.to_datetime(date.date())
             if date in df_mb_daily.index:
-                idx_data.append(i)
+                if ~np.isnan(df_mb_daily.loc[date,'CMB']):
+                    idx_data.append(i)
                 
         # Index model data
         if pd.to_datetime(ds.time.values[0]).minute == 30:
@@ -249,6 +261,11 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
         # Clean up arrays
         model = ds.values[idx_data]
         data = df_mb_daily['CMB'].values
+        if model.shape != data.shape:
+            idx_data = np.where(~np.isnan(df_mb_daily['CMB'].values))[0]
+            data = df_mb_daily.iloc[idx_data]
+            data = data['CMB'].values
+            model = ds.values[idx_data]
         assert model.shape == data.shape
 
         # Assess error
@@ -260,19 +277,28 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
                 fig,ax = plt.subplots(figsize=(3,6))
             else:
                 ax = plot_ax
-            # df_stake_daily = pd.read_csv(data_fp.replace('GNSSIR','stake'),index_col=0)
-            # df_stake_daily.index = pd.to_datetime(df_stake_daily.index)
-            # df_stake_daily['CMB'] -= df_stake_daily['CMB'].iloc[0]
-            # df_stake_daily = df_stake_daily.sort_index().loc[start:end]
-            # ax.plot(df_stake_daily.index,df_stake_daily['CMB'],label='Stake',linestyle=':',color='gray')
+            
+            # Plot stake images
+            if os.path.exists(fp_stake):
+                df_stake_daily = pd.read_csv(fp_stake.replace('GNSSIR','stake'),index_col=0)
+                df_stake_daily.index = pd.to_datetime(df_stake_daily.index)
+                df_stake_daily['CMB'] -= df_stake_daily['CMB'].iloc[0]
+                df_stake_daily = df_stake_daily.sort_index().loc[start:end]
+                ax.plot(df_stake_daily.index,df_stake_daily['CMB'],label='Stake',linestyle=':',color='gray')
 
-            # plot gnssir
-            ax.plot(df_mb_daily.index,df_mb_daily['CMB'],label='GNSS-IR',linestyle='--',color='black')
-            ax.plot(ds.time.values,ds.values,label='Model',color=plt.cm.Dark2(0))
-            # error bounds
-            lower = df_mb_daily['CMB'] - df_mb_daily['sigma']
-            upper = df_mb_daily['CMB'] + df_mb_daily['sigma']
-            ax.fill_between(df_mb_daily.index,lower,upper,alpha=0.2,color='gray')
+            # Plot gnssir
+            if os.path.exists(fp_gnssir):
+                ax.plot(df_mb_daily.index,df_mb_daily['CMB'],label='GNSS-IR',linestyle='--',color='black')
+                # error bounds
+                lower = df_mb_daily['CMB'] - df_mb_daily['sigma']
+                upper = df_mb_daily['CMB'] + df_mb_daily['sigma']
+                ax.fill_between(df_mb_daily.index,lower,upper,alpha=0.2,color='gray')
+            
+            # Plot model and beautify plot
+            if site == 'AB':
+                ax.plot(plotds.time.values,plotds.values,label='Model',color=plt.cm.Dark2(0))
+            else:
+                ax.plot(ds.time.values,ds.values,label='Model',color=plt.cm.Dark2(0))
             ax.legend(fontsize=12)
             ax.xaxis.set_major_formatter(date_form)
             ax.set_xticks(pd.date_range(start,end,freq='MS'))
@@ -280,13 +306,18 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
             ax.set_xlim(start,end)
             ax.set_ylabel('Surface height change (m)',fontsize=14)
             if error < 1:
-                ax_title = f'{method} = {error:.3f} m'
+                ax_title = f'{method}: {error:.3f} m'
             else:
-                ax_title = f'{method} = {error:.3e} m'
+                ax_title = f'{method}: {error:.3e} m'
             if site not in ['ABB','BD']:
-                ax_title += f'\nModeled MB: {mbs_modeled:.3f} m w.e.\nMeasured MB: {mbs_measured:.3f} m w.e.'
+                mb_bias = mbs_modeled - mbs_measured
+                # ax_title += f'\nMBMOD: {mbs_modeled:.3f} m w.e.\nMBMEAS: {mbs_measured:.3f} m w.e.'
+                # ax_title.replace('MOD','$_{mod}$')
+                # ax_title.replace('MEAS','$_{meas}$')
+                direction = '' if mb_bias < 0 else '+'
+                ax_title += f'\n{direction}{mb_bias:.3f} m w.e.'
             else:
-                ax_title = ax_title + '\n\n' 
+                ax_title = ax_title + '\n' 
             ax.set_title(ax_title,y=1.03)
             if not plot_ax:
                 return fig, ax
