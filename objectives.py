@@ -85,8 +85,7 @@ def seasonal_mass_balance(site,ds,method='MAE',plot=False):
                 years = years[:-1]
                 break
         winter_mb = wds.accum + wds.refreeze - wds.melt
-        ds_summer = ds.sel(time=melt_dates)
-        internal_acc = ds_summer.isel(time=-1).cumrefreeze.values
+        internal_acc = ds.sel(time=melt_dates[-2]).cumrefreeze.values
         summer_mb = sds.accum + sds.refreeze - sds.melt - internal_acc
         mb_dict['bw'].append(winter_mb.values)
         mb_dict['bs'].append(summer_mb.values)

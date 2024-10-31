@@ -146,7 +146,8 @@ class Layers():
         
         # Get depth of layers (distance from surface to midpoint of layer) [m]
         nlayers = len(lheight)
-        assert nlayers <= eb_prms.max_nlayers, f'Need >= {nlayers} in eb_prms.max_nlayers'
+        if 'layers' in eb_prms.store_vars:
+            assert nlayers <= eb_prms.max_nlayers, f'Need >= {nlayers} in eb_prms.max_nlayers'
         ldepth = [np.sum(lheight[:i+1])-(lheight[i]/2) for i in range(nlayers)]
 
         # Arrays
@@ -314,7 +315,7 @@ class Layers():
         """
         Splits a single layer into two layers with half the height, mass, and water content.
         """
-        if (self.nlayers+1) > eb_prms.max_nlayers:
+        if (self.nlayers+1) > eb_prms.max_nlayers and 'layers' in eb_prms.store_vars:
             print(f'Need bigger max_nlayers: currently have {self.nlayers+1} layers')
             quit()
         l = layer_to_split

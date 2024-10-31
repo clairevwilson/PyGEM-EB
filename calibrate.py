@@ -16,7 +16,8 @@ from objectives import *
 
 # ===== USER OPTIONS =====
 sites = ['A','AU','B','D']
-n_spc_runs_ahead = 1    # Step if you're going to run this script more than once
+use_AWS = True
+n_spc_runs_ahead = 0    # Step if you're going to run this script more than once
 
 # Summer parameter bounds and guesses by site
 summer_info = {'A':{'param':'kw','bounds':[0.2,5],'x0':1,'step':0.5},
@@ -43,7 +44,7 @@ print(f'                       and winter mass balance using kp with bounds [0.5
 # ===== FILEPATHS =====
 today = str(pd.Timestamp.today()).replace('-','_')[5:10]
 base_fn = f'calibration_{today}_run#_'
-n_today = 0
+n_today = n_spc_runs_ahead
 eb_prms.output_filepath = os.getcwd() + f'/../Output/EB/{today}_{n_today}/'
 while os.path.exists(eb_prms.output_filepath):
     n_today += 1
@@ -63,13 +64,14 @@ for site in sites:
 
 # Force some args
 args.store_data = True              # Ensures output is stored
-args.use_AWS = False                 # Use available AWS data
+args.use_AWS = use_AWS              # Use available AWS data
 if not args.use_AWS:
     print('Using only MERRA-2 data')
 args.a_ice = 0.4
 eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana_22yrs.csv'
 print('Forcing ice albedo to 0.4')
 eb_prms.store_vars = ['MB']         # Only store basic results
+eb_prms.precgrad = 0
 
 # Initialize model
 args.startdate = pd.to_datetime('2000-04-20 00:00:00')
