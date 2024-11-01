@@ -159,9 +159,6 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
     columns: 'Date' and 'CMB' where 'CMB' is the surface 
     height change in meters.
     """
-    if site == 'AB':
-        plotds = ds.dh.cumsum() - ds.dh.isel(time=0)
-
     # Update filepath
     fp_gnssir = GNSSIR_fp.replace('SITE',site)
     fp_stake = fp_gnssir.replace('GNSSIR','stake')
@@ -278,7 +275,7 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
             else:
                 ax = plot_ax
             
-            # Plot stake images
+            # Plot stake
             if os.path.exists(fp_stake):
                 df_stake_daily = pd.read_csv(fp_stake.replace('GNSSIR','stake'),index_col=0)
                 df_stake_daily.index = pd.to_datetime(df_stake_daily.index)
@@ -295,10 +292,7 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
                 ax.fill_between(df_mb_daily.index,lower,upper,alpha=0.2,color='gray')
             
             # Plot model and beautify plot
-            if site == 'AB':
-                ax.plot(plotds.time.values,plotds.values,label='Model',color=plt.cm.Dark2(0))
-            else:
-                ax.plot(ds.time.values,ds.values,label='Model',color=plt.cm.Dark2(0))
+            ax.plot(ds.time.values,ds.values,label='Model',color=plt.cm.Dark2(0))
             ax.legend(fontsize=12)
             ax.xaxis.set_major_formatter(date_form)
             ax.set_xticks(pd.date_range(start,end,freq='MS'))

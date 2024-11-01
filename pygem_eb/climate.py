@@ -221,7 +221,7 @@ class Climate():
         # TEMPERATURE: correct according to lapserate
         temp_elev = self.AWS_elev if 'temp' in self.measured_vars else self.reanalysis_elev
         new_temp = self.cds.temp.values + LAPSE_RATE*(self.elev - temp_elev)
-        if 'gulkana_22yrs' in eb_prms.AWS_fn:
+        if 'gulkana_22yrs' in eb_prms.AWS_fn and 'temp' in self.measured_vars:
             new_temp -= 1
             print('Reducing temperature for on-ice weather station')
             

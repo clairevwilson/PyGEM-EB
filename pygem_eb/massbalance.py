@@ -166,13 +166,18 @@ class massBalance():
             Specific mass of liquid and solid precipitation [kg m-2]
         """
         # CONSTANTS
-        SNOW_THRESHOLD_LOW = eb_prms.snow_threshold_low
-        SNOW_THRESHOLD_HIGH = eb_prms.snow_threshold_high
+        # SNOW_THRESHOLD_LOW = eb_prms.snow_threshold_low
+        # SNOW_THRESHOLD_HIGH = eb_prms.snow_threshold_high
+        SNOW_THRESHOLD_LOW, SNOW_THRESHOLD_HIGH = self.args.snow_threshold
         DENSITY_WATER = eb_prms.density_water
 
         # Define rain vs snow scaling 
         rain_scale = np.arange(0,1,20)
-        temp_scale = np.arange(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
+        try:
+            temp_scale = np.arange(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
+        except:
+            print(SNOW_THRESHOLD_HIGH,SNOW_THRESHOLD_LOW,self.args.snow_threshold)
+            assert 1==0
         
         if enbal.tempC <= SNOW_THRESHOLD_LOW: 
             # precip falls as snow
@@ -649,7 +654,8 @@ class massBalance():
             c2 = 0.042      # K-1 (0.042)
             c3 = 0.046      # m3 kg-1 (0.046)
             c4 = 0.081      # K-1 (0.081)
-            c5 = eb_prms.Boone_c5      # m3 kg-1 (0.018) --> adjust in input
+            # c5 = eb_prms.Boone_c5      # m3 kg-1 (0.018) --> adjust in input
+            c5 = self.args.Boone_c5
 
             for layer in snowfirn_idx:
                 weight_above = GRAVITY*np.sum(lm[:layer]+lw[:layer])

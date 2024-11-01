@@ -173,8 +173,8 @@ precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 dep_factor = 1              # multiplicative factor to adjust MERRA-2 deposition
 albedo_ice = 0.47           # albedo of ice [-] 
-snow_threshold_low = 0      # lower threshold for linear snow-rain scaling [C]
-snow_threshold_high = 1     # upper threshold for linear snow-rain scaling [C]
+snow_threshold_low = 1.2      # lower threshold for linear snow-rain scaling [C]
+snow_threshold_high = 3.2     # upper threshold for linear snow-rain scaling [C]
 # <<<<<< Discretization >>>>>
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
 layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
@@ -195,7 +195,7 @@ Cp_ice = 2050               # Isobaric heat capacity of ice [J kg-1 K-1]
 Lv_evap = 2514000           # latent heat of evaporation [J kg-1]
 Lv_sub = 2849000            # latent heat of sublimation [J kg-1]
 Lh_rf = 333550              # Latent heat of fusion of ice [J kg-1]
-viscosity_snow = 3.7e7      # Viscosity of snow [Pa-s] 3.7
+viscosity_snow = 3.7e7      # Viscosity of snow [Pa-s]
 firn_grainsize = 2000       # firn grain size in um
 rfz_grainsize = 1500        # Grainsize of refrozen snow [um]
 ice_grainsize = 5000        # ice grain size in um (placeholder -- unused)

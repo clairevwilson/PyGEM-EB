@@ -68,6 +68,10 @@ def get_args(parse=True):
                         help='Multiplicative wind factor')
     parser.add_argument('-kp',default=eb_prms.kp,action='store',type=float,
                         help='Multiplicative precipitation factor')
+    parser.add_argument('-snow_threshold',action='store',help='Snow temperature thresholds',
+                        default=[eb_prms.snow_threshold_low,eb_prms.snow_threshold_high])
+    parser.add_argument('-Boone_c5',action='store',default=eb_prms.Boone_c5,
+                        help='Parameter for Boone densification scheme')
     
     # PARALLELIZATION
     parser.add_argument('-n','--n_simultaneous_processes',default=1,type=int,
@@ -75,7 +79,7 @@ def get_args(parse=True):
     parser.add_argument('-task_id',default=-1,type=int,
                         help='Task ID if submitted as batch job')
     
-    # INITIALIZATION
+    # OTHER
     parser.add_argument('-initial_snow_depth',action='store',type=float,
                         default=eb_prms.initial_snow_depth,
                         help='Snow depth in m')
@@ -104,8 +108,6 @@ def check_inputs(dem_fp,args):
     #             if not os.path.exists(f'shading/out/{name}{site}_shade.csv'):
     #                 model.main()
     #                 model.store_site_info()
-
-    
     # else:
     #     eb_prms.shading_fp = 
 

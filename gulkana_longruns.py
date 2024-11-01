@@ -10,19 +10,19 @@ import pygem_eb.massbalance as mb
 import pygem_eb.input as eb_prms
 
 # User info
-sites = ['A','D'] # Sites to run in parallel
+sites = ['A','B','D'] # Sites to run in parallel
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
-params_fn = '../Output/params/10_08.csv'
+params_fn = '../Output/params/10_30.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
-n_runs_ahead = 1    # Step if you're going to run this script more than once
+n_runs_ahead = 2    # Step if you're going to run this script more than once
 
 # Read command line args
 args = sim.get_args()
 args.startdate = '2000-04-20 00:00'
-args.enddate = '2022-04-20 12:00'
+args.enddate = '2000-04-20 12:00'
 args.store_data = True              # Ensures output is stored
-args.debug = False
-args.use_AWS = True
+args.debug = True
+args.use_AWS = False
 args.glac_no = ['01.00570']
 eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana_22yrs.csv'
 
@@ -30,33 +30,56 @@ eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana_22yrs.csv'
 n_processes = len(sites)
 args.n_processes = n_processes
 
-# Parse list for inputs to Pool function
-packed_vars = [[] for _ in range(n_processes)]
-run_no = 0
-for site in sites:
-    # Get current site args
-    args_run = copy.deepcopy(args)
-    args_run.site = site
+def pack_vars():
+    # Parse list for inputs to Pool function
+    packed_vars = [[] for _ in range(n_processes)]
+    run_no = 0
+    for site in sites:
+        # Get current site args
+        args_run = copy.deepcopy(args)
+        args_run.site = site
 
-    # Set parameters filename (relative to PyGEM-EB/)
-    if params_fn:
-        args_run.params_fn = params_fn
-        store_attrs = {'params_fn':params_fn,'site':site}
-    else:
-        store_attrs = {'site':site}
+        # Set parameters filename (relative to PyGEM-EB/)
+        if params_fn:
+            args_run.params_fn = params_fn
+            params = pd.read_csv(params_fn,index_col=0)
+            kp = params.loc['kp',args_run.site].astype(float)
+            kw = params.loc['kw',args_run.site].astype(float)
+            a_ice = params.loc['a_ice',args_run.site].astype(float)
+            c5 = params.loc['Boone_c5',args_run.site].astype(float)
+            t_low = params.loc['t_low',args_run.site].astype(float)
+            t_high = params.loc['t_high',args_run.site].astype(float)
+            # Command line args override params input
+            if args_run.kp == eb_prms.kp:
+                args_run.kp = kp
+            if args_run.kw == eb_prms.wind_factor:
+                args_run.kw = kw
+            if args_run.a_ice == eb_prms.albedo_ice:
+                args_run.a_ice = a_ice
+            if args_run.Boone_c5 == eb_prms.Boone_c5:
+                args_run.Boone_c5 = c5
+            if args_run.snow_threshold == [eb_prms.snow_threshold_low,eb_prms.snow_threshold_high]:
+                args_run.snow_threshold = [t_low,t_high]
+            store_attrs = {'params_fn':params_fn,'site':site,
+                        'kp':str(args_run.kp),'kw':str(args_run.kw),
+                            'AWS':eb_prms.AWS_fn,
+                            'c5':str(c5),'t_low':str(t_low),'t_high':str(t_high)}
+        else:
+            store_attrs = {'site':site}
 
-    # Output info
-    args_run.out = f'Gulkana_{run_date}_{site}_'
+        # Output info
+        args_run.out = f'Gulkana_{run_date}_long{site}_'
 
-    # Set task ID for SNICAR input file
-    args_run.task_id = run_no + n_runs_ahead*n_processes
+        # Set task ID for SNICAR input file
+        args_run.task_id = run_no + n_runs_ahead*n_processes
 
-    # Store model inputs
-    climate = sim.initialize_model(args_run.glac_no[0],args_run)
-    packed_vars[run_no].append((args_run,climate,store_attrs))
+        # Store model inputs
+        climate = sim.initialize_model(args_run.glac_no[0],args_run)
+        packed_vars[run_no].append((args_run,climate,store_attrs))
 
-    # Advance counter
-    run_no += 1
+        # Advance counter
+        run_no += 1
+    return packed_vars
 
 def run_model_parallel(list_inputs):
     # Loop through the variable sets
@@ -81,5 +104,7 @@ def run_model_parallel(list_inputs):
     return
 
 # Run model in parallel
-with Pool(n_processes) as processes_pool:
-    processes_pool.map(run_model_parallel,packed_vars)
+if __name__ == '__main__':
+    packed_vars = pack_vars()
+    with Pool(n_processes) as processes_pool:
+        processes_pool.map(run_model_parallel,packed_vars)

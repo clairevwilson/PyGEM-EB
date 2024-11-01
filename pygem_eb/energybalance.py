@@ -151,8 +151,16 @@ class energyBalance():
         spectral_weights = surface.spectral_weights
         assert np.abs(1-np.sum(spectral_weights)) < 1e-5, 'Solar weights dont sum to 1'
         
-        # SWin needs to be corrected for shade, unless measured
+        # SWin needs to be corrected for shade
         if self.measured_SWin:
+            # if point elev != AWS elev
+            # is AWS in the sun?
+            # if so: is the point in the sun?
+                # if so: just calcualte diffuse
+                # if not: neglect SWin, just diffuse
+            # if not: is the point in the sun?
+                # if so: COMPLICATED
+                # if not: SWin AWS = SWin point
             SWin = self.SWin_ds/self.dt
             self.SWin_sky = self.SWin_terr = np.nan
         else:
