@@ -19,9 +19,9 @@ n_runs_ahead = 2    # Step if you're going to run this script more than once
 # Read command line args
 args = sim.get_args()
 args.startdate = '2000-04-20 00:00'
-args.enddate = '2000-04-20 12:00'
+args.enddate = '2024-08-20 12:00'
 args.store_data = True              # Ensures output is stored
-args.debug = True
+args.debug = False
 args.use_AWS = False
 args.glac_no = ['01.00570']
 eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana_22yrs.csv'
