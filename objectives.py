@@ -45,7 +45,7 @@ def objective(model,data,method):
         return np.mean(model - data)
     
 # ========== 1. SEASONAL MASS BALANCE ==========
-def seasonal_mass_balance(site,ds,method='MAE',plot=False):
+def seasonal_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
     """
     Compares seasonal mass balance measurements from
     USGS stake surveys to a model output.
@@ -112,8 +112,11 @@ def seasonal_mass_balance(site,ds,method='MAE',plot=False):
 
     # Plot
     if plot:
-        if plot == 'w-s+':
+        if plot_ax:
+            ax = plot_ax
+        else:
             fig,ax = plt.subplots()
+        if plot == 'w-s+':
             ax.plot(years,mb_dict['w-'],label='Winter Melt',color='turquoise',linewidth=2)
             ax.plot(years,mb_dict['s+'],label='Summer Acc.',color='orange',linewidth=2)
             ax.plot(years,wabl_data,color='turquoise',linestyle='--')
@@ -121,7 +124,6 @@ def seasonal_mass_balance(site,ds,method='MAE',plot=False):
             ax.set_ylabel('Partitioned seasonal mass balance (m w.e.)',fontsize=14)
             ax.set_title(f'Summer accumulation and winter ablation at site {site}')
         else:
-            fig,ax = plt.subplots()
             ax.plot(years,winter_model,label='Winter',color='turquoise',linewidth=2)
             ax.plot(years,summer_model,label='Summer',color='orange',linewidth=2)
             ax.plot(years,winter_data,color='turquoise',linestyle='--')
@@ -145,7 +147,10 @@ def seasonal_mass_balance(site,ds,method='MAE',plot=False):
         ax.tick_params(labelsize=12,length=5,width=1)
         ax.set_xlim(years[0],years[-1])
         ax.set_xticks(np.arange(years[0],years[-1],4))
-        return fig,ax
+        if plot_ax:
+            return ax
+        else:
+            return fig,ax
     else:
         return winter_error, summer_error
 
@@ -215,6 +220,13 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
                 if ~np.isnan(df_mb_daily.loc[date,'CMB']):
                     idx_data.append(i)
                 
+        # Save original ds for plotting all time
+        ds_alltime = ds.copy(deep=True)
+        s = ds_alltime.time.values[0]
+        e = ds_alltime.time.values[-1]
+        ds_alltime = ds_alltime.dh.cumsum() - ds_alltime.dh.isel(time=0)
+        ds_alltime = ds_alltime.sel(time=pd.date_range(s,e))
+
         # Index model data
         if pd.to_datetime(ds.time.values[0]).minute == 30:
             if start.minute != pd.to_datetime(ds.time.values[0]).minute:
@@ -280,7 +292,7 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
                 df_stake_daily = pd.read_csv(fp_stake.replace('GNSSIR','stake'),index_col=0)
                 df_stake_daily.index = pd.to_datetime(df_stake_daily.index)
                 df_stake_daily['CMB'] -= df_stake_daily['CMB'].iloc[0]
-                df_stake_daily = df_stake_daily.sort_index().loc[start:end]
+                df_stake_daily = df_stake_daily.sort_index()
                 ax.plot(df_stake_daily.index,df_stake_daily['CMB'],label='Stake',linestyle=':',color='gray')
 
             # Plot gnssir
@@ -292,7 +304,7 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
                 ax.fill_between(df_mb_daily.index,lower,upper,alpha=0.2,color='gray')
             
             # Plot model and beautify plot
-            ax.plot(ds.time.values,ds.values,label='Model',color=plt.cm.Dark2(0))
+            ax.plot(ds_alltime.time.values,ds_alltime.values,label='Model',color=plt.cm.Dark2(0))
             ax.legend(fontsize=12)
             ax.xaxis.set_major_formatter(date_form)
             ax.set_xticks(pd.date_range(start,end,freq='MS'))
@@ -300,7 +312,11 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
             ax.set_xlim(start,end)
             ax.set_ylabel('Surface height change (m)',fontsize=14)
             if error < 1:
-                ax_title = f'{method}: {error:.3f} m'
+                if method in ['ME']:
+                    direction = '' if error < 0 else '+'
+                    ax_title = f'{direction}{error:.3f} m'
+                else:
+                    ax_title = f'{method}: {error:.3f} m'
             else:
                 ax_title = f'{method}: {error:.3e} m'
             if site not in ['ABB','BD']:
@@ -308,17 +324,20 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
                 # ax_title += f'\nMBMOD: {mbs_modeled:.3f} m w.e.\nMBMEAS: {mbs_measured:.3f} m w.e.'
                 # ax_title.replace('MOD','$_{mod}$')
                 # ax_title.replace('MEAS','$_{meas}$')
-                direction = '' if mb_bias < 0 else '+'
-                ax_title += f'\n{direction}{mb_bias:.3f} m w.e.'
+                # direction = '' if mb_bias < 0 else '+'
+                # ax_title += f'\n{direction}{mb_bias:.3f} m w.e.'
             else:
                 ax_title = ax_title + '\n' 
             ax.set_title(ax_title,y=1.03)
             if not plot_ax:
                 return fig, ax
             else:
-                return ax
+                return ax, error 
         else:
-            return error
+            if site not in ['ABB','BD']:
+                return mbs_modeled,mbs_measured
+            else:
+                return error 
     
     print(f'Modeled MB: {mbs_modeled} m w.e.\nMeasured MB: {mbs_measured} m w.e.')
 

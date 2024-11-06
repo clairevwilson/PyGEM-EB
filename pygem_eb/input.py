@@ -165,7 +165,7 @@ initSSA = 80   # initial estimate of Specific Surface Area of fresh snowfall (in
 grainsize_ds = xr.open_dataset(grainsize_fp.replace('##',str(initSSA)))
 
 # ========== PARAMETERS and CONSTANTS ==========
-# <<<<<< Downscaling >>>>>
+# <<<<<< Climate downscaling >>>>>
 sky_view = 0.936            # sky-view factor [-]
 kp = 3.2                    # precipitation factor [-]
 wind_factor = 1             # wind factor [-]
@@ -173,13 +173,13 @@ precgrad = 0.0001           # precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 dep_factor = 1              # multiplicative factor to adjust MERRA-2 deposition
 albedo_ice = 0.47           # albedo of ice [-] 
-snow_threshold_low = 1.2      # lower threshold for linear snow-rain scaling [C]
-snow_threshold_high = 3.2     # upper threshold for linear snow-rain scaling [C]
+snow_threshold_low = 0      # lower threshold for linear snow-rain scaling [C]
+snow_threshold_high = 1     # upper threshold for linear snow-rain scaling [C]
 # <<<<<< Discretization >>>>>
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
 layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
-max_nlayers = 80            # Maximum number of vertical layers allowed
-max_dz = 1                  # Max layer height
+max_nlayers = 50            # Maximum number of vertical layers allowed (defines output file size)
+max_dz = 2                  # Max layer height
 # <<<<<< Boundary conditions >>>>>
 temp_temp = -2              # temperature of temperate ice [C]
 temp_depth = 100            # depth of temperate ice [m]
@@ -210,19 +210,19 @@ pressure_std = 101325       # Standard pressure [Pa]
 temp_std = 293.15           # Standard temperature [K]
 density_std = 1.225         # Air density at sea level [kg m-3]
 # <<<<<< Model parameterizations >>>>>
-Boone_c5 = 0.05             # m3 kg-1 (0.018)
+Boone_c5 = 0.018             # m3 kg-1 (0.018)
 roughness_fresh_snow = 0.24 # surface roughness length for fresh snow [mm] (Moelg et al. 2012, TC)
-roughness_aged_snow = 4     # surface roughness length for aged snow [mm]
+roughness_aged_snow = 10    # surface roughness length for aged snow [mm]
 roughness_firn = 4          # surface roughness length for firn [mm] (Moelg et al. 2012, TC)
-roughness_ice = 10          # surface roughness length for ice [mm] (Moelg et al. 2012, TC)
-roughness_aging_rate = 0.1  # rate in mm/day fresh --> aged snow (60 days from 0.24 to 4.0 => 0.06267)
+roughness_ice = 20          # surface roughness length for ice [mm] (Moelg et al. 2012, TC)
+roughness_aging_rate = 0.5  # rate in mm/day fresh --> aged snow (60 days from 0.24 to 4.0 => 0.06267)
 wet_snow_C = 4.22e-13       # Constant for wet snow metamorphosis [m3 s-1]
 Sr = 0.033                  # Fraction of irreducible water content for percolation [-]
 albedo_ground = 0.2         # Albedo of ground [-]
 # <<<<<< SNICAR things >>>>>
 albedo_TOD = [14]           # List of time(s) of day to calculate albedo [hr] 
 diffuse_cloud_limit = 0.6   # Threshold to consider cloudy vs clear-sky in SNICAR [-]
-include_LWC_SNICAR = False
+include_LWC_SNICAR = True
 grainshape_SNICAR = 0       # 0: sphere, 1: spheroid, 2: hexagonal plate, 3: koch snowflake, 4: hexagonal prisms
 # <<<<<< Constants for switch runs >>>>>
 albedo_deg_rate = 15        # Rate of exponential decay of albedo

@@ -379,12 +379,6 @@ class massBalance():
                 snow_firn_idx = snow_firn_idx[:layers.ice_idx[0]]
             else: # surface ice layer: all water runs off
                 snow_firn_idx = []
-        
-        # LAYERS IN
-        lm = layers.lice.copy()[snow_firn_idx]
-        lw = layers.lwater.copy()[snow_firn_idx]
-        lh = layers.lheight.copy()[snow_firn_idx]
-        layermelt_sf = layermelt[snow_firn_idx]
 
         # Initialize variables
         initial_mass = np.sum(layers.lice + layers.lwater)
@@ -392,18 +386,24 @@ class massBalance():
         rain_bool = rainfall > 0
         runoff = 0  # Any flow that leaves the point laterally
 
-        # Get completely melted layers
+        # Add water from completely melted layers
         if self.melted_layers != 0:
             water_in = rainfall + np.sum(self.melted_layers.mass)
         else:
             water_in = rainfall
 
-        if len(snow_firn_idx) > 1:
+        if len(snow_firn_idx) > 0:
+            # LAYERS IN
+            lm = layers.lice.copy()[snow_firn_idx]
+            lw = layers.lwater.copy()[snow_firn_idx]
+            lh = layers.lheight.copy()[snow_firn_idx]
+            layermelt_sf = layermelt[snow_firn_idx]
+
             # Calculate volumetric fractions (theta)
-            theta_liq = lw / (lh*DENSITY_WATER)
-            theta_ice = lm / (lh*DENSITY_ICE)
-            porosity = 1 - theta_ice
-            theta_liq[theta_liq > porosity] = porosity[theta_liq > porosity]
+            vol_f_liq = lw / (lh*DENSITY_WATER)
+            vol_f_ice = lm / (lh*DENSITY_ICE)
+            porosity = 1 - vol_f_ice
+            vol_f_liq[vol_f_liq > porosity] = porosity[vol_f_liq > porosity]
 
             # Remove / move snow melt to layer water
             lm -= layermelt_sf
@@ -424,13 +424,13 @@ class massBalance():
 
                 # Calculate flow out of layer i
                 q_out = DENSITY_WATER*lh[layer]/dt * (
-                        theta_liq[layer]-FRAC_IRREDUC*porosity[layer])
+                        vol_f_liq[layer]-FRAC_IRREDUC*porosity[layer])
                 
                 # Check limits on flow out (q_out)
                 # check limit of qi based on underlying layer holding capacity
-                if layer < len(porosity) - 1 and theta_liq[layer] <= 0.3:
+                if layer < len(porosity) - 1 and vol_f_liq[layer] <= 0.3:
                     next = layer+1
-                    lim = DENSITY_WATER*lh[next]/dt * (1-theta_ice[next]-theta_liq[next])
+                    lim = DENSITY_WATER*lh[next]/dt * (1-vol_f_ice[next]-vol_f_liq[next])
                 else: # no limit on bottom layer (1e6 sufficiently high)
                     lim = 1e6
                 # cannot have more flow out than flow in + existing water

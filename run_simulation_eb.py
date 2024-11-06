@@ -70,7 +70,7 @@ def get_args(parse=True):
                         help='Multiplicative precipitation factor')
     parser.add_argument('-snow_threshold',action='store',help='Snow temperature thresholds',
                         default=[eb_prms.snow_threshold_low,eb_prms.snow_threshold_high])
-    parser.add_argument('-Boone_c5',action='store',default=eb_prms.Boone_c5,
+    parser.add_argument('-Boone_c5',default=eb_prms.Boone_c5,action='store',type=float,
                         help='Parameter for Boone densification scheme')
     
     # PARALLELIZATION

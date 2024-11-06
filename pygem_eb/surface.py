@@ -362,7 +362,7 @@ class Surface():
         list_doc['ICE']['RHO'] = ldensity
         list_doc['ICE']['RDS'] = lgrainsize
         if eb_prms.include_LWC_SNICAR:
-            list_doc['ICE']['KAYER_TYPE'][0] = 4
+            list_doc['ICE']['LAYER_TYPE'][0] = 4
             list_doc['ICE']['LWC'] = lwater.tolist()
         else:
             list_doc['ICE']['LWC'] = [0]*nlayers
