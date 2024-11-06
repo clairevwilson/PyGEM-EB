@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 import sys, os
-sys.path.append('/home/claire/research/PyGEM-EB/biosnicar-py/')
 import yaml
 import suncalc
+sys.path.append(os.getcwd()+'/biosnicar-py/')
 
 class Surface():
     """
@@ -32,7 +32,7 @@ class Surface():
         # Set initial albedo based on surface type
         self.albedo_dict = {'snow':eb_prms.albedo_fresh_snow,
                             'firn':eb_prms.albedo_firn,
-                            'ice':eb_prms.albedo_ice}
+                            'ice':args.a_ice}
         self.bba = self.albedo_dict[self.stype]
         self.albedo = [self.bba]
         self.spectral_weights = np.ones(1)
@@ -46,6 +46,21 @@ class Surface():
         if eb_prms.store_bands:
             bands = np.arange(0,480).astype(str)
             self.albedo_df = pd.DataFrame(np.zeros((0,480)),columns=bands)
+
+        # Parallel runs need separate input files to access
+        if args.task_id != -1:
+            self.snicar_fn = os.getcwd() + f'/biosnicar-py/biosnicar/inputs_{args.task_id}.yaml'
+            if not os.path.exists(self.snicar_fn):
+                self.reset_SNICAR(self.snicar_fn)
+            try:
+                with HiddenPrints():
+                    from biosnicar import get_albedo
+                    _,_ = get_albedo.get('adding-doubling',plot=False,validate=False)
+            except:
+                self.reset_SNICAR(self.snicar_fn)
+        else:
+            self.snicar_fn = eb_prms.snicar_input_fp
+        self.tcc = 0.5
         return
     
     def daily_updates(self,layers,airtemp,surftemp,time):
@@ -62,7 +77,7 @@ class Surface():
         """
         self.stype = layers.ltype[0]
         if self.args.switch_melt == 2 and layers.nlayers > 2:
-            layers.get_grain_size(airtemp,surftemp)
+            layers.get_grain_size(airtemp,surftemp,time)
         self.days_since_snowfall = (time - self.snow_timestamp)/pd.Timedelta(days=1)
         self.get_surr_albedo(layers,time)
         return
@@ -113,14 +128,19 @@ class Surface():
                     Qm_check = enbal.surface_EB(self.stemp,layers,self,
                                                self.days_since_snowfall)
                     # warm top layer
-                    temp_change = Qm_check*dt/(HEAT_CAPACITY_ICE*layers.ldrymass[0])
+                    temp_change = Qm_check*dt/(HEAT_CAPACITY_ICE*layers.lice[0])
                     layers.ltemp[0] += temp_change
 
                     # temp change can raise layer above melting point
                     if layers.ltemp[0] > 0.:
                         # leave excess energy in the melt energy
-                        Qm = layers.ltemp[0]*HEAT_CAPACITY_ICE*layers.ldrymass[0]/dt
+                        Qm = layers.ltemp[0]*HEAT_CAPACITY_ICE*layers.lice[0]/dt
                         layers.ltemp[0] = 0.
+
+                        # if that layer will be fully melted, warm the lower layer
+                        if Qm*dt/eb_prms.Lh_rf > layers.lice[0] and layers.ltemp[1] < 0.:
+                            leftover = Qm*dt/eb_prms.Lh_rf - layers.lice[0]
+                            layers.ltemp[1] += leftover*dt/(HEAT_CAPACITY_ICE*layers.lice[1])
                     else:
                         Qm = 0
 
@@ -167,6 +187,7 @@ class Surface():
                                 if result.x > -60:
                                     self.stemp = result.x[0]
                             break
+
                 # If cooling, Qm must be 0
                 Qm = 0
 
@@ -262,10 +283,12 @@ class Surface():
         """
         with HiddenPrints():
             from biosnicar import get_albedo
+        get_albedo.input_fp = self.snicar_fn
 
         # CONSTANTS
         AVG_GRAINSIZE = eb_prms.average_grainsize
         DIFFUSE_CLOUD_LIMIT = eb_prms.diffuse_cloud_limit
+        DENSITY_FIRN = eb_prms.density_firn
 
         # Get layers to include in the calculation
         if not nlayers and max_depth:
@@ -275,18 +298,20 @@ class Surface():
         elif not nlayers and not max_depth:
             # Default case if neither is specified: only includes top 1m or non-ice layers
             nlayers = np.where(layers.ldepth > 1)[0][0] + 1
-            if layers.ldensity[nlayers-1] > eb_prms.density_firn:
+            if layers.ldensity[nlayers-1] > DENSITY_FIRN:
                 nlayers = np.where(layers.ltype != 'ice')[0][-1] + 1
         idx = np.arange(nlayers)
 
         # Unpack layer variables (need to be stored as lists)
         lheight = layers.lheight[idx].astype(float).tolist()
         ldensity = layers.ldensity[idx].astype(float).tolist()
-        lgrainsize = layers.grainsize[idx].astype(int)
+        lgrainsize = layers.lgrainsize[idx].astype(int)
+        lwater = layers.lwater[idx] / (layers.lice[idx]+layers.lwater[idx])
 
         # Grain size files are every 1um till 1500um, then every 500
-        idx_1500 = np.where(lgrainsize>1500)[0]
+        idx_1500 = lgrainsize>1500
         lgrainsize[idx_1500] = np.round(lgrainsize[idx_1500]/500) * 500
+        lgrainsize[lgrainsize < 30] = 30
         lgrainsize = lgrainsize.tolist()
 
         # Convert LAPs from mass to concentration in ppb
@@ -317,11 +342,17 @@ class Surface():
             ldust5 = ldust1.copy()
 
         # Open and edit yaml input file for SNICAR
-        with open(eb_prms.snicar_input_fp) as f:
+        with open(self.snicar_fn) as f:
             list_doc = yaml.safe_load(f)
 
         # Update changing layer variables
-        list_doc['IMPURITIES']['BC']['CONC'] = lBC
+        try:
+            list_doc['IMPURITIES']['BC']['CONC'] = lBC
+        except:
+            self.reset_SNICAR(self.snicar_fn)
+            with open(self.snicar_fn) as f:
+                list_doc = yaml.safe_load(f)
+            list_doc['IMPURITIES']['BC']['CONC'] = lBC
         list_doc['IMPURITIES']['DUST1']['CONC'] = ldust1
         list_doc['IMPURITIES']['DUST2']['CONC'] = ldust2
         list_doc['IMPURITIES']['DUST3']['CONC'] = ldust3
@@ -330,10 +361,17 @@ class Surface():
         list_doc['ICE']['DZ'] = lheight
         list_doc['ICE']['RHO'] = ldensity
         list_doc['ICE']['RDS'] = lgrainsize
+        if eb_prms.include_LWC_SNICAR:
+            list_doc['ICE']['LAYER_TYPE'][0] = 4
+            list_doc['ICE']['LWC'] = lwater.tolist()
+        else:
+            list_doc['ICE']['LWC'] = [0]*nlayers
 
         # The following variables are constants for the n layers
         ice_variables = ['LAYER_TYPE','SHP','HEX_SIDE','HEX_LENGTH',
-                         'SHP_FCTR','WATER','AR','CDOM']
+                         'SHP_FCTR','WATER_COATING','AR','CDOM']
+        # Option to change shape in inputs
+        list_doc['ICE']['SHP'][0] = eb_prms.grainshape_SNICAR
         for var in ice_variables:
             list_doc['ICE'][var] = [list_doc['ICE'][var][0]] * nlayers
 
@@ -348,20 +386,27 @@ class Surface():
         list_doc['RTM']['DIRECT'] = 0 if self.tcc > DIFFUSE_CLOUD_LIMIT else 1
 
         # Save SNICAR input file
-        with open(eb_prms.snicar_input_fp, 'w') as f:
+        with open(self.snicar_fn, 'w') as f:
             yaml.dump(list_doc,f)
         
-        # Get albedo from biosnicar
+        # Run get_albedo from SNICAR
         with HiddenPrints():
             albedo,spectral_weights = get_albedo.get('adding-doubling',plot=False,validate=False)
-        # I adjusted SNICAR code to return spectral albedo and spectral weights for viewing purposes
-        
-        # band_albedo = []
-        # Calculate albedo in the specified bands
-        # for idx in eb_prms.band_indices.values():
-        #     band_albedo.append(np.sum(solar[idx]*albedo[idx]) / np.sum(solar[idx]))
+        # I adjusted SNICAR code to return spectral weights, rather than BBA
+
         self.bba = np.sum(albedo * spectral_weights) / np.sum(spectral_weights)
         return albedo,spectral_weights
+    
+    def reset_SNICAR(self,fp):
+        # remove old file if it exists
+        if os.path.exists(fp):
+            os.remove(fp)
+        # open the base inputs file
+        with open(eb_prms.snicar_input_fp, 'rb') as src_file:
+            file_contents = src_file.read()
+        # copy the base inputs file to fp
+        with open(fp, 'wb') as dest_file:
+            dest_file.write(file_contents)
     
     def get_surr_albedo(self,layers,time):
         ALBEDO_GROUND = eb_prms.albedo_ground
@@ -370,7 +415,7 @@ class Surface():
         if time.month + time.day + time.hour < 1:
             layers.max_snow = 0
         # check if max_snow has been exceeded
-        current_snow = np.sum(layers.ldrymass[layers.snow_idx])
+        current_snow = np.sum(layers.lice[layers.snow_idx])
         layers.max_snow = max(current_snow, layers.max_snow)
         # scale surrounding albedo based on snowdepth
         albedo_surr = np.interp(current_snow,

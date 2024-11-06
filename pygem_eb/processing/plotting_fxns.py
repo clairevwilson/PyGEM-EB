@@ -3,7 +3,8 @@ import xarray as xr
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from sklearn.metrics import mean_squared_error
+
+mean_squared_error = lambda model,data: np.mean(np.square(model - data))
 
 mpl.style.use('seaborn-v0_8-white')
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color'] 
@@ -20,26 +21,27 @@ glac_props = {'01.00570':{'name':'Gulkana',
             '16.02444':{'name':'Artesonraju',
                             'AWS_fn':'Preprocessed/artesonraju/Artesonraju_hourly.csv'}}
 
-varprops = {'surftemp':{'label':'Surface temp','type':'Temperature','units':'C'},
-            'airtemp':{'label':'Air temp','type':'Temperature','units':'C'},
-           'melt':{'label':'Cum. Melt','type':'MB','units':'m w.e.'},
-           'runoff':{'label':'Cum. Runoff','type':'MB','units':'m w.e.'},
-           'accum':{'label':'Cum. Accumulation','type':'MB','units':'m w.e.'},
-           'refreeze':{'label':'Cum. Refreeze','type':'MB','units':'m w.e.'},
-           'meltenergy':{'label':'Melt Energy','type':'Flux','units':'W m$^{-2}$'},
-           'SWin':{'label':'Shortwave In','type':'Flux','units':'W m$^{-2}$'},
-           'SWout':{'label':'Shortwave Out','type':'Flux','units':'W m$^{-2}$'},
-           'SWin_sky':{'label':'Sky Shortwave In','type':'Flux','units':'W m$^{-2}$'},
-           'SWin_terr':{'label':'Terrain Shortwave In','type':'Flux','units':'W m$^{-2}$'},
-           'LWin':{'label':'Longwave In','type':'Flux','units':'W m$^{-2}$'},
-           'LWout':{'label':'Longwave Out','type':'Flux','units':'W m$^{-2}$'},
-           'SWnet':{'label':'Net Shortwave','type':'Flux','units':'W m$^{-2}$'},
-           'LWnet':{'label':'Net Longwave','type':'Flux','units':'W m$^{-2}$'},
-           'NetRad':{'label':'Net Radiation','type':'Flux','units':'W m$^{-2}$'},
-           'sensible':{'label':'Sensible Heat','type':'Flux','units':'W m$^{-2}$'},
-           'latent':{'label':'Latent Heat','type':'Flux','units':'W m$^{-2}$'},
-           'rain':{'label':'Rain Energy','type':'Flux','units':'W m$^{-2}$'},
-           'ground':{'label':'Ground Energy','type':'Flux','units':'W m$^{-2}$'},
+varprops = {'surftemp':{'label':'Temperature','type':'Temperature','units':'C'},
+            'airtemp':{'label':'Temperature','type':'Temperature','units':'C'},
+           'melt':{'label':'Mass balance','type':'MB','units':'m w.e.'},
+           'runoff':{'label':'Mass balance','type':'MB','units':'m w.e.'},
+           'accum':{'label':'Mass balance','type':'MB','units':'m w.e.'},
+           'refreeze':{'label':'Mass balance','type':'MB','units':'m w.e.'},
+           'MB':{'label':'Mass balance','type':'MB','units':'m w.e.'},
+           'meltenergy':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'SWin':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'SWout':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'SWin_sky':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'SWin_terr':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'LWin':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'LWout':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'SWnet':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'LWnet':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'NetRad':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'sensible':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'latent':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'rain':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
+           'ground':{'label':'Heat fluxes','type':'Flux','units':'W m$^{-2}$'},
            'layertemp':{'label':'Temperature','type':'Layers','units':'C'},
            'layerdensity':{'label':'Density','type':'Layers','units':'kg m$^{-3}$'},
            'layerwater':{'label':'Water content','type':'Layers','units':'kg m$^{-2}$'},
@@ -47,6 +49,7 @@ varprops = {'surftemp':{'label':'Surface temp','type':'Temperature','units':'C'}
            'layerdust':{'label':'Dust','type':'Layers','units':'ppm'},
            'layergrainsize':{'label':'Grain size','type':'Layers','units':'um'},
            'layerheight':{'label':'Layer height','type':'Layers','units':'m'},
+           'layerrefreeze':{'label':'Layer refreeze','type':'Layers','units':'kg m-2'},
            'snowdepth':{'label':'Snow depth','type':'MB','units':'m'},
            'dh':{'label':'Surface height change','type':'MB','units':'m$'},
            'albedo':{'label':'Albedo','type':'Albedo','units':'-'},}
@@ -63,7 +66,7 @@ def getds(file):
     end = pd.to_datetime(ds.indexes['time'].to_numpy()[-1])
     return ds,start,end
 
-def simple_plot(ds,bin,time,vars,res='d',t='',cumMB=True,
+def simple_plot(ds,time,vars,res='d',t='',cumMB=True,
                 skinny=True,save_fig=False,new_y=['None']):
     """
     Returns a simple timeseries plot of the variables as lumped in the input.
@@ -72,8 +75,6 @@ def simple_plot(ds,bin,time,vars,res='d',t='',cumMB=True,
     ----------
     ds : xr.Dataset
         Dataset object containing the model output
-    bin : int
-        Integer value of the bin index to plot
     vars : list-like
         List of strings where the variables to be plotted together are nested together
         e.g. [['airtemp','surftemp'],['SWnet','LWnet','sensible','latent']]
@@ -90,14 +91,14 @@ def simple_plot(ds,bin,time,vars,res='d',t='',cumMB=True,
     new_y : list-like
         List of variables in vars that should be plotted on a new y-axis
     """
-    h = 1.5 if skinny else 3
-    fig,axes = plt.subplots(len(vars),1,figsize=(7,h*len(vars)),sharex=True,layout='constrained')
+    h = 2 if skinny else 4
+    fig,axes = plt.subplots(len(vars),1,figsize=(8,h*len(vars)),sharex=True,layout='constrained')
 
     if len(time) == 2:
         start = pd.to_datetime(time[0])
         end = pd.to_datetime(time[1])
         time = pd.date_range(start,end,freq='h')
-    ds = ds.sel(time=time,bin=bin)
+    ds = ds.sel(time=time)
     ds_mean = ds.resample(time=res).mean(dim='time',keep_attrs='units')
     ds_sum = ds.resample(time=res).sum(dim='time',keep_attrs='units')
     c_iter = iter([plt.cm.Dark2(i) for i in range(8)])
@@ -115,7 +116,7 @@ def simple_plot(ds,bin,time,vars,res='d',t='',cumMB=True,
                 c_iter = iter([plt.cm.Dark2(i) for i in range(8)])
                 c = next(c_iter)
         
-            if var in ['melt','runoff','accum','refreeze','dh'] and cumMB:
+            if var in ['melt','runoff','accum','refreeze','dh','MB'] and cumMB:
                 var_to_plot = ds_sum[var].cumsum()
             elif 'layer' in var:
                 var_to_plot = ds_mean[var].isel(layer=0)
@@ -136,10 +137,12 @@ def simple_plot(ds,bin,time,vars,res='d',t='',cumMB=True,
     date_form = mpl.dates.DateFormatter('%d %b')
     axis.xaxis.set_major_formatter(date_form)
     fig.suptitle(t)
+    axis.set_xlim(start,end)
     if save_fig:
         plt.savefig(save_fig,dpi=150)
+    return fig, axes
 
-def plot_hours(ds,bin,time,vars,skinny=True,t='Hourly EB Outputs'):
+def plot_hours(ds,time,vars,skinny=True,t='Hourly EB Outputs'):
     h = 1.5 if skinny else 3
     fig,axes = plt.subplots(len(vars),1,figsize=(7,h*len(vars)),sharex=True,layout='constrained')
     ds['hour'] = (['time'],pd.to_datetime(ds['time'].values).hour)
@@ -148,7 +151,7 @@ def plot_hours(ds,bin,time,vars,skinny=True,t='Hourly EB Outputs'):
         start = pd.to_datetime(time[0])
         end = pd.to_datetime(time[1])
         time = pd.date_range(start,end,freq='h')
-    ds = ds.sel(time=time,bin=bin)
+    ds = ds.sel(time=time)
     c_iter = iter([plt.cm.Dark2(i) for i in range(8)])
     for i,v in enumerate(vars):
         if len(vars) > 1:
@@ -177,7 +180,7 @@ def plot_hours(ds,bin,time,vars,skinny=True,t='Hourly EB Outputs'):
     axis.set_xlabel('Hour of Day')
     fig.suptitle(t)
 
-def dh_vs_stake(stake_df,ds_list,time,labels=['Model'],bin=0,t='Surface Height Change Comparison'):
+def dh_vs_stake(stake_df,ds_list,time,labels=['Model'],t='Surface Height Change Comparison'):
     """
     Returns a comparison of snow depth from the output datasets to stake data
 
@@ -206,7 +209,7 @@ def dh_vs_stake(stake_df,ds_list,time,labels=['Model'],bin=0,t='Surface Height C
     stake_df['CMB'] -= stake_df['CMB'].iloc[0]
     for i,ds in enumerate(ds_list):
         c = plt.cm.Dark2(i)
-        ds = ds.sel(time=time,bin=bin).resample(time='d').sum()
+        ds = ds.sel(time=time).resample(time='d').sum()
         dh = ds.dh.cumsum().to_numpy() - ds.dh.to_numpy()[0]
         ax.plot(ds.coords['time'],dh,label=labels[i],color=c)
     ax.plot(stake_df.index,stake_df['CMB'].to_numpy(),label='Stake',linestyle='--',color='black')
@@ -220,7 +223,7 @@ def dh_vs_stake(stake_df,ds_list,time,labels=['Model'],bin=0,t='Surface Height C
     ax.set_ylabel('Surface Height Change (m)',fontsize=14)
     fig.suptitle(t)
 
-def snowdepth_vs_stake(stake_df,ds_list,time,labels,bin=0,t='Snow Depth Comparison'):
+def snowdepth_vs_stake(stake_df,ds_list,time,labels,t='Snow Depth Comparison'):
     """
     Returns a comparison of snow depth from the output datasets to stake data
 
@@ -248,7 +251,7 @@ def snowdepth_vs_stake(stake_df,ds_list,time,labels,bin=0,t='Snow Depth Comparis
     stake_df = stake_df.loc[days]
     for i,ds in enumerate(ds_list):
         c = plt.cm.Dark2(i)
-        ds = ds.sel(time=time,bin=bin)
+        ds = ds.sel(time=time)
         ax.plot(ds.coords['time'],ds.snowdepth.to_numpy()*100,label=labels[i],color=c)
     ax.plot(stake_df.index,stake_df['snow_depth'].to_numpy(),label='Stake',linestyle='--',color='black')
     date_form = mpl.dates.DateFormatter('%d %b')
@@ -257,7 +260,7 @@ def snowdepth_vs_stake(stake_df,ds_list,time,labels,bin=0,t='Snow Depth Comparis
     ax.set_ylabel('Snow Depth (cm)')
     fig.suptitle(t)
 
-def albedo_vs_CNR4(cnr4_df,ds_list,time,labels=['Model'],bin=0,t='Albedo Comparison'):
+def albedo_vs_CNR4(cnr4_df,ds_list,time,labels=['Model'],t='Albedo Comparison'):
     
     fig,ax = plt.subplots(figsize=(4,6),sharex=True,layout='constrained')
     cnr4_df = cnr4_df.set_index(pd.to_datetime(cnr4_df['Datetime']))
@@ -276,7 +279,7 @@ def albedo_vs_CNR4(cnr4_df,ds_list,time,labels=['Model'],bin=0,t='Albedo Compari
     cnr4_df['albedo'] = cnr4_df['albedo'].mask(cnr4_df['albedo']>1,1)
     for i,ds in enumerate(ds_list):
         c = plt.cm.Dark2(i)
-        ds = ds.sel(time=time,bin=bin)
+        ds = ds.sel(time=time)
         ax.plot(ds.coords['time'],ds['albedo'],label=labels[i],color=c)
     ax.plot(cnr4_df.index,cnr4_df['albedo'].to_numpy(),label='CNR4',linestyle='--',color='black')
     date_form = mpl.dates.DateFormatter('%d %b')
@@ -286,7 +289,7 @@ def albedo_vs_CNR4(cnr4_df,ds_list,time,labels=['Model'],bin=0,t='Albedo Compari
     fig.suptitle(t)
     
 
-def plot_stake_ablation(stake_df,ds_list,time,labels,bin=0,t='Stake Comparison'):
+def plot_stake_ablation(stake_df,ds_list,time,labels,t='Stake Comparison'):
     """
     Returns a comparison of melt from the output datasets to stake data
 
@@ -312,7 +315,7 @@ def plot_stake_ablation(stake_df,ds_list,time,labels,bin=0,t='Stake Comparison')
     stake_df = stake_df.loc[days - pd.Timedelta(minutes=30)]
     for i,ds in enumerate(ds_list):
         c = plt.cm.Dark2(i)
-        ds = ds.sel(time=time,bin=bin)
+        ds = ds.sel(time=time)
         melt = ds.melt.cumsum().to_numpy()
         rfz = ds.refreeze.cumsum().to_numpy()
         ax.plot(ds.coords['time'],melt-rfz,label=labels[i],color=c)
@@ -327,11 +330,7 @@ def plot_stake_ablation(stake_df,ds_list,time,labels,bin=0,t='Stake Comparison')
     ax.set_ylabel('Cumulative Melt (m w.e.)')
     fig.suptitle(t)
 
-def plot_seasonal_mb(mb_df,ds_list,years,site='B',t=''):
-    fig,ax = plt.subplots(figsize=(4,6),sharex=True,layout='constrained')
-    
-
-def plot_stake_accumulation(stake_df,ds_list,time,labels,bin=0,t=''):
+def plot_stake_accumulation(stake_df,ds_list,time,labels,t=''):
     """
     Returns a comparison of accumulation from the output datasets to stake data
 
@@ -358,7 +357,7 @@ def plot_stake_accumulation(stake_df,ds_list,time,labels,bin=0,t=''):
     stake_df = stake_df.loc[days]
     for i,ds in enumerate(ds_list):
         c = plt.cm.Dark2(i)
-        ds = ds.sel(time=time,bin=bin)
+        ds = ds.sel(time=time)
         ax.plot(ds.coords['time'],ds.accum,color=c,label=labels[i])
     snow_depth = stake_df['snow_depth'].to_numpy() / 100
     previous_depth = snow_depth[0]
@@ -398,16 +397,18 @@ def compare_runs(ds_list,time,labels,var,res='d',t=''):
     fig,ax = plt.subplots(figsize=(6,3))
     start = pd.to_datetime(time[0])
     end = pd.to_datetime(time[1])
+    time_sel = pd.date_range(start,end,freq='h')
     if len(time) == 2 and res != 'd':
-        start += pd.Timedelta(minutes=30)
-        end -= pd.Timedelta(minutes=30)
-        time = pd.date_range(start,end,freq=res).date
+        # start += pd.Timedelta(minutes=30)
+        # end -= pd.Timedelta(minutes=30)
+        time = pd.date_range(start,end,freq=res)
         # time = pd.to_datetime(time,format='%Y-%m-%d')
-        res = time[1] - time[0]
-        res = str(int(res.total_seconds() / 3600))+'h'
+        # res = time[1] - time[0]
+        # res = str(int(res.total_seconds() / 3600))+'h'
     else:
         time = pd.date_range(start,end,normalize=True)
     for i,ds in enumerate(ds_list):
+        ds = ds.sel(time=time_sel)
         c = plt.cm.Dark2(i)
         if res != 'h':
             if var in ['melt','runoff','refreeze','accum','MB','dh']:
@@ -425,16 +426,86 @@ def compare_runs(ds_list,time,labels,var,res='d',t=''):
             elif 'layer' in var:
                 to_plot = ds[var].sel(time=time,layer=0)
             else:
-                to_plot = ds[var].sel(time=time)
-        ax.plot(to_plot.time,to_plot,label=labels[i],color=c,alpha=0.6,linewidth=0.8)
+                to_plot = ds[var].sel(time=time)     
+        ax.plot(to_plot.time,to_plot,label=labels[i],color=c)
+        ax.set_ylim(np.min(to_plot),np.max(to_plot)+0.01*np.max(to_plot))
     date_form = mpl.dates.DateFormatter('%d %b')
     ax.xaxis.set_major_formatter(date_form)
     ax.set_ylabel(var)
     ax.legend()
+    ax.tick_params(length=5)
+    ax.set_xlim(time[0],time[-1])
     fig.suptitle(t)
-    return
+    return fig,ax
 
-def panel_dh_compare(ds_list,time,labels,units,stake_df,rows=2,t='',bin=0):
+def plot_by(ds,time,vars,t='Monthly EB Outputs',by='doy'):
+    h = 1.5
+    fig,axes = plt.subplots(len(vars),1,figsize=(7,h*len(vars)),sharex=True,layout='constrained')
+    if len(vars) == 1:
+        axes = [axes]
+    
+    if by == 'month':
+        ds[by] = (['time'],pd.to_datetime(ds['time'].values).month)
+        time_list = np.arange(1,13)
+    elif by == 'hour':
+        ds[by] = (['time'],pd.to_datetime(ds['time'].values).hour)
+        time_list = np.arange(0,24)
+    elif by == 'doy':
+        ds[by] = (['time'],pd.to_datetime(ds['time'].values).day_of_year)
+        time_list = np.arange(1,366)
+
+    if len(time) == 2:
+        start = pd.to_datetime(time[0])
+        end = pd.to_datetime(time[1])
+        time = pd.date_range(start,end,freq='h')
+    ds = ds.sel(time=time)
+    c_iter = iter([plt.cm.Dark2(i) for i in range(8)])
+    for i,v in enumerate(vars):
+        axis = axes[i]
+        vararray = np.array(v)
+        for var in vararray:
+            try:
+                c = next(c_iter)
+            except:
+                c_iter = iter([plt.cm.Dark2(i) for i in range(8)])
+                c = next(c_iter)
+        
+            var_out = []
+            for time in time_list:
+                ds_sel = ds.where(ds[by] == time,drop=True)
+                if 'layer' in var:
+                    vardata = ds_sel.isel(layer=0)[var].to_numpy()
+                else:
+                    vardata = ds_sel[var].to_numpy()
+                if by == 'doy':
+                    nyrs = int(vardata.shape[0] / 24)
+                    try:
+                        vardata = np.sum(vardata.reshape(24,nyrs),axis=0)
+                    except:
+                        if time != 366:
+                            print('Must index dates exactly 1 year - 1 day apart')
+                        vardata = np.array([0])
+                    out = np.mean(vardata)
+                else:
+                    out = np.mean(vardata)
+                var_out.append(out)
+            axis.plot(time_list,np.cumsum(var_out),label=var,color=c)
+            axis.legend()
+            if by == 'doy':
+                axis.axvline(111,color='green')
+                axis.axvline(232,color='red')
+    if by == 'month':
+        months = pd.date_range('2024-01-01','2024-12-31',freq='MS')
+        month_names = [date.month_name()[:3] for date in months]
+        axis.set_xticks(np.arange(1,13),month_names)
+    if by == 'doy':
+        axis.set_xlabel('Day of year')
+    axis.set_ylabel('Melt (m w.e.)')
+    axis.tick_params(length=5)
+    fig.suptitle(t)
+    print(np.cumsum(var_out)[231] / np.cumsum(var_out)[-1])
+
+def panel_dh_compare(ds_list,time,labels,units,stake_df,rows=2,t=''):
     """
     Returns a comparison of different model runs
 
@@ -482,7 +553,7 @@ def panel_dh_compare(ds_list,time,labels,units,stake_df,rows=2,t='',bin=0):
         var,val = labels[i].split('=')
 
         # get RMSE
-        daily_dh_MODEL = ds.resample(time='d').sum().sel(bin=bin,time=time)
+        daily_dh_MODEL = ds.resample(time='d').sum().sel(time=time)
         daily_cum_dh_MODEL = daily_dh_MODEL['dh'].cumsum().to_numpy()
         # melt_mse = mean_squared_error(daily_cum_melt_DATA,daily_cum_melt_MODEL)
         # melt_rmse = np.mean(melt_mse)
@@ -514,7 +585,7 @@ def panel_dh_compare(ds_list,time,labels,units,stake_df,rows=2,t='',bin=0):
     plt.show()
     return
 
-def temp_vs_iButton(dslist,temp_df,time,bin,plot_heights=[0.05,0.5],
+def temp_vs_iButton(dslist,temp_df,time,plot_heights=[0.05,0.5],
                     t='Modeled and measured snow temperatures',labels=['Model'],
                     ax_titles=False):
     if not ax_titles:
@@ -539,7 +610,7 @@ def temp_vs_iButton(dslist,temp_df,time,bin,plot_heights=[0.05,0.5],
     for j,ds in enumerate(dslist):
         store = {'measured':[],'modeled':[],'measure_plot':[],'model_plot':[]}
         c = plt.cm.Dark2(j)
-        ds = ds.sel(time=time,bin=bin)
+        ds = ds.sel(time=time)
         for hour in time:
             # get temperatures of buried iButtons
             buried = np.where(melt_out > hour)[0]
@@ -648,18 +719,18 @@ def panel_temp_compare(ds_list,time,labels,temp_df,rows=2,t=''):
         plot_DATA = np.array([])
         for hour in time:
             # Extract layer heights
-            lheight = ds.sel(time=hour,bin=0)['layerheight'].to_numpy()
-            # Index snow bins
-            density = ds.sel(time=hour,bin=0)['layerdensity'].to_numpy()
+            lheight = ds.sel(time=hour)['layerheight'].to_numpy()
+            # Index snow layers
+            density = ds.sel(time=hour)['layerdensity'].to_numpy()
             density[np.where(np.isnan(density))[0]] = 1e5
-            full_bins = np.where(density < 700)[0]
-            if len(full_bins) < 1:
+            full_layers = np.where(density < 700)[0]
+            if len(full_layers) < 1:
                 break
-            lheight = lheight[full_bins]
+            lheight = lheight[full_layers]
             icedepth = np.sum(lheight) + lheight[-1] / 2
 
             # Get property and absolute depth
-            temp_MODEL = ds.sel(time=hour,bin=0)['layertemp'].to_numpy()[full_bins]
+            temp_MODEL = ds.sel(time=hour)['layertemp'].to_numpy()[full_layers]
             ldepth = np.array([np.sum(lheight[:i+1])-(lheight[i]/2) for i in range(len(lheight))])
             height_above_ice = icedepth - ldepth
 
@@ -703,6 +774,51 @@ def panel_temp_compare(ds_list,time,labels,temp_df,rows=2,t=''):
     plt.show()
     return
 
+def plot_multiyear_mb(ds_list,mb_df,years,site):
+    fig,ax = plt.subplots(figsize=(9,3),sharex=True,layout='constrained')
+    mb_df = mb_df.loc[mb_df['site_name'] == site]
+    mb_df.index = mb_df['Year']
+
+    # plot mass balance data
+    winter_mb_data = mb_df['bw'].loc[mb_df['Year'].isin(years)]
+    summer_mb_data = mb_df['ba'].loc[mb_df['Year'].isin(years)] - mb_df['bw'].loc[mb_df['Year'].isin(years)]
+    ax.plot(years,winter_mb_data,label='MB Data',color='black',linestyle='--')
+    ax.plot(years,summer_mb_data,color='black',linestyle='--')
+
+    for k,ds in enumerate(ds_list):
+        mb_mod = {'bw':[],'bs':[]}
+        for year in years:
+            # spring_date = mb_df['spring_date'].loc[year]
+            # fall_date = mb_df['fall_date'].loc[year]
+            # next_spring_date = mb_df
+            spring_date = str(year)+'-04-20 00:00'
+            fall_date = str(year)+'-08-20 00:00'
+            next_spring_date = str(year)+'-04-20 00:00'
+            last_fall_date = str(year-1)+'-08-20 00:00'
+            melt_dates = pd.date_range(spring_date,fall_date,freq='h')
+            acc_dates = pd.date_range(last_fall_date,spring_date,freq='h')
+            if pd.to_datetime(ds.time.values[0]).minute == 30:
+                melt_dates = melt_dates + pd.Timedelta(minutes=30)
+                acc_dates = acc_dates + pd.Timedelta(minutes=30)
+            # sum mass balance
+            wds = ds.sel(time=acc_dates).sum()
+            sds = ds.sel(time=melt_dates).sum()
+            winter_mb = wds.accum + wds.refreeze # - wds.melt
+            summer_mb = sds.accum + sds.refreeze - sds.melt - wds.melt
+            mb_mod['bw'].append(winter_mb.to_numpy())
+            mb_mod['bs'].append(summer_mb.to_numpy())
+        ax.plot(years,mb_mod['bw'],label='Winter MB Modeled'+str(k))
+        ax.plot(years,mb_mod['bs'],label='Summer MB Modeled'+str(k))
+    ax.legend()
+    ax.axhline(0,color='white')
+    ax.set_ylabel('Seasonal Mass Balance (m w.e.)')
+    ax.set_xlim(years[0],years[-1])
+    ax.set_xticks(np.arange(years[0],years[-1],2))
+    fig.suptitle('Gulkana Mass Balance Comparison')
+    # plt.show()
+    # plt.savefig('20yrfig.png',dpi=200)
+    return fig, ax
+
 def build_RMSEs(ds_list,stake_df,time,labels,save='sensitivity.npy'):
     """
     save : str or False
@@ -714,7 +830,7 @@ def build_RMSEs(ds_list,stake_df,time,labels,save='sensitivity.npy'):
     daily_cum_melt_DATA = np.cumsum(stake_df['melt'].to_numpy())
     sens_out = {}
     for i,ds in enumerate(ds_list):
-        daily_melt_MODEL = ds.resample(time='d').sum().sel(bin=0)
+        daily_melt_MODEL = ds.resample(time='d').sum()
         daily_cum_melt_MODEL = daily_melt_MODEL['melt'].cumsum().to_numpy()
         melt_mse = mean_squared_error(daily_cum_melt_DATA,daily_cum_melt_MODEL)
         melt_rmse = np.mean(melt_mse)
@@ -723,7 +839,7 @@ def build_RMSEs(ds_list,stake_df,time,labels,save='sensitivity.npy'):
         np.save(save,sens_out)
     return sens_out
 
-def plot_iButtons(ds,bin,dates,path=None):
+def plot_iButtons(ds,dates,path=None):
     if not path:
         path = '/home/claire/research/MB_data/Gulkana/field_data/iButton_2023_all.csv'
     df = pd.read_csv(path,index_col=0)
@@ -734,24 +850,24 @@ def plot_iButtons(ds,bin,dates,path=None):
     fig,axes = plt.subplots(1,len(dates),sharey=True,sharex=True,figsize=(8,4)) #,sharex=True,sharey='row'
     for i,date in enumerate(dates):
         # Extract layer heights
-        lheight = ds.sel(time=date,bin=bin)['layerheight'].to_numpy()
-        # Index snow bins
-        density = ds.sel(time=date,bin=bin)['layerdensity'].to_numpy()
+        lheight = ds.sel(time=date)['layerheight'].to_numpy()
+        # Index snow layers
+        density = ds.sel(time=date)['layerdensity'].to_numpy()
         density[np.where(np.isnan(density))[0]] = 1e5
-        full_bins = np.where(density < 700)
+        full_layers = np.where(density < 700)
         
-        # full_bins = np.array([not y for y in np.isnan(lheight)])
-        lheight = lheight[full_bins]
+        # full_layers = np.array([not y for y in np.isnan(lheight)])
+        lheight = lheight[full_layers]
         icedepth = np.sum(lheight) + lheight[-1] / 2
         # Get property and absolute depth
-        lprop = ds.sel(time=date,bin=bin)['layertemp'].to_numpy()[full_bins]
+        lprop = ds.sel(time=date)['layertemp'].to_numpy()[full_layers]
         ldepth = np.array([np.sum(lheight[:i+1])-(lheight[i]/2) for i in range(len(lheight))])
         height_above_ice = icedepth - ldepth
         # Plot output data
         axes[i].plot(lprop,height_above_ice,label='Model')
 
         # Plot iButton data
-        snowdepth = ds.sel(time=date,bin=bin)['snowdepth'].to_numpy()
+        snowdepth = ds.sel(time=date)['snowdepth'].to_numpy()
         tempdata = df.loc[date].to_numpy()
         idx = np.where(depth_0 < snowdepth)
         axes[i].plot(tempdata[idx],depth_0[idx],label='iButton')
@@ -806,80 +922,7 @@ def stacked_eb_barplot(ds,time,res='d',t='',savefig=False):
         plt.savefig(savefig,dpi=300)
     plt.show()
 
-def plot_avgs(ds,time,title=False):
-    """
-    Plots heat fluxes, surface/air temperature, and mass balance terms, averaged monthly and then interannually.
-
-    Parameters
-    ----------
-    ds : xr.Dataset
-        Dataset object containing the model output
-    time : list-like   
-        Either len-2 list of [start date, end date], or a list of datetimes
-    """
-    nyr = pd.to_datetime(time[0]).year - pd.to_datetime(np.array(time)[-1]).year
-    if len(time) == 2:
-        start = pd.to_datetime(time[0])
-        end = pd.to_datetime(time[1])
-        time = pd.date_range(start,end,freq='h')
-    months = np.arange(1,13)
-
-    fig,axes = plt.subplots(3,3,sharex=True,sharey='row',figsize=(12,6))
-    varnames_idx = ['SWnet','LWnet','sensible','latent','rain','meltenergy','surftemp','melt','runoff','refreeze','accum']
-    varnames = ['SWnet','LWnet','sensible','latent','rain','meltenergy','surftemp','melt','runoff','refreeze','accum']
-    heat = ['SWnet','LWnet','sensible','latent','rain','meltenergy']
-    temp = ['surftemp']
-    mb = ['melt','runoff','refreeze','accum','MB']
-
-    airtemp = np.zeros((3,12))
-    for b in range(len(ds.coords['bin'])):
-        climateds = xr.open_dataset('/home/claire/research/Output/EB/climateds.nc').isel(bin=b).to_pandas()
-        monthly = climateds['bin_temp'].resample('M').mean()
-        monthly_avg = np.mean(monthly[:(nyr*12)].values.reshape((nyr,12)),axis=0)
-        airtemp[b,:] = monthly_avg
-
-    for bin_no in range(len(ds.coords['bin'])):
-        df = ds[varnames_idx].isel(bin=bin_no).to_pandas()
-        df['melt'] = df['melt'] * -1
-        
-        for var in varnames:
-            if var in ['melt','runoff','refreeze','accum','MB']:
-                monthly = df[var].resample('M').sum()
-            else:
-                monthly = df[var].resample('M').mean()
-            monthly_avg = np.mean(monthly[:(nyr*12)].values.reshape((nyr,12)),axis=0)
-            run_start_month = pd.Timestamp(ds.coords['time'].values[0]).month
-            if run_start_month > 1:
-                monthly_avg_jan = np.append(monthly_avg[13-run_start_month:],monthly_avg[:13-run_start_month],)
-            else:
-                monthly_avg_jan = monthly_avg
-
-            axis = np.piecewise(var,[var in heat, var in temp, var in mb],[0,1,2])
-            lw = 1 if var in ['meltenergy','surftemp'] else 0.5
-            axes[int(axis),bin_no].plot(months,monthly_avg_jan,label=var,linewidth=lw)
-        axes[1,bin_no].plot(months,airtemp[bin_no,:],linewidth=0.5,label='air temp')
-        axes[1,bin_no].axhline(0,lw=0.3,color='gray')
-        axes[bin_no,2].set_xticks(months)
-    axes[0,0].set_ylabel('Energy Flux ($W / m^2$)')
-    axes[1,0].set_ylabel('Temperature (C)')
-    axes[2,0].set_ylabel('Mass balance (m w.e.)')
-
-    binname = ['Lower','Middle','Upper']
-    for i in range(3):
-        axes[0,i].set_title(binname[i])
-    axes[0,0].legend(loc='upper right',bbox_to_anchor=(1.25, 1.0))
-    axes[1,0].legend()
-    axes[2,0].legend()
-    if not title:
-        fig.suptitle(f'Gulkana Glacier (ERA5-Hourly)\nMonthly Averages Over {nyr}-yr Run')
-    else:
-        fig.suptitle(title)
-    fig.supxlabel('Months')
-    #plt.gcf().autofmt_xdate()
-    plt.show()
-    return
-
-def plot_yrs(file,bin,nyr):
+def plot_yrs(file,nyr):
     months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
     fig,axes = plt.subplots(3,nyr,sharey='row',sharex='col',figsize=(14,8))
 
@@ -890,7 +933,7 @@ def plot_yrs(file,bin,nyr):
     temp = ['snowdepth']
     mb = ['melt','runoff','refreeze','accum','MB']
 
-    df = ds[varnames_idx].isel(bin=bin).to_pandas()
+    df = ds[varnames_idx].to_pandas()
     df['SWnet'] = df['SWin'] + df['SWout']
     df['LWnet'] = df['LWin'] + df['LWout']
     df['MB'] = df['accum']+df['refreeze']-df['melt']
@@ -979,7 +1022,7 @@ def compare_AWS(df_list,vars,time,labels=None,t='',res='d',y=''):
     fig.suptitle(t)
     plt.show()
 
-def plot_avg_layers(ds,bin,nyr=False,res='365d'):
+def plot_avg_layers(ds,nyr=False,res='365d'):
     """
     Plots layer temperature, density, water content and layer height averaged first across all layers,
     then averaged between years. 
@@ -991,7 +1034,7 @@ def plot_avg_layers(ds,bin,nyr=False,res='365d'):
     for j,var in enumerate(['layertemp','layerdensity','layerwater','snowdepth','layergrainsize','layerBC']):
         ax = axes[j]
         ax.set_title(var+'   '+ds[var].attrs['units'])
-        snow = ds[var].sel(bin=bin).to_pandas()
+        snow = ds[var].to_pandas()
         loop = True
         i=29
         while loop:
@@ -1032,30 +1075,29 @@ def plot_layers(ds,vars,dates):
     fig,axes = plt.subplots(len(vars),len(dates),sharey=True,sharex=True,figsize=(8,4)) #,sharex=True,sharey='row'
     for i,var in enumerate(vars):
         for j,date in enumerate(dates):
-            for bin in ds.coords['bin'].values:
-                lheight = ds.sel(time=date,bin=bin)['layerheight'].to_numpy()
-                full_bins = np.array([not y for y in np.isnan(lheight)])
-                bins = np.where(ds.sel(time=date,bin=bin)['layerdensity']<600)[0]
-                lheight = lheight[bins]
-                lprop = ds.sel(time=date,bin=bin)[var].to_numpy()[bins]
-                ldepth = -1*np.array([np.sum(lheight[:i+1])-(lheight[i]/2) for i in range(len(lheight))])
-                if len(vars) > 1:
-                    axes[i,j].plot(lprop,ldepth,label='bin '+str(bin))
-                    axes[i,j].set_xlabel(var)
-                    axes[0,j].set_title(str(date)[:10])
-                    axes[i,0].legend()
-                    axes[i,0].set_ylabel('Depth (m)')
-                else:
-                    axes[j].plot(lprop,ldepth,label='bin '+str(bin))
-                    axes[j].set_xlabel(var)
-                    axes[j].set_title(str(date)[:10])
-                    axes[0].legend()
-                    axes[0].set_ylabel('Depth (m)')
+            lheight = ds.sel(time=date)['layerheight'].to_numpy()
+            full_layers = np.array([not y for y in np.isnan(lheight)])
+            full_layers = np.where(ds.sel(time=date)['layerdensity']<600)[0]
+            lheight = lheight[full_layers]
+            lprop = ds.sel(time=date)[var].to_numpy()[full_layers]
+            ldepth = -1*np.array([np.sum(lheight[:i+1])-(lheight[i]/2) for i in range(len(lheight))])
+            if len(vars) > 1:
+                axes[i,j].plot(lprop,ldepth)
+                axes[i,j].set_xlabel(var)
+                axes[0,j].set_title(str(date)[:10])
+                axes[i,0].legend()
+                axes[i,0].set_ylabel('Depth (m)')
+            else:
+                axes[j].plot(lprop,ldepth)
+                axes[j].set_xlabel(var)
+                axes[j].set_title(str(date)[:10])
+                axes[0].legend()
+                axes[0].set_ylabel('Depth (m)')
         
     # fig.supxlabel(varprops[var]['label'])
     return
 
-def visualize_layers(ds,bin,dates,vars,force_layers=False,
+def visualize_layers(ds,dates,vars,force_layers=False,
                      t='Visualization of Snow ',
                      plot_firn=True,plot_ice=False,ylim=False):
     """
@@ -1081,6 +1123,8 @@ def visualize_layers(ds,bin,dates,vars,force_layers=False,
         return c
 
     fig,axes = plt.subplots(len(vars),figsize=(5,1.7*len(vars)),sharex=True,layout='constrained')
+    if len(vars) == 1:
+        axes = [axes]
     for i,var in enumerate(vars):
         if var in ['layerBC']:
             bounds = [-2,30]
@@ -1091,9 +1135,11 @@ def visualize_layers(ds,bin,dates,vars,force_layers=False,
         elif var in ['layerwater']:
             bounds = [-1,6]
         elif var in ['layertemp']:
-            bounds = [-14,0]
+            bounds = [-10,0]
         elif var in ['layergrainsize']:
             bounds = [50,1500]
+        elif var in ['layerrefreeze']:
+            bounds = [0,0.05]
         dens_lim = 890 if plot_firn else 600
         dens_lim = 1000 if plot_ice else dens_lim
         assert 'layer' in var, 'choose layer variable'
@@ -1104,9 +1150,9 @@ def visualize_layers(ds,bin,dates,vars,force_layers=False,
         last = False
         max_snowdepth = 0
         for step in dates:
-            height = ds.sel(time=step,bin=bin)['layerheight'].to_numpy()
-            vardata = ds.sel(time=step,bin=bin)[var].to_numpy()
-            dens = ds.sel(time=step,bin=bin)['layerdensity'].to_numpy()
+            height = ds.sel(time=step)['layerheight'].to_numpy()
+            vardata = ds.sel(time=step)[var].to_numpy()
+            dens = ds.sel(time=step)['layerdensity'].to_numpy()
             if type(force_layers) == bool:
                 layers_to_plot = np.where(dens < dens_lim)[0]
             else:
@@ -1121,12 +1167,15 @@ def visualize_layers(ds,bin,dates,vars,force_layers=False,
             vardata = np.flip(vardata[layers_to_plot])
             if var in ['layerwater']:
                 vardata = vardata / height / 1000 * 100
+            if var in ['layerrefreeze']:
+                vardata = vardata
             # if plot_ice:
             #     height = np.log(height)
 
             bottom = 0
-            ctypes = {'layerBC':'Greys','layerdust':'Oranges','layertemp':'viridis',
-                'layerdensity':'Greens','layerwater':'Blues','layergrainsize':'Purples'}
+            ctypes = {'layerBC':'Greys','layerdust':'Oranges','layertemp':'plasma',
+                'layerdensity':'Greens','layerwater':'Blues','layergrainsize':'Purples',
+                'layerrefreeze':'Reds'}
             ctype = ctypes[var]
             if np.sum(height) < 0.05 and first and not last and step.month<9:
                 last = step
@@ -1143,7 +1192,8 @@ def visualize_layers(ds,bin,dates,vars,force_layers=False,
             #     ax.axvline(step,lw=0.7,color='red')
         # Add colorbar
         units = {'layerBC':'ppb','layerdust':'ppm','layertemp':'$^{\circ}$C',
-                'layerdensity':'kg m$^{-3}$','layerwater':'%','layergrainsize':'um'}
+                'layerdensity':'kg m$^{-3}$','layerwater':'%','layergrainsize':'um',
+                'layerrefreeze':'kg m-2'}
         sm = mpl.cm.ScalarMappable(cmap=ctype,norm=plt.Normalize(bounds[0],bounds[1]))
         leg = plt.colorbar(sm,ax=ax,aspect=7)
         leg.ax.tick_params(labelsize=9)
@@ -1156,8 +1206,6 @@ def visualize_layers(ds,bin,dates,vars,force_layers=False,
         ax.tick_params(length=5)
         if ylim:
             ax.set_ylim(ylim)
-        snowdepth = ds.sel(time=dates,bin=bin)
-        # ax.plot(snowdepth.time,snowdepth.snowdepth,'k--')
     # Customize plot     
     ylabel = 'Height above ice (m)'
     fig.supylabel(ylabel,)
@@ -1177,6 +1225,7 @@ def visualize_layers(ds,bin,dates,vars,force_layers=False,
 
     # Show plot
     # plt.show()
+    return fig,ax
 
 def plot_single_layer(ds,layer,vars,time,cumMB=False,t='',vline=None,res='h',resample=False):
     if len(time) == 2:
@@ -1191,23 +1240,22 @@ def plot_single_layer(ds,layer,vars,time,cumMB=False,t='',vline=None,res='h',res
     for i,var in enumerate(vars):
         if vline:
             axes[i].axvline(vline,c='r',linewidth=0.6)
-        for bin in ds.coords['bin'].values:
-            if 'layer' in var:
-                dsvar = ds.resample(time=res).mean() if resample else ds
-                lprop = dsvar.sel(time=time,bin=bin,layer=layer)[var].to_numpy()
+        if 'layer' in var:
+            dsvar = ds.resample(time=res).mean() if resample else ds
+            lprop = dsvar.sel(time=time,layer=layer)[var].to_numpy()
+        else:
+            if var in ['melt','runoff','accum','refreeze'] and cumMB:
+                dsvar = ds.resample(time=res).sum() if resample else ds
+                lprop = dsvar.sel(time=time)[var].cumsum().to_numpy()
             else:
-                if var in ['melt','runoff','accum','refreeze'] and cumMB:
-                    dsvar = ds.resample(time=res).sum() if resample else ds
-                    lprop = dsvar.sel(time=time,bin=bin)[var].cumsum().to_numpy()
-                else:
-                    dsvar = ds.resample(time=res).sum() if resample else ds
-                    lprop = dsvar.sel(time=time,bin=bin)[var].to_numpy()
-            axes[i].plot(time,lprop,label='bin '+str(bin))
-            axes[i].legend()
-            axes[i].set_title(varprops[var]['label'])
-            if 'Cum.' in varprops[var]['label'] and not cumMB:
-                axes[i].set_title(varprops[var]['label'][5:])
-            axes[i].set_ylabel(varprops[var]['units'])
+                dsvar = ds.resample(time=res).sum() if resample else ds
+                lprop = dsvar.sel(time=time)[var].to_numpy()
+        axes[i].plot(time,lprop)
+        axes[i].legend()
+        axes[i].set_title(varprops[var]['label'])
+        if 'Cum.' in varprops[var]['label'] and not cumMB:
+            axes[i].set_title(varprops[var]['label'][5:])
+        axes[i].set_ylabel(varprops[var]['units'])
     if end - start > pd.Timedelta(days=365):
         date_form = mpl.dates.DateFormatter('%d %b %y')
     else:
@@ -1215,46 +1263,4 @@ def plot_single_layer(ds,layer,vars,time,cumMB=False,t='',vline=None,res='h',res
     axes[i].xaxis.set_major_formatter(date_form)
     fig.suptitle(t)
     plt.show()
-    return
-
-def plot_monthly_layer_avgs(file,var,dates_to_plot):
-    ds = xr.open_dataset(file)
-    fig,axes = plt.subplots(1,len(dates_to_plot),sharey=True,sharex=True,figsize=(8,4)) #,sharex=True,sharey='row'
-    df = ds['snowdepth'].to_pandas()
-    snowdepth_monthly = df.resample('M').mean()
-    # for each month, find average snow depth
-    # interpolate the variable of interest at new depths, with max depth being the average snow depth of the month
-    # take mean of resampled variables
-    # plot new depths vs. monthly means
-    ax=0
-    for month in range(12):
-        snowdepth = snowdepth_monthly.iloc[month]
-        for bin_no in [0,1,2]:
-            var_data = ds[var].isel(bin=bin_no).to_numpy()
-            depth_data = ds['layerheight'].isel(bin=bin_no).to_numpy()
-            new_depths = np.linspace(0,snowdepth.iloc[bin_no],20)
-
-            zeros = np.zeros((len(ds.coords['time'].values),20))
-            var_interp = zeros.copy()
-            for i,t in enumerate(ds.coords['time'].values):
-                var_interp[i,:] = np.interp(new_depths,depth_data[i,:],var_data[i,:])
-            da = xr.DataArray(data=var_interp,
-                    coords=dict(
-                        time=(['time'],ds.coords['time'].values),
-                        depth=(['depth'],new_depths)
-                        ))
-            da_monthly = da.resample(time='M').mean()
-            if month in months_to_plot:
-                axes[ax].plot(da.isel(time=month).data,-1*da.coords['depth'].values,label='Bin '+str(bin_no))
-        if month in months_to_plot: 
-            axes[ax].set_xlabel(var)
-            axes[0].set_ylabel('Depth (m)')
-            month_dict = {'0':'Jan','1':'Feb','2':'Mar','3':'Apr','4':'May','5':'Jun',
-                        '6':'Jul','7':'Aug','8':'Sept','9':'Oct','10':'Nov','11':'Dec'}
-            axes[ax].set_title(month_dict[str(month)])
-            axes[ax].axhline(-snowdepth[0],color=colors[0],linestyle='--')
-            axes[ax].axhline(-snowdepth[1],color=colors[1],linestyle='--')
-            axes[ax].axhline(-snowdepth[2],color=colors[2],linestyle='--')
-            ax += 1
-    axes[len(months_to_plot)-1].legend()
     return

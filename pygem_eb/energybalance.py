@@ -1,7 +1,7 @@
 """
 Energy balance class for PyGEM Energy Balance
 
-@author: cvwilson
+@author: clairevwilson
 """
 import pandas as pd
 import numpy as np
@@ -16,7 +16,7 @@ class energyBalance():
     MassBalance every timestep, so it stores the current climate data and 
     surface fluxes.
     """ 
-    def __init__(self,climate,time,bin_idx,dt):
+    def __init__(self,climate,time,dt,args):
         """
         Loads in the climate data at a given timestep to use in the surface energy balance.
 
@@ -27,30 +27,27 @@ class energyBalance():
             shortwave radiation, and total cloud cover.
         local_time : datetime
             Time to index the climate dataset.
-        bin_idx : int
-            Index number of the bin being run
         dt : float
             Resolution for the time loop [s]
         """
         # Unpack climate variables
         climateds_now = climate.cds.sel(time=time)
-        # Bin-dependent variables indexed by bin_idx
-        self.tempC = climateds_now['bin_temp'].to_numpy()[bin_idx]
-        self.tp = climateds_now['bin_tp'].to_numpy()[bin_idx]
-        self.sp = climateds_now['bin_sp'].to_numpy()[bin_idx]
-        # Elevation-invariant variables
-        self.rH = climateds_now['rh'].to_numpy()
-        self.wind = climateds_now['wind'].to_numpy()
-        self.tcc = climateds_now['tcc'].to_numpy()
-        self.SWin_ds = climateds_now['SWin'].to_numpy()
-        self.SWout_ds = climateds_now['SWout'].to_numpy()
-        self.LWin_ds = climateds_now['LWin'].to_numpy()
-        self.LWout_ds = climateds_now['LWout'].to_numpy()
-        self.NR_ds = climateds_now['NR'].to_numpy()
-        self.bcdry = climateds_now['bcdry'].to_numpy()
-        self.bcwet = climateds_now['bcwet'].to_numpy()
-        self.dustdry = climateds_now['dustdry'].to_numpy()
-        self.dustwet = climateds_now['dustwet'].to_numpy()
+        self.tempC = climateds_now['temp'].values
+        self.tp = climateds_now['tp'].values
+        self.sp = climateds_now['sp'].values
+        self.rh = climateds_now['rh'].values
+        self.wind = climateds_now['wind'].values
+        self.tcc = climateds_now['tcc'].values
+        self.SWin_ds = climateds_now['SWin'].values
+        self.SWout_ds = climateds_now['SWout'].values
+        self.albedo_ds = climateds_now['albedo'].values
+        self.LWin_ds = climateds_now['LWin'].values
+        self.LWout_ds = climateds_now['LWout'].values
+        self.NR_ds = climateds_now['NR'].values
+        self.bcdry = climateds_now['bcdry'].values
+        self.bcwet = climateds_now['bcwet'].values
+        self.dustdry = climateds_now['dustdry'].values
+        self.dustwet = climateds_now['dustwet'].values
 
         # Define additional useful values
         self.tempK = self.tempC + 273.15
@@ -58,7 +55,10 @@ class energyBalance():
         self.dt = dt
         self.climateds = climate.cds
         self.time = time
-        self.rH = 100 if self.rH > 100 else self.rH
+        self.rh = 100 if self.rh > 100 else self.rh
+
+        # Adjust calibrated values
+        self.wind *= args.kw
 
         # Radiation terms
         self.measured_SWin = 'SWin' in climate.measured_vars
@@ -66,6 +66,7 @@ class energyBalance():
         self.nanSWout = True if np.isnan(self.SWout_ds) else False
         self.nanLWout = True if np.isnan(self.LWout_ds) else False
         self.nanNR = True if np.isnan(self.NR_ds) else False
+        self.nanalbedo = True if np.isnan(self.albedo_ds) else False
         return
 
     def surface_EB(self,surftemp,layers,albedo,days_since_snowfall,mode='sum'):
@@ -150,8 +151,16 @@ class energyBalance():
         spectral_weights = surface.spectral_weights
         assert np.abs(1-np.sum(spectral_weights)) < 1e-5, 'Solar weights dont sum to 1'
         
-        # SWin needs to be corrected for shade, unless measured
+        # SWin needs to be corrected for shade
         if self.measured_SWin:
+            # if point elev != AWS elev
+            # is AWS in the sun?
+            # if so: is the point in the sun?
+                # if so: just calcualte diffuse
+                # if not: neglect SWin, just diffuse
+            # if not: is the point in the sun?
+                # if so: COMPLICATED
+                # if not: SWin AWS = SWin point
             SWin = self.SWin_ds/self.dt
             self.SWin_sky = self.SWin_terr = np.nan
         else:
@@ -170,9 +179,13 @@ class energyBalance():
             self.SWin_terr = SWin_terrain
 
         # get reflected radiation
-        if self.nanSWout:
+        if self.nanSWout and self.nanalbedo:
             albedo = albedo[0] if len(spectral_weights) < 2 else albedo
             SWout = -np.sum(SWin*spectral_weights*albedo)
+        elif not self.nanalbedo:
+            albedo = self.albedo_ds
+            surface.bba = albedo
+            SWout = -SWin*albedo
         else:
             SWout = -self.SWout_ds/self.dt
             # store albedo
@@ -249,8 +262,9 @@ class energyBalance():
         surftemp : float
             Surface temperature of snowpack/ice [C]
         """
+        k_ice = eb_prms.k_ice
         if eb_prms.method_ground in ['MolgHardy']:
-            Qg = -eb_prms.k_ice * (surftemp - eb_prms.temp_temp) / eb_prms.temp_depth
+            Qg = -k_ice * (surftemp - eb_prms.temp_temp) / eb_prms.temp_depth
         else:
             assert 1==0, 'Ground flux method not accepted; choose from [\'MolgHardy\']'
         return Qg
@@ -289,12 +303,14 @@ class energyBalance():
         # ADJUST WIND SPEED
         z = 2 # reference height in m
         if eb_prms.wind_ref_height != 2:
-            self.wind *= np.log(2/roughness) / np.log(eb_prms.wind_ref_height/roughness)
+            wind_2m *= np.log(2/roughness) / np.log(eb_prms.wind_ref_height/roughness)
+        else:
+            wind_2m = self.wind
 
         # Transform humidity into mixing ratio (q), get air density from PV=nRT
         Ewz = self.vapor_pressure(self.tempC)  # vapor pressure at 2m
         Ew0 = self.vapor_pressure(surftemp) # vapor pressure at the surface
-        qz = (self.rH/100)*0.622*(Ewz/(self.sp-Ewz))
+        qz = (self.rh/100)*0.622*(Ewz/(self.sp-Ewz))
         q0 = 1.0*0.622*(Ew0/(self.sp-Ew0))
         density_air = self.sp/R_GAS/self.tempK*MM_AIR
 
@@ -312,16 +328,18 @@ class energyBalance():
         if eb_prms.method_turbulent in ['MO-similarity']:
             while loop:
                 # calculate stability terms
-                fric_vel = KARMAN*self.wind / (np.log(z/z0)-self.PhiM(z,L))
+                fric_vel = KARMAN*wind_2m / (np.log(z/z0)-self.PhiM(z,L))
                 cD = KARMAN**2/np.square(np.log(z/z0) - self.PhiM(z,L) - self.PhiM(z0,L))
                 csT = KARMAN*np.sqrt(cD) / (np.log(z/z0t) - self.PhiT(z,L) - self.PhiT(z0,L))
                 csQ = KARMAN*np.sqrt(cD) / (np.log(z/z0q) - self.PhiT(z,L) - self.PhiT(z0,L))
                 
                 # calculate fluxes
-                Qs = density_air*CP_AIR*csT*self.wind*(self.tempC - surftemp)
-                Ql = density_air*Lv*csQ*self.wind*(qz-q0)
+                Qs = density_air*CP_AIR*csT*wind_2m*(self.tempC - surftemp)
+                Ql = density_air*Lv*csQ*wind_2m*(qz-q0)
 
                 # recalculate L
+                if np.abs(Qs) < 1e-5:
+                    Qs = 1e-5 # prevent overflow errors
                 L = fric_vel**3*(self.tempK)*density_air*CP_AIR/(KARMAN*GRAVITY*Qs)
                 L = max(L,0.3) # DEBAM uses this limit to prevent over-stabilization
 
@@ -335,8 +353,8 @@ class energyBalance():
 
                 Qs_last = Qs
         elif eb_prms.method_turbulent in ['BulkRichardson']:   
-            if self.wind != 0:
-                RICHARDSON = GRAVITY/self.tempK*(self.tempC-surftemp)*(z-z0)/self.wind**2
+            if wind_2m != 0:
+                RICHARDSON = GRAVITY/self.tempK*(self.tempC-surftemp)*(z-z0)/wind_2m**2
             else:
                 RICHARDSON = 0
             csT = KARMAN**2/(np.log(z/z0) * np.log(z/z0t))
@@ -349,8 +367,8 @@ class energyBalance():
                 phi = 0
             
             # calculate fluxes
-            Qs = density_air*CP_AIR*csT*phi*self.wind*(self.tempC - surftemp)
-            Ql = density_air*Lv*csQ*phi*self.wind*(qz-q0)
+            Qs = density_air*CP_AIR*csT*phi*wind_2m*(self.tempC - surftemp)
+            Ql = density_air*Lv*csQ*phi*wind_2m*(qz-q0)
         else:
             assert 1==0, 'Choose turbulent method from MO-similarity or BulkRichardson'
         
@@ -423,12 +441,13 @@ class energyBalance():
         """
         # CONSTANTS
         ROUGHNESS_FRESH_SNOW = eb_prms.roughness_fresh_snow
+        ROUGHNESS_AGED_SNOW = eb_prms.roughness_aged_snow
         ROUGHNESS_FIRN = eb_prms.roughness_firn
         ROUGHNESS_ICE = eb_prms.roughness_ice
         AGING_RATE = eb_prms.roughness_aging_rate
 
         if layertype[0] in ['snow']:
-            sigma = min(ROUGHNESS_FRESH_SNOW + AGING_RATE * days_since_snowfall, ROUGHNESS_FIRN)
+            sigma = min(ROUGHNESS_FRESH_SNOW + AGING_RATE * days_since_snowfall, ROUGHNESS_AGED_SNOW)
         elif layertype[0] in ['firn']:
             sigma = ROUGHNESS_FIRN
         elif layertype[0] in ['ice']:
@@ -457,9 +476,9 @@ class energyBalance():
  
     def stable_PhiM(self,z,L):
         zeta = z/L
-        if zeta > 1.:
+        if zeta > 1:
             phim = -4*(1+np.log(zeta)) - zeta
-        elif zeta > 0.:
+        elif zeta > 0:
             phim = -5*zeta
         else:
             phim = 0

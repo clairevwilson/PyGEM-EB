@@ -6,7 +6,7 @@ Requirements: - DEM, slope and aspect rasters surrounding glacier
               - Coordinates for point to perform calculations
 
 1. Input site coordinates and time zone
-2. Load DEM, slope and aspect grid
+2. Load DEM and calculate slope/aspect
 3. Determine horizon angles
         Optional: plot horizon search
 4. Calculate sky-view factor
@@ -27,13 +27,14 @@ import pandas as pd
 import geopandas as gpd
 import argparse
 import suncalc
+import os
 from pyproj import Transformer
 from numpy import pi, cos, sin, arctan
 
 # =================== INPUTS ===================
-site_by = 'id'                  # method to choose lat/lon ('id' or 'latlon')
-site = 'B'                         # name of site for indexing .csv OR specify lat/lon
-lat,lon = [60.8155986,-139.1236350] # site lat/lon
+site_by = 'id'                      # method to choose lat/lon ('id' or 'latlon')
+site = 'B'                          # name of site for indexing .csv OR specify lat/lon
+lat,lon = [60.8155986,-139.1236350] # site latitude,longitude 
 timezone = pd.Timedelta(hours=-8)   # time zone of location
 glacier_name = 'Gulkana'            # name of glacier for labeling
 
@@ -50,42 +51,24 @@ get_diffuse = False # doesn't work yet
 assert get_shade or get_direct or get_diffuse, 'Why are you running this?'
 
 # model parameters
-time_freq = '30min'         # timestep in offset alias notation
-angle_step = 5              # step to calculate horizon angle (degrees)
-search_length = 5000        # distance to search from center point (m)
-sub_dt = 10                 # timestep to calculate solar corrections (minutes)
+time_freq = '30min'     # timestep in offset alias notation
+angle_step = 5          # step to calculate horizon angle (degrees)
+search_length = 5000    # distance to search from center point (m)
+sub_dt = 10             # timestep to calculate solar corrections (minutes)
+buffer = 20             # min num of gridcells away from which horizon can be found
 
-# =================== PARSE ARGS ===================
-parser = argparse.ArgumentParser(description='pygem-eb shading model')
-parser.add_argument('-latitude','--lat',action='store',default=lat)
-parser.add_argument('-longitude','--lon',action='store',default=lon)
-parser.add_argument('-site',action='store',default=site)
-parser.add_argument('-site_name',action='store',default=glacier_name)
-parser.add_argument('-site_by',action='store',default=site_by)
-parser.add_argument('-plot',action='store',default=plot)
-parser.add_argument('-store',action='store',default=store)
-args = parser.parse_args()
-args.site_name += args.site
-
-# =================== FILEPATHS ===================
+# =======+========= INPUT FILEPATHS =================
 # in
-site_fp = 'in/gulkana/gulkana_sites.csv' # if choosing lat/lon by site
-dem_fp = 'in/gulkana/Gulkana_DEM_20m.tif'
-aspect_fp = 'in/gulkana/Gulkana_Aspect_20m.tif'
-slope_fp = 'in/gulkana/Gulkana_Slope_20m.tif'
-# dem_fp = 'in/south/south_dem.tif'
-# aspect_fp = 'in/south/south_aspect.tif'
-# slope_fp = 'in/south/south_slope.tif'
-# optional shapefile for visualizing
-shp_fp = 'in/shapefile/Gulkana.shp'
-# optional solar radiation file for diffuse fraction
-# solar_fp = '/home/claire/research/climate_data/AWS/CNR4/cnr4_2023.csv'
-
-# out
-shade_fp = f'out/{args.site_name}_shade.csv'
-irr_fp = f'out/{args.site_name}_irr.csv'
-out_image_fp = f'plots/{args.site_name}.png'
-out_horizon_fp = f'plots/{args.site_name}_horizon.png'
+dem_fp = 'in/gulkana/Gulkana_DEM_20m.tif'   # DEM containing glacier + surroundings
+# if using get_diffuse, need a solar radiation file
+solar_fp = None # '/home/claire/research/climate_data/AWS/CNR4/cnr4_2023.csv'
+# optional: shapefile of glacier outline for plotting
+shp_fp = None # 'in/shapefile/Gulkana.shp'
+# optional: if choosing lat/lon by site, need site constants
+site_fp = '../data/Gulkana/site_constants.csv'
+# optional: slope/aspect .tif (can also be calculated from DEM)
+aspect_fp = None     # 'in/gulkana/Gulkana_aspect_20m.tif'
+slope_fp = None      # 'in/gulkana/Gulkana_slope_20m.tif'
 
 # =================== CONSTANTS ===================
 I0 = 1368       # solar constant in W m-2
@@ -108,67 +91,48 @@ class Shading():
     the sun or shade for every hour (or user-defined dt)
     of the year.
     """
-    def __init__(self,args):
+    def __init__(self):
         """
-        Initializes shading model.
+        Initializes shading model by opening the DEM and 
+        calculating slope and aspect.
         """
+        # Parse line args
+        args = self.parse_args()
         if args.site_by == 'id':
             # get site lat and lon    
-            latlon_df = pd.read_csv(site_fp,index_col=0)
-            args.lat = latlon_df.loc[args.site]['lat']    # latitude of point of interest
-            args.lon = latlon_df.loc[args.site]['lon']    # longitude of point of interest
+            site_df = pd.read_csv(site_fp,index_col=0)
+            args.lat = site_df.loc[args.site]['lat']    # latitude of point of interest
+            args.lon = site_df.loc[args.site]['lon']    # longitude of point of interest
             args.site_name = glacier_name + args.site
+            self.site_df = site_df
 
         # =================== SETUP ===================
-        # open files
-        dem = rxr.open_rasterio(dem_fp).isel(band=0)
-        aspect = rxr.open_rasterio(aspect_fp).isel(band=0)
-        slope = rxr.open_rasterio(slope_fp).isel(band=0)
-        self.dem_res = dem.rio.resolution()[0]
+        # load the DEM
+        self.load_dem()
 
-        # ensure same coordinates
-        shapefile = gpd.read_file(shp_fp).set_crs(epsg=4326)
-        shapefile = shapefile.to_crs(dem.rio.crs)
-
-        # filter nans
-        dem = dem.where(dem > 0)
-        aspect = aspect.where(aspect > 0)
-        slope = slope.where(slope > 0)
-
-        # get min/max elevation for plotting
-        self.min_elev = int(np.round(np.min(dem.values)/100,0)*100)
-        self.max_elev = int(np.round(np.max(dem.values)/100,0)*100)
-
-        # get UTM coordinates from lat/lon
-        transformer = Transformer.from_crs('EPSG:4326', dem.rio.crs, always_xy=True)
-        xx, yy = transformer.transform(args.lon, args.lat)
-        # check point is in bounds
-        bounds = np.array(dem.rio.bounds())
-        x_in = xx >= bounds[0] and xx <= bounds[2]
-        y_in = yy >= bounds[1] and yy <= bounds[3]
-        assert x_in and y_in,'point out of raster bounds'
-        self.xx = xx
-        self.yy = yy
-        # get elevation of point from grid
-        self.point_elev = dem.sel(x=xx, y=yy, method='nearest').values
-
-        # get slope and aspect at point of interest
-        asp = aspect.sel(x=xx, y=yy, method='nearest').values * pi/180
-        slp = slope.sel(x=xx, y=yy, method='nearest').values * pi/180
-        print(f'{args.site_name} point stats:')
-        print(f'        elevation: {self.point_elev:.0f} m a.s.l.')
-        print(f'        aspect: {asp*180/pi:.1f} o')
-        print(f'        slope: {slp*180/pi:.2f} o')
+        # output filepaths
+        self.shade_fp = f'out/{args.site_name}_shade.csv'
+        self.irr_fp = f'out/{args.site_name}_irr.csv'
+        self.out_image_fp = f'plots/{args.site_name}.png'
+        self.out_horizon_fp = f'plots/{args.site_name}_horizon.png'
 
         # out
         self.args = args
-        self.dem = dem
-        self.slope = slope
-        self.aspect = aspect
-        self.shapefile = shapefile
-        self.asp = asp
-        self.slp = slp
         return
+
+    def parse_args(self):
+        # =================== PARSE ARGS ===================
+        parser = argparse.ArgumentParser(description='pygem-eb shading model')
+        parser.add_argument('-latitude','--lat',action='store',default=lat)
+        parser.add_argument('-longitude','--lon',action='store',default=lon)
+        parser.add_argument('-site',action='store',default=site)
+        parser.add_argument('-site_name',action='store',default=glacier_name)
+        parser.add_argument('-site_by',action='store',default=site_by)
+        parser.add_argument('-plot',action='store',default=plot)
+        parser.add_argument('-store',action='store',default=store)
+        args = parser.parse_args()
+        args.site_name += args.site
+        return args
     
     def main(self):
         """
@@ -195,15 +159,16 @@ class Shading():
         # store results
         if 'result' in args.store:
             if get_shade:
-                df['shaded'].astype(bool).to_csv(shade_fp,
+                df['shaded'].astype(bool).to_csv(self.shade_fp,
                                                 header=f'skyview={self.sky_view}')
             if get_direct:
-                df['dirirrslope'].astype(bool).to_csv(irr_fp,
+                df['dirirrslope'].astype(bool).to_csv(self.irr_fp,
                                                 header=f'skyview={self.sky_view}')
 
         # get diffuse fraction from incoming solar data
         if get_diffuse:
             self.diffuse(df)
+        return
 
     # =================== FUNCTIONS ===================
     def r_sun(self,time):
@@ -243,7 +208,7 @@ class Shading():
         # get starting coordinates
         start_x = self.xx
         start_y = self.yy
-        step_size = self.dem_res
+        step_size = self.x_res
 
         # convert angle to radians and make 0 north
         rad = angle * pi/180 + pi/2
@@ -266,14 +231,85 @@ class Shading():
             xs = np.ones(n_steps) * start_x
         
         return xs,ys
+    
+    def load_dem(self,dem_fp):
+        """
+        Loads the DEM and calculates aspect and slope from it.
+        """
+        # open files
+        dem = rxr.open_rasterio(dem_fp).isel(band=0)
+        self.x_res = dem.rio.resolution()[0]
+        self.y_res = dem.rio.resolution()[1]
 
-    def find_horizon_point(self,elev,xs,ys,buffer = 10):
+        if 'search' in self.args.plot and shp_fp:
+            # load shapefile and ensure same coordinates
+            shapefile = gpd.read_file(shp_fp).set_crs(epsg=4326)
+            shapefile = shapefile.to_crs(dem.rio.crs)
+            self.shapefile = shapefile
+
+        # filter nans
+        dem = dem.where(dem > 0)
+
+        # if specified aspect/slope files:
+        if aspect_fp and slope_fp:
+            # open files
+            aspect = rxr.open_rasterio(aspect_fp).isel(band=0)
+            slope = rxr.open_rasterio(slope_fp).isel(band=0)
+
+            # filter nans and convert to radians
+            aspect = aspect.where(aspect > 0)*np.pi/180
+            slope = slope.where(slope > 0)*np.pi/180
+        else:
+            # calculate gradient from DEM
+            dx,dy = np.gradient(dem,self.y_res,self.x_res)
+            # calculate slope and aspect from gradient
+            slope = np.arctan(np.sqrt(dx**2 + dy**2))
+            aspect = np.arctan2(-dy,-dx)
+            # adjust so 0 is North
+            aspect = (aspect + 2*np.pi) % (2*np.pi) 
+            # store in a DataArray
+            slope = xr.DataArray(slope, dims=['y', 'x'], coords={'y': dem.y, 'x': dem.x})
+            aspect = xr.DataArray(aspect, dims=['y', 'x'], coords={'y': dem.y, 'x': dem.x})
+
+        # get min/max elevation for plotting
+        self.min_elev = int(np.round(np.min(dem.values)/100,0)*100)
+        self.max_elev = int(np.round(np.max(dem.values)/100,0)*100)
+
+        # get UTM coordinates from lat/lon
+        transformer = Transformer.from_crs('EPSG:4326', dem.rio.crs, always_xy=True)
+        xx, yy = transformer.transform(args.lon, args.lat)
+        # check point is in bounds
+        bounds = np.array(dem.rio.bounds())
+        x_in = xx >= bounds[0] and xx <= bounds[2]
+        y_in = yy >= bounds[1] and yy <= bounds[3]
+        assert x_in and y_in,'point out of raster bounds'
+        self.xx = xx
+        self.yy = yy
+
+        # get elevation of point from grid
+        self.point_elev = dem.sel(x=xx, y=yy, method='nearest').values
+
+        # get slope and aspect at point of interest
+        point_aspect = aspect.sel(x=xx, y=yy, method='nearest').values
+        point_slope = slope.sel(x=xx, y=yy, method='nearest').values
+        print(f'{self.args.site_name} point stats:')
+        print(f'        elevation: {self.point_elev:.0f} m a.s.l.')
+        print(f'        aspect: {point_aspect*180/pi:.1f} o')
+        print(f'        slope: {point_slope*180/pi:.2f} o')
+
+        # out
+        self.dem = dem
+        self.slope = slope
+        self.aspect = aspect
+        self.point_aspect = point_aspect
+        self.point_slope = point_slope
+        return
+
+    def find_horizon_point(self,elev,xs,ys):
         """Finds the horizon along a line of elevation
         values paired to x,y coordinates
         - elev: array of elevations in a single direction
-        - xs, ys: coordinates corresponding to elev
-        - buffer: minimum number of gridcells away the horizon 
-                can be found (needed when looking uphill)"""
+        - xs, ys: coordinates corresponding to elev"""
         # calculate distance from origin and height relative to origin
         distances = np.sqrt((xs-self.xx)**2+(ys-self.yy)**2)
         distances[np.where(distances < 1e-3)[0]] = 1e-6
@@ -293,10 +329,13 @@ class Shading():
     def find_horizon(self):
         args = self.args
         # plot DEM as background
-        if 'search' in args.plot:
+        if 'search' in args.plot and shp_fp:
             fig,ax = plt.subplots(figsize=(6,6))
             self.dem.plot(ax=ax,cmap='viridis')
             self.shapefile.plot(ax=ax,color='none',edgecolor='black',linewidth=1.5)
+            plt.axis('equal')
+        elif 'search' in args.plot:
+            fig,ax = plt.subplots(figsize=(6,6))
             plt.axis('equal')
 
         # loop through angles
@@ -393,7 +432,7 @@ class Shading():
                 period_dict['shaded'] = np.append(period_dict['shaded'],shaded)
 
                 # incident angle calculation
-                cosTHETA = cos(self.slp)*cos(Z) + sin(self.slp)*sin(Z)*cos(sun_az - self.asp)
+                cosTHETA = cos(self.point_slope)*cos(Z) + sin(self.point_slope)*sin(Z)*cos(sun_az - self.point_aspect)
                 Icorr = I * min(cosTHETA/cos(Z),5) * (shaded-1)*-1
                 period_dict['corr_factor'] = np.append(period_dict['corr_factor'],min(cosTHETA/cos(Z),5))
                 period_dict['Icorr'] = np.append(period_dict['Icorr'],Icorr)
@@ -521,7 +560,16 @@ class Shading():
         else:
             plt.show()
 
+    def store_site_info(self):
+        self.site_df.loc[args.site,'sky_view'] = self.sky_view
+        self.site_df.loc[args.site,'slope'] = self.point_slope*180/pi
+        self.site_df.loc[args.site,'aspect'] = self.point_aspect*180/pi
+        self.site_df.loc[args.site,'elevation'] = int(self.point_elev)
+        self.site_df.to_csv(site_fp)
+        print(f'Saved sky view, slope, aspect and elevation to {site_fp}')
+
 # RUN MODEL
-if run_model:
-    model = Shading(args)
+if __name__ == '__main__':
+    model = Shading()
     model.main()
+    model.store_site_info()

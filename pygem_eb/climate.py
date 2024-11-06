@@ -1,3 +1,8 @@
+"""
+Climate class for PyGEM Energy Balance
+
+@author: clairevwilson
+"""
 import numpy as np
 import xarray as xr
 import pandas as pd
@@ -21,16 +26,15 @@ class Climate():
         self.dates = pd.date_range(args.startdate,args.enddate,freq='h')
         self.dates_UTC = self.dates - eb_prms.timezone
         n_time = len(self.dates)
-        n_bins = args.n_bins
-        bin_idx = np.arange(0,n_bins)
+        self.elev = args.elev
 
         # glacier cenlat and lon
-        if eb_prms.glac_no == ['01.00570']:
-            self.lat = eb_prms.site_df.loc[eb_prms.site]['lat']
-            self.lon = eb_prms.site_df.loc[eb_prms.site]['lon']
-        else:
-            self.lat = glacier_table['CenLat'].values
-            self.lon = glacier_table['CenLon'].values
+        # if eb_prms.glac_no == ['01.00570']:
+        #     self.lat = args.site_df.loc[args.site]['lat']
+        #     self.lon = eb_prms.site_df.loc[args.site]['lon']
+        # else:
+        self.lat = glacier_table['CenLat'].values
+        self.lon = glacier_table['CenLon'].values
 
         # define reanalysis variables
         self.get_vardict()
@@ -41,15 +45,14 @@ class Climate():
 
         # create empty dataset
         nans = np.ones(n_time)*np.nan
-        bin_nans = np.array([nans]*n_bins).reshape(n_bins,n_time)
         self.cds = xr.Dataset(data_vars = dict(
-                bin_elev = (['bin'],eb_prms.bin_elev,{'units':'m a.s.l.'}),
                 SWin = (['time'],nans,{'units':'J m-2'}),
                 SWout = (['time'],nans,{'units':'J m-2'}),
+                albedo = (['time'],nans,{'units':'-'}),
                 LWin = (['time'],nans,{'units':'J m-2'}),
                 LWout = (['time'],nans,{'units':'J m-2'}),
                 NR = (['time'],nans,{'units':'J m-2'}),
-                tcc = (['time'],nans,{'units':'1'}),
+                tcc = (['time'],nans,{'units':'-'}),
                 rh = (['time'],nans,{'units':'%'}),
                 uwind = (['time'],nans,{'units':'m s-1'}),
                 vwind = (['time'],nans,{'units':'m s-1'}),
@@ -59,17 +62,12 @@ class Climate():
                 bcwet = (['time'],nans,{'units':'kg m-2 s-1'}),
                 dustdry = (['time'],nans,{'units':'kg m-2 s-1'}),
                 dustwet = (['time'],nans,{'units':'kg m-2 s-1'}),
-                bin_temp = (['bin','time'],bin_nans,{'units':'C'}),
-                bin_tp = (['bin','time'],bin_nans,{'units':'m'}),
-                bin_sp = (['bin','time'],bin_nans,{'units':'Pa'})
+                temp = (['time'],nans,{'units':'C'}),
+                tp = (['time'],nans,{'units':'m'}),
+                sp = (['time'],nans,{'units':'Pa'})
                 ),
-                coords = dict(
-                    bin=(['bin'],bin_idx),
-                    time=(['time'],self.dates)
-                    ))
-    
+                coords = dict(time=(['time'],self.dates)))
         self.n_time = n_time
-        self.n_bins = n_bins
         return
     
     def get_AWS(self,fp):
@@ -84,8 +82,8 @@ class Climate():
         # check dates of data match input dates
         data_start = pd.to_datetime(df.index.to_numpy()[0])
         data_end = pd.to_datetime(df.index.to_numpy()[-1])
-        assert self.dates[0] >= data_start, 'Check input dates: start date before range of AWS data'
-        assert self.dates[len(self.dates)-1] <= data_end, 'Check input dates: end date after range of AWS data'
+        assert self.dates[0] >= data_start, f'Check input dates: start date before range of AWS data ({data_start})'
+        assert self.dates[len(self.dates)-1] <= data_end, f'Check input dates: end date after range of AWS data ({data_end})'
         
         # reindex in case of MERRA-2 half-hour timesteps
         new_index = pd.DatetimeIndex(self.dates)
@@ -96,21 +94,14 @@ class Climate():
         self.AWS_elev = df.iloc[0]['z']
 
         # get the available variables
-        all_AWS_vars = ['temp','tp','rh','wind','sp','SWin','SWout','NR',
+        all_AWS_vars = ['temp','tp','rh','wind','sp','SWin','SWout','albedo','NR',
                     'LWin','LWout','bcwet','bcdry','dustwet','dustdry']
         AWS_vars = df.columns
         self.measured_vars = list(set(all_AWS_vars) & set(AWS_vars))
         
         # extract and store data
         for var in self.measured_vars:
-            data = df[var]
-            # adjust elevation-dependent variables
-            if var in ['temp','tp','sp']:
-                data = self.bin_adjust(data, var, self.AWS_elev)
-                varname = 'bin_' + var
-            else:
-                varname = var
-            self.cds[varname].values = data.astype(float)
+            self.cds[var].values = df[var].astype(float)
 
         # figure out which data is still needed from reanalysis
         need_vars = [e for e in self.all_vars if e not in AWS_vars]
@@ -127,28 +118,21 @@ class Climate():
         lon = self.lon
         self.need_vars = vars
         use_threads = self.args.use_threads
-                
+        
+        interpolate = dates[0].minute != 30 and eb_prms.reanalysis == 'MERRA2'
+        
         # get reanalysis data geopotential
         z_fp = self.reanalysis_fp + self.var_dict['elev']['fn']
-        z_vn = self.var_dict['elev']['vn']
-        zds = xr.open_dataset(z_fp)
+        zds = xr.open_dataarray(z_fp)
         zds = zds.sel({self.lat_vn:lat,self.lon_vn:lon},method='nearest')
         zds = self.check_units('elev',zds)
-        self.reanalysis_elev = zds.isel(time=0)[z_vn].values
+        self.reanalysis_elev = zds.isel(time=0).values.ravel()[0]
 
         # define worker function for threading
         def access_cell(fn, var, result_dict):
             # open and check units of climate data
             ds = xr.open_dataset(fn)
-            if var != 'elev':
-                dep_var = 'bc' in var or 'dust' in var
-                if not dep_var and eb_prms.reanalysis == 'ERA5-hourly':
-                    assert dates[0] >= pd.to_datetime(ds.time.values[0])
-                    assert dates[-1] <= pd.to_datetime(ds.time.values[-1])
-                    ds = ds.interp(time=dates)
-                else:
-                    ds = ds.sel(time=dates)
-            ds = self.check_units(var,ds)
+
             # index by lat and lon
             vn = self.var_dict[var]['vn'] 
             lat_vn,lon_vn = [self.lat_vn,self.lon_vn]
@@ -156,16 +140,25 @@ class Climate():
                 if eb_prms.reanalysis == 'ERA5-hourly':
                     lat_vn,lon_vn = ['lat','lon']
             ds = ds.sel({lat_vn:lat,lon_vn:lon}, method='nearest')[vn]
+
+            # check the units
+            ds = self.check_units(var,ds)
+
+            if var != 'elev':
+                dep_var = 'bc' in var or 'dust' in var
+                if not dep_var and eb_prms.reanalysis == 'ERA5-hourly':
+                    assert dates[0] >= pd.to_datetime(ds.time.values[0])
+                    assert dates[-1] <= pd.to_datetime(ds.time.values[-1])
+                    ds = ds.interp(time=dates)
+                elif interpolate:
+                    ds = ds.interp(time=dates)
+                else:
+                    ds = ds.sel(time=dates)
+            
             assert np.abs(ds.coords[lat_vn].values - float(lat)) <= 0.5, 'Wrong grid cell accessed'
             assert np.abs(ds.coords[lon_vn].values - float(lon)) <= 0.5, 'Wrong grid cell accessed'
-            data = ds.values
-            # adjust elevation-dependent variables
-            if var in ['temp','tp','sp']:
-                data = self.bin_adjust(data.ravel(), var, self.reanalysis_elev)
-            else:
-                data = data.ravel()
             # store result
-            result_dict[var] = data
+            result_dict[var] = ds.values.ravel()
             ds.close()
             if not use_threads:
                 return result_dict
@@ -191,7 +184,8 @@ class Climate():
                                         args=(fn, var, all_data))
                 thread.start()
                 threads.append(thread)
-            else: all_data = access_cell(fn,var,all_data)
+            else:
+                all_data = access_cell(fn,var,all_data)
         if use_threads:
             # join threads
             for thread in threads:
@@ -199,19 +193,17 @@ class Climate():
 
         # store data
         for var in vars:
-            if var in ['temp','tp','sp']:
-                varname = 'bin_'+var
-            elif var == 'wind':
+            if var == 'wind':
                 varname = 'uwind'
                 self.cds[varname].values = all_data[varname]
                 varname = 'vwind'
                 var = 'vwind'
             else:
                 varname = var
-            self.cds[varname].values = all_data[var]
+            self.cds[varname].values = all_data[var].ravel()
         return
 
-    def bin_adjust(self, data, var, elev_data):
+    def adjust_to_elevation(self):
         """
         Adjusts elevation-dependent climate variables (temperature, precip,
         surface pressure).
@@ -219,32 +211,38 @@ class Climate():
         Parameters
         =========
         """
-        out = np.zeros((self.n_bins,self.n_time))
-        
-        #Loop through each elevation bin and adjust climate variables
-        for idx,z in enumerate(eb_prms.bin_elev):
-            # TEMPERATURE: correct according to lapserate
-            if var == 'temp':
-                out[idx,:] = data + eb_prms.lapserate*(z-elev_data)
+        # CONSTANTS
+        LAPSE_RATE = eb_prms.lapserate
+        PREC_GRAD = eb_prms.precgrad
+        GRAVITY = eb_prms.gravity
+        R_GAS = eb_prms.R_gas
+        MM_AIR = eb_prms.molarmass_air
 
-            # PRECIP: correct according to lapserate, precipitation factor
-            elif var == 'tp':
-                if '__iter__' in dir(eb_prms.kp):
-                    out[idx,:] = data*(1+eb_prms.precgrad*(z-elev_data))*eb_prms.kp[idx]
-                else:
-                    out[idx,:] = data*(1+eb_prms.precgrad*(z-elev_data))*eb_prms.kp
+        # TEMPERATURE: correct according to lapserate
+        temp_elev = self.AWS_elev if 'temp' in self.measured_vars else self.reanalysis_elev
+        new_temp = self.cds.temp.values + LAPSE_RATE*(self.elev - temp_elev)
+        if 'gulkana_22yrs' in eb_prms.AWS_fn and 'temp' in self.measured_vars:
+            new_temp -= 1
+            print('Reducing temperature for on-ice weather station')
+            
+        # PRECIP: correct according to lapse rate
+        tp_elev = self.AWS_elev if 'tp' in self.measured_vars else self.reanalysis_elev
+        new_tp = self.cds.tp.values*(1+PREC_GRAD*(self.elev-tp_elev))
 
-            # SURFACE PRESSURE: correct according to barometric law
-            elif var == 'sp':
-                out[idx,:] = data
-                # **** FIGURE THIS OUT TO ACTUALLY ADJUST BY ELEVATION
-                # temp_data = self.cds.sel(bin=idx)['bin_temp']
-                # out[idx,:] = data*np.power((data + eb_prms.lapserate*(z-elev_data)+273.15)/(temp_data+273.15),
-                #                 -eb_prms.gravity*eb_prms.molarmass_air/(eb_prms.R_gas*eb_prms.lapserate))
-        return out
+        # SURFACE PRESSURE: correct according to barometric law
+        sp_elev = self.AWS_elev if 'sp' in self.measured_vars else self.reanalysis_elev
+        temp_sp_elev = new_temp + LAPSE_RATE*(sp_elev - self.elev) + 273.15
+        ratio = ((new_temp + 273.15) / temp_sp_elev) ** (-GRAVITY*MM_AIR/(R_GAS*LAPSE_RATE))
+        new_sp = self.cds.sp.values * ratio
+
+        # Store adjusted values
+        self.cds.temp.values = new_temp.ravel()
+        self.cds.tp.values = new_tp.ravel()
+        self.cds.sp.values = new_sp.ravel()
+        return
     
     def check_ds(self):
-        # need to get wind from u/v components in reanalysis data      
+        # If using reanalysis wind, get wind from u/v components  
         wind = self.cds['wind'].values
         if np.all(np.isnan(wind)):
             uwind = self.cds['uwind'].values
@@ -254,69 +252,106 @@ class Climate():
             self.cds['wind'].values = wind
             self.cds['winddir'].values = winddir
 
-        # adjust MERRA-2 temperature bias (varies by month of the year)
+        # Add MERRA-2 temperature bias
         temp_filled = True if not self.args.use_AWS else 'temp' in self.need_vars
         if eb_prms.temp_bias_adjust and temp_filled:
             self.adjust_temp_bias()
 
-        # check all variables are there
+        # Adjust elevation dependence
+        self.adjust_to_elevation()
+        
+        # Adjust MERRA-2 deposition by reduction coefficient
+        if eb_prms.reanalysis == 'MERRA2':
+            self.adjust_dep()
+
+        # Check all variables are there
         failed = []
         for var in self.all_vars:
-            varname = 'bin_'+var if var in ['temp','tp','sp'] else var
-            data = self.cds[varname].values
-            if np.all(np.isnan(data)):
+            data = self.cds[var].values
+            if np.any(np.isnan(data)):
                 failed.append(var)
+        # Can input net radiation instead of incoming longwave
         if 'LWin' in failed and 'NR' in self.measured_vars:
-            failed.drop('LWin')
+            failed.remove('LWin')
         if len(failed) > 0:
-            print('Missing data:',failed)
+            print('Missing data from',failed)
             quit()
 
+        # Store the dataset as a netCDF
         if eb_prms.store_climate:
-            name = eb_prms.glac_name
-            out_fp = eb_prms.output_name.replace(name,name+'_climate')
+            out_fp = eb_prms.output_filepath + self.args.out + 'climate'
             self.cds.to_netcdf(out_fp+'.nc')
-            print('Climate dataset saved to ',out_fp+'.nc')
+            print('Climate dataset saved to',out_fp+'.nc')
         return
     
     def check_units(self,var,ds):
+        # Define the units the model needs
         model_units = {'temp':'C','uwind':'m s-1','vwind':'m s-1',
                        'rh':'%','sp':'Pa','tp':'m s-1','elev':'m',
-                       'SWin':'J m-2', 'LWin':'J m-2', 'tcc':'1',
+                       'SWin':'J m-2', 'LWin':'J m-2', 'tcc':'-',
                        'bcdry':'kg m-2 s-1', 'bcwet':'kg m-2 s-1',
                        'dustdry':'kg m-2 s-1', 'dustwet':'kg m-2 s-1'}
-        vn = list(ds.keys())[0]
-        units_in =  ds[vn].attrs['units'].replace('*','')
+        
+        # Get the current variable's units
+        units_in = ds.attrs['units'].replace('*','')
         units_out = model_units[var]
+
+        # Check and make replacements
         if units_in != units_out:
             if var == 'temp' and units_in == 'K':
-                ds[vn] = ds[vn] - 273.15
-            elif var == 'rh' and units_in in ['1','0-1']:
-                ds[vn] = ds[vn] * 100
+                ds = ds - 273.15
+            elif var == 'rh' and units_in in ['-','0-1']:
+                ds  = ds * 100
             elif var == 'tp':
                 if units_in == 'kg m-2 s-1':
-                    ds[vn] = ds[vn] / 1000 * 3600
+                    ds = ds / 1000 * 3600
                 elif units_in == 'm':
-                    ds[vn] = ds[vn] / 3600
+                    ds = ds / 3600
             elif var == 'SWin' and units_in == 'W m-2':
-                ds[vn] = ds[vn] * 3600
+                ds = ds * 3600
             elif var == 'LWin' and units_in == 'W m-2':
-                ds[vn] = ds[vn] * 3600
+                ds = ds * 3600
             elif var == 'elev' and units_in in ['m+2 s-2','m2 s-2']:
-                ds[vn] = ds[vn] / eb_prms.gravity
+                ds = ds / eb_prms.gravity
             else:
                 print(f'WARNING: units did not match for {var} but were not updated')
                 print(f'Previously {units_in}; should be {units_out}')
-                print('Make a manual change in utils.py')
+                print('Make a manual change in check_units (climate.py)')
                 quit()
         return ds
     
+    def adjust_dep(self):
+        """
+        Updates deposition based on preprocessed reduction coefficients
+        """
+        fn = self.reanalysis_fp + 'merra2_to_ukesm_conversion_map_MERRAgrid.nc'
+        ds_f = xr.open_dataarray(fn)
+        ds_f = ds_f.sel({self.lat_vn:self.lat,self.lon_vn:self.lon},method='nearest')
+        f = ds_f.mean('time').values.ravel()[0]
+        # To do time-moving monthly factors:
+        # for date in ds_f.time.values:
+        #     # select the reduction coefficient of the current month
+        #     f = ds_f.sel(time=date).values[0]
+        #     # index the climate dataset by the month and year
+        #     month = pd.to_datetime(date).month
+        #     year = pd.to_datetime(date).year
+        #     idx_month = np.where(self.cds.coords['time'].dt.month.values == month)[0]
+        #     idx_year = np.where(self.cds.coords['time'].dt.year.values == year)[0]
+        #     idx = list(set(idx_month)&set(idx_year))
+        #     # update dry and wet BC deposition
+        #     self.cds['bcdry'][{'time':idx}] = self.cds['bcdry'][{'time':idx}] * f
+        #     self.cds['bcwet'][{'time':idx}] = self.cds['bcwet'][{'time':idx}] * f
+        self.cds['bcdry'].values *= f
+        self.cds['bcwet'].values *= f
+        return
+    
     def adjust_temp_bias(self):
-        bias_df = pd.read_csv(eb_prms.temp_bias_fp)
-        for month in bias_df.index:
-            bias = bias_df.loc[month]['bias']
-            idx = np.where(self.cds.coords['time'].dt.month.values == month)[0]
-            self.cds['bin_temp'][{'time':idx}] = self.cds['bin_temp'][{'time':idx}] + bias
+        """
+        Updates air temperature according to preprocessed bias adjustments
+        """
+        old_T = self.cds['temp'].values
+        new_T = eb_prms.temp_bias_slope * old_T + eb_prms.temp_bias_intercept
+        self.cds['temp'].values = new_T 
         return
 
     def getVaporPressure(self,tempC):
@@ -343,7 +378,7 @@ class Climate():
         tag = eb_prms.MERRA2_filetag if eb_prms.MERRA2_filetag else f'{flat}_{flon}'
 
         # Update filenames for MERRA-2 (need grid lat/lon)
-        self.reanalysis_fp = eb_prms.main_directory + '/../climate_data/'
+        self.reanalysis_fp = '../climate_data/'
         self.var_dict = {'temp':{'fn':[],'vn':[]},
             'rh':{'fn':[],'vn':[]},'sp':{'fn':[],'vn':[]},
             'tp':{'fn':[],'vn':[]},'tcc':{'fn':[],'vn':[]},
@@ -439,7 +474,7 @@ class Climate():
         
     #     # form meshgrid and corresponding y for model input
     #     TT,pp,ddTT = np.meshgrid(T,p,dTdz)
-    #     X = np.array([TT.flatten(),pp.flatten(),ddTT.flatten()]).T
+    #     X = np.array([TT.ravel(),pp.ravel(),ddTT.ravel()]).T
     #     y = []
     #     for tpd in X:
     #         tsel = tpd[0]
@@ -466,7 +501,7 @@ class Climate():
 
     #     # train rain forest model
     #     rf = RandomForestRegressor(max_depth=15,n_estimators=10)
-    #     y_train = y_train.flatten()
+    #     y_train = y_train.ravel()
     #     rf.fit(X_train,y_train)
     #     trainloss = self.RMSE(y_train,rf.predict(X_train))
     #     valloss = self.RMSE(y_val,rf.predict(X_val))
