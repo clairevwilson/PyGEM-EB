@@ -173,11 +173,7 @@ class massBalance():
 
         # Define rain vs snow scaling 
         rain_scale = np.arange(0,1,20)
-        try:
-            temp_scale = np.arange(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
-        except:
-            print(SNOW_THRESHOLD_HIGH,SNOW_THRESHOLD_LOW,self.args.snow_threshold)
-            assert 1==0
+        temp_scale = np.arange(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
         
         if enbal.tempC <= SNOW_THRESHOLD_LOW: 
             # precip falls as snow
