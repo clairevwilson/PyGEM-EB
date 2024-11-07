@@ -155,7 +155,7 @@ def seasonal_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
         return winter_error, summer_error
 
 # ========== 2. CUMULATIVE MASS BALANCE ==========
-def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
+def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False,label='Model'):
     """
     Compares cumulative mass balance measurements from
     a stake to a model output. 
@@ -304,7 +304,7 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
                 ax.fill_between(df_mb_daily.index,lower,upper,alpha=0.2,color='gray')
             
             # Plot model and beautify plot
-            ax.plot(ds_alltime.time.values,ds_alltime.values,label='Model',color=plt.cm.Dark2(0))
+            ax.plot(ds_alltime.time.values,ds_alltime.values,label=label,color=plt.cm.Dark2(0))
             ax.legend(fontsize=12)
             ax.xaxis.set_major_formatter(date_form)
             ax.set_xticks(pd.date_range(start,end,freq='MS'))

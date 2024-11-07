@@ -784,8 +784,12 @@ class massBalance():
         # CONSTANTS
         CP_ICE = eb_prms.Cp_ice
         DENSITY_ICE = eb_prms.density_ice
+        DENSITY_WATER = eb_prms.density_water
         TEMP_TEMP = eb_prms.temp_temp
         TEMP_DEPTH = eb_prms.temp_depth
+        K_ICE = eb_prms.k_ice
+        K_WATER = eb_prms.k_water
+        K_AIR = eb_prms.k_air
 
         # set temperate ice and heat-diffusing layer indices
         temperate_idx = np.where(layers.ldepth > TEMP_DEPTH)[0]
@@ -799,16 +803,22 @@ class massBalance():
         lh = layers.lheight[diffusing_idx]
         lp = layers.ldensity[diffusing_idx]
         lT_old = layers.ltemp[diffusing_idx]
+        lm = layers.lice[diffusing_idx]
+        lw = layers.lwater[diffusing_idx]
         lT = layers.ltemp[diffusing_idx]
 
         # get conductivity 
         ice_idx = layers.ice_idx
         if type(self.args.k_snow) == float:
             lcond = self.args.k_snow*np.ones_like(lp)
+        elif self.args.k_snow in ['Sauter']:
+            f_ice = (lm/DENSITY_ICE) / lh
+            f_liq = (lw/DENSITY_WATER) / lh
+            f_air = 1 - f_ice - f_liq
+            f_air[f_air < 0] = 0
+            lcond = f_ice*K_ICE + f_liq*K_WATER + f_air*K_AIR
         elif self.args.k_snow in ['VanDusen']:
             lcond = 0.21e-01 + 0.42e-03*lp + 0.22e-08*lp**3
-        elif self.args.k_snow in ['Sturm']:
-            lcond = 0.0138 - 1.01e-3*lp + 3.233e-6*lp**2
         elif self.args.k_snow in ['Douville']:
             lcond = 2.2*np.power(lp/DENSITY_ICE,1.88)
         elif self.args.k_snow in ['Jansson']:
@@ -818,7 +828,7 @@ class massBalance():
         # ice has constant conductivity
         diffusing_ice_idx = list(set(ice_idx)&set(diffusing_idx))
         if len(diffusing_ice_idx) > 0:
-            lcond[diffusing_ice_idx] = eb_prms.k_ice
+            lcond[diffusing_ice_idx] = K_ICE
 
         if nl > 2:
             # heights of imaginary average bins between layers

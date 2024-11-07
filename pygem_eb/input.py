@@ -144,7 +144,7 @@ method_heateq = 'Crank-Nicholson'       # 'Crank-Nicholson'
 method_densification = 'Boone'          # 'Boone', 'HerronLangway', 'Kojima'
 method_cooling = 'iterative'            # 'minimize' (slow) or 'iterative' (fast)
 method_ground = 'MolgHardy'             # 'MolgHardy'
-method_conductivity = 'Sturm'           # 'Sturm','Douville','Jansson','OstinAndersson','VanDusen'
+method_conductivity = 'Sauter'          # 'Sauter', 'Douville','Jansson','OstinAndersson','VanDusen'
 
 # CONSTANT SWITCHES
 constant_snowfall_density = False       # False or density in kg m-3
@@ -189,6 +189,7 @@ density_water = 1000        # Density of water [kg m-3]
 density_firn = 700          # Density threshold for firn
 k_air = 0.023               # Thermal conductivity of air [W K-1 m-1] (Mellor, 1997)
 k_ice = 2.25                # Thermal conductivity of ice [W K-1 m-1]
+k_water = 0.56              # Thermal conductivity of water [W K-1 m-1]
 Cp_water = 4184             # Isobaric heat capacity of water [J kg-1 K-1]
 Cp_air = 1005               # Isobaric heat capacity of air [J kg-1 K-1]
 Cp_ice = 2050               # Isobaric heat capacity of ice [J kg-1 K-1]
@@ -231,7 +232,7 @@ albedo_fresh_snow = 0.85    # Albedo of fresh snow [-] (Moelg et al. 2012, TC)
 albedo_firn = 0.5           # Albedo of firn [-]
 # <<<<<< BC and dust >>>>>
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
-ksp_BC = 0.5                # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
+ksp_BC = 0.1                # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
 ksp_dust = 0.2              # Meltwater scavenging efficiency of dust (0.015 from CLM5)
 BC_freshsnow = 0            # Concentration of BC in fresh snow for initialization [kg m-3]
 dust_freshsnow = 0          # Concentration of dust in fresh snow for initilization [kg m-3] 
@@ -244,8 +245,10 @@ ratio_DU_bin3 = 0.481675    # " SNICAR Bin 3 (1.25-2.5um)
 ratio_DU_bin4 = 0.203775    # " SNICAR Bin 4 (2.5-5um)
 ratio_DU_bin5 = 0.034       # " SNICAR Bin 5 (5-50um)
 # <<<<<< MERRA-2: temperature bias >>>>>
-temp_bias_slope = 0.72801   # Slope of linear regression of MERRA-2 --> AWS
-temp_bias_intercept = 2.234 # Intercept of linear regression MERRA-2 --> AWS
+# temp_bias_slope = 0.72801   # Slope of linear regression MERRA-2 --> OFF-ICE AWS
+# temp_bias_intercept = 2.234 # Intercept of linear regression MERRA-2 --> OFF-ICE AWS
+temp_bias_slope = 0.57596   # Slope of MERRA-2 --> ON-ICE AWS
+temp_bias_intercept = 1.799 # Intercept of MERRA-2 --> ON-ICE AWS
 
 # ========== OTHER PYGEM INPUTS ========== 
 rgi_regionsO1 = [1]
