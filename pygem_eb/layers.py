@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import pygem_eb.input as eb_prms
+import warnings
+warnings.simplefilter('error', RuntimeWarning)
 
 class Layers():
     """
@@ -651,9 +653,9 @@ class Layers():
                 drdrydt = []
                 for r,t,k,g in zip(dr0,tau,kap,grainsize):
                     if t + g < FRESH_GRAINSIZE:
-                        drdrydt.append(r*np.power(t/(t + 1e-6),1/k)/3600)
+                        drdrydt.append(r*np.power(t/(t + 1e-6),1/k)/dt)
                     else:
-                        drdrydt.append(r*np.power(t/(t + g - FRESH_GRAINSIZE),1/k)/3600)
+                        drdrydt.append(r*np.power(t/(t + g - FRESH_GRAINSIZE),1/k)/dt)
                 drdry = np.array(drdrydt) * dt
 
             # Wet metamorphism

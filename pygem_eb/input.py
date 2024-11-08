@@ -144,7 +144,7 @@ method_heateq = 'Crank-Nicholson'       # 'Crank-Nicholson'
 method_densification = 'Boone'          # 'Boone', 'HerronLangway', 'Kojima'
 method_cooling = 'iterative'            # 'minimize' (slow) or 'iterative' (fast)
 method_ground = 'MolgHardy'             # 'MolgHardy'
-method_conductivity = 'Sauter'          # 'Sauter', 'Douville','Jansson','OstinAndersson','VanDusen'
+method_conductivity = 'VanDusen'        # 'Sauter', 'Douville','Jansson','OstinAndersson','VanDusen'
 
 # CONSTANT SWITCHES
 constant_snowfall_density = False       # False or density in kg m-3

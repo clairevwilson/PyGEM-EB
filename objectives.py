@@ -226,8 +226,11 @@ def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False,
         ds_alltime = ds.copy(deep=True)
         s = pd.to_datetime(ds_alltime.time.values[0])
         e = pd.to_datetime(ds_alltime.time.values[-1])
-        s += pd.Timedelta(hours=24-s.hour)
-        e -= pd.Timedelta(hours=s.hour)
+        if s.hour != 0:
+            s += pd.Timedelta(hours=24-s.hour)
+            e -= pd.Timedelta(hours=s.hour)
+            if s > start:
+                s == start
         ds_alltime = ds_alltime.dh.cumsum().sel(time=pd.date_range(s,e))
         ds_alltime -= ds_alltime.sel(time=pd.to_datetime(start))
 

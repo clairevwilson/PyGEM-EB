@@ -52,6 +52,7 @@ args.store_data = True              # Ensures output is stored
 args.use_AWS = use_AWS              # Use available AWS data
 args.debug = False                  # Don't need debug prints
 if args.use_AWS: # Short AWS run
+    eb_prms.store_vars = ['MB','layers']
     args.startdate = pd.to_datetime('2024-04-18 00:00:00')
     args.enddate = pd.to_datetime('2024-08-20 00:00:00')
 else: # Long MERRA-2 run
@@ -62,11 +63,12 @@ else: # Long MERRA-2 run
 # Make directory for the output
 date = str(pd.Timestamp.today()).replace('-','_')[5:10]
 n_today = 0
-out_fp = f'../Output/EB/{date}_{n_today}/'
-while os.path.exists(out_fp):
-    n_today += 1
-    out_fp = f'../Output/EB/{date}_{n_today}/'
-os.mkdir(out_fp)
+# out_fp = f'{date}_{n_today}/'
+# while os.path.exists('../Output/EB/' + out_fp):
+#     n_today += 1
+#     out_fp = f'{date}_{n_today}/'
+# os.mkdir('../Output/EB/' + out_fp)
+out_fp = f'{date}_0'
 
 # Parse list for inputs to Pool function
 packed_vars = [[] for _ in range(n_processes)]
@@ -126,26 +128,25 @@ def run_model_parallel(list_inputs):
         args,climate,store_attrs = inputs
         
         # Check if model run should be performed
-        # if not os.path.exists(eb_prms.output_filepath + args.out + '0.nc'):
+        if not os.path.exists(eb_prms.output_filepath + args.out + '0.nc'):
+            # Start timer
+            start_time = time.time()
 
-        # Start timer
-        start_time = time.time()
+            # Initialize the mass balance / output
+            massbal = mb.massBalance(args,climate)
 
-        # Initialize the mass balance / output
-        massbal = mb.massBalance(args,climate)
+            # Add attributes to output file in case it crashes
+            massbal.output.add_attrs(store_attrs)
 
-        # Add attributes to output file in case it crashes
-        massbal.output.add_attrs(store_attrs)
+            # Run the model
+            massbal.main()
 
-        # Run the model
-        massbal.main()
+            # End timer
+            time_elapsed = time.time() - start_time
 
-        # End timer
-        time_elapsed = time.time() - start_time
-
-        # Store output
-        massbal.output.add_vars()
-        massbal.output.add_basic_attrs(args,time_elapsed,climate)
+            # Store output
+            massbal.output.add_vars()
+            massbal.output.add_basic_attrs(args,time_elapsed,climate)
     return
 
 # Run model in parallel

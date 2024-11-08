@@ -173,8 +173,11 @@ class massBalance():
 
         # Define rain vs snow scaling 
         rain_scale = np.arange(0,1,20)
-        temp_scale = np.arange(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
-        
+        try:
+            temp_scale = np.arange(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
+        except:
+            print(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH)
+
         if enbal.tempC <= SNOW_THRESHOLD_LOW: 
             # precip falls as snow
             rain = 0
@@ -316,10 +319,10 @@ class massBalance():
         class MeltedLayers():
             def __init__(self):
                 try:
-                    self.mass = layermelt[fully_melted]
+                    self.mass = np.array(layermelt)[fully_melted]
                 except:
                     print(fully_melted)
-                    self.mass = layermelt[0]
+                    self.mass = 0
                 self.BC = layers.lBC[fully_melted]
                 self.dust = layers.ldust[fully_melted]
 
@@ -336,7 +339,7 @@ class massBalance():
         change = np.sum(layers.lice + layers.lwater) - initial_mass
         if len(fully_melted) > 0:
             change += np.sum(self.melted_layers.mass)
-        assert np.abs(change) < eb_prms.mb_threshold, 'melt_layers failed mass conservation'
+        assert np.abs(change) < eb_prms.mb_threshold, f'melt_layers failed mass conservation in {self.output.out_fn}'
         return layermelt
         
     def percolation(self,enbal,layers,layermelt,rainfall=0):
@@ -473,10 +476,11 @@ class massBalance():
         outs = runoff
         change = np.sum(layers.lice + layers.lwater) - initial_mass
         if np.abs(change - (ins-outs)) >= eb_prms.mb_threshold:
+            print(self.output.out_fn)
             print('percolation ins',water_in,'outs',runoff,'now',np.sum(layers.lice + layers.lwater),'initial',initial_mass)
             print('now',layers.lice,layers.lwater)
             print('initial',lmi,lwi)
-        assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, 'percolation failed mass conservation'
+        assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, f'percolation failed mass conservation in {self.output.out_fn}'
         return runoff
         
     def diffuse_LAPs(self,q_out,enbal,layers,rain_bool,snow_firn_idx):
@@ -614,7 +618,7 @@ class massBalance():
         change = np.sum(layers.lice + layers.lwater) - initial_mass
         if np.abs(change) >= eb_prms.mb_threshold:
             print('rfz change',change, 'initial',initial_mass,'dry, water',layers.lice, layers.lwater)
-        assert np.abs(change) < eb_prms.mb_threshold, 'refreezing failed mass conservation'
+        assert np.abs(change) < eb_prms.mb_threshold, f'refreezing failed mass conservation in {self.output.out_fn}'
         return np.sum(refreeze)
     
     def densification(self,layers):
@@ -716,7 +720,7 @@ class massBalance():
 
         # CHECK MASS CONSERVATION
         change = np.sum(layers.lice + layers.lwater) - initial_mass
-        assert np.abs(change) < eb_prms.mb_threshold, 'densification failed mass conservation'
+        assert np.abs(change) < eb_prms.mb_threshold, f'densification failed mass conservation in {self.output.out_fn}'
         return
     
     def phase_changes(self,enbal,surface,layers):
@@ -757,7 +761,7 @@ class massBalance():
         ins = deposition + condensation
         outs = sublimation + evaporation
         change = np.sum(layers.lice + layers.lwater) - initial_mass
-        assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, 'phase change failed mass conservation'
+        assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, f'phase change failed mass conservation in {self.output.out_fn}'
         return
       
     def solve_heat_eq(self,layers,surftemp,dt_heat=eb_prms.dt_heateq):
