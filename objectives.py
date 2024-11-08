@@ -155,7 +155,8 @@ def seasonal_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
         return winter_error, summer_error
 
 # ========== 2. CUMULATIVE MASS BALANCE ==========
-def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False,label='Model'):
+def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False,
+                            plot=False,plot_ax=False,label='Model'):
     """
     Compares cumulative mass balance measurements from
     a stake to a model output. 
@@ -179,25 +180,26 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False,label=
         df_mb_daily.index = pd.to_datetime(df_mb_daily['Date'])
         df_mb_daily = df_mb_daily.sort_index()
 
-    # Load USGS seasonal MB
-    if site not in ['ABB','BD']:
-        year = pd.to_datetime(ds.time.values[0]).year
-        df_mb = pd.read_csv(USGS_fp)
-        df_mb = df_mb.loc[df_mb['site_name'] == site]
-        mba = df_mb.loc[df_mb['Year'] == year,'ba'].values[0]
-        mbw = df_mb.loc[df_mb['Year'] == year,'bw'].values[0]
-        mbs_measured = mba - mbw
+    if out_mbs or plot or plot_ax:
+        # Load USGS seasonal MB
+        if site not in ['ABB','BD']:
+            year = pd.to_datetime(ds.time.values[0]).year
+            df_mb = pd.read_csv(USGS_fp)
+            df_mb = df_mb.loc[df_mb['site_name'] == site]
+            mba = df_mb.loc[df_mb['Year'] == year,'ba'].values[0]
+            mbw = df_mb.loc[df_mb['Year'] == year,'bw'].values[0]
+            mbs_measured = mba - mbw
 
-        # Retrieve modeled summer MB
-        spring_date = str(year)+'-04-20 00:00'
-        fall_date = str(year)+'-08-20 00:00'
-        melt_dates = pd.date_range(spring_date,fall_date,freq='h')
-        ds_summer = ds.sel(time=melt_dates)
-        mbs_ds = ds_summer.accum + ds_summer.refreeze - ds_summer.melt
-        internal_acc = ds.sel(time=melt_dates[-2]).cumrefreeze.values
-        if internal_acc > 1e-5:
-            print(f'Site {site} internal acc: {internal_acc:.5f} m w.e.')
-        mbs_modeled = mbs_ds.sum().values - internal_acc
+            # Retrieve modeled summer MB
+            spring_date = str(year)+'-04-20 00:00'
+            fall_date = str(year)+'-08-20 00:00'
+            melt_dates = pd.date_range(spring_date,fall_date,freq='h')
+            ds_summer = ds.sel(time=melt_dates)
+            mbs_ds = ds_summer.accum + ds_summer.refreeze - ds_summer.melt
+            internal_acc = ds.sel(time=melt_dates[-2]).cumrefreeze.values
+            if internal_acc > 1e-5:
+                print(f'Site {site} internal acc: {internal_acc:.5f} m w.e.')
+            mbs_modeled = mbs_ds.sum().values - internal_acc
 
     if os.path.exists(fp_gnssir) or os.path.exists(fp_stake):
         # Retrieve the dates
@@ -222,10 +224,12 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False,label=
                 
         # Save original ds for plotting all time
         ds_alltime = ds.copy(deep=True)
-        s = ds_alltime.time.values[0]
-        e = ds_alltime.time.values[-1]
-        ds_alltime = ds_alltime.dh.cumsum() - ds_alltime.dh.isel(time=0)
-        ds_alltime = ds_alltime.sel(time=pd.date_range(s,e))
+        s = pd.to_datetime(ds_alltime.time.values[0])
+        e = pd.to_datetime(ds_alltime.time.values[-1])
+        s += pd.Timedelta(hours=24-s.hour)
+        e -= pd.Timedelta(hours=s.hour)
+        ds_alltime = ds_alltime.dh.cumsum().sel(time=pd.date_range(s,e))
+        ds_alltime -= ds_alltime.sel(time=pd.to_datetime(start))
 
         # Index model data
         if pd.to_datetime(ds.time.values[0]).minute == 30:
@@ -236,33 +240,35 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False,label=
         ds = ds.sel(time=pd.date_range(start,end,freq='h'))
 
         # Accumulation area sites: need only dh above stake depth
-        if site in ['D','T']:
-            dh = []
-            stake_depth = 9
-            for hour in pd.date_range(start,end,freq='h'):
-                ds_now = ds.sel(time=hour)
-                lheight = ds_now.layerheight.values 
-                ldepth = np.array([np.sum(lheight[:i+1])-(lheight[i]/2) for i in range(len(lheight))])
-                layers = np.where(ldepth < stake_depth)[0]
-                height_now = np.sum(lheight[layers])
-                if hour == start:
-                    height_before = height_now
-                i = -1
-                while np.abs(height_now - height_before) > 0.5:
-                    height_now = np.sum(lheight[layers[:i]])
-                    i -= 1
-                    if len(layers[:i])<1:
-                        break
-                i = 1
-                while np.abs(height_now - height_before) > 0.5:
-                    height_now = np.sum(lheight[:layers[-1]+i])
-                    i += 1
-                    assert i < 20
-                dh.append(height_now - height_before)
-                height_before = height_now
-                stake_depth += ds_now.dh.values
-            ds['dh'].values = dh
+        # DONT NEED THIS IF INITIAL FIRN IS 5 M
+        # if site in ['D','T']:
+        #     dh = []
+        #     stake_depth = 8.97 if site == 'T' else 7.856
+        #     for hour in pd.date_range(start,end,freq='h'):
+        #         ds_now = ds.sel(time=hour)
+        #         lheight = ds_now.layerheight.values 
+        #         ldepth = np.array([np.sum(lheight[:i+1])-(lheight[i]/2) for i in range(len(lheight))])
+        #         layers = np.where(ldepth < stake_depth)[0]
+        #         print(layers,stake_depth)
+        #         height_now = np.sum(lheight[layers])
+        #         if hour == start:
+        #             height_before = height_now
+        #         if len(layers) > 0:
+        #             i = -1  # Start searching backwards
+        #             while np.abs(height_now - height_before) > 0.5:
+        #                 height_now = np.sum(lheight[layers[:i]] if i < 0 else lheight[:layers[-1] + i])
+        #                 if (i < 0 and len(layers[:i]) < 1):
+        #                     i = 0
+        #                 elif (i > 0 and i >= 20):  # Stop if bounds are exceeded
+        #                     break
+        #                 i = i - 1 if i < 0 else i + 1
+        #         dh.append(height_now - height_before)
+        #         height_before = height_now
+        #         stake_depth += ds_now.dh.values
+        #     ds['dh'].values = dh
+
         # Cumululative sum
+        ds = ds.sel(time=pd.date_range(start,end,freq='h'))
         ds['dh'].values = ds.dh.cumsum().values - ds.dh.isel(time=0).values
         # Select data daily
         ds = ds.sel(time=pd.date_range(start,end)).dh
@@ -281,7 +287,7 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False,label=
         error = objective(model,data,method)
 
         # Plot
-        if plot:
+        if plot or plot_ax:
             if not plot_ax:
                 fig,ax = plt.subplots(figsize=(3,6))
             else:
@@ -332,9 +338,9 @@ def cumulative_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False,label=
             if not plot_ax:
                 return fig, ax
             else:
-                return ax, error 
+                return ax, error
         else:
-            if site not in ['ABB','BD']:
+            if out_mbs:
                 return mbs_modeled,mbs_measured
             else:
                 return error 
