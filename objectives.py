@@ -296,14 +296,9 @@ def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False,
             else:
                 ax = plot_ax
             
-            # Plot stake
-            if os.path.exists(fp_stake):
-                df_stake_daily = pd.read_csv(fp_stake.replace('GNSSIR','stake'),index_col=0)
-                df_stake_daily.index = pd.to_datetime(df_stake_daily.index)
-                df_stake_daily['CMB'] -= df_stake_daily['CMB'].iloc[0]
-                df_stake_daily = df_stake_daily.sort_index()
-                ax.plot(df_stake_daily.index,df_stake_daily['CMB'],label='Stake',linestyle=':',color='gray')
-
+            # Plot model
+            ax.plot(ds_alltime.time.values,ds_alltime.values,label=label,color=plt.cm.Dark2(0))
+            
             # Plot gnssir
             if os.path.exists(fp_gnssir):
                 ax.plot(df_mb_daily.index,df_mb_daily['CMB'],label='GNSS-IR',linestyle='--',color='black')
@@ -311,9 +306,16 @@ def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False,
                 lower = df_mb_daily['CMB'] - df_mb_daily['sigma']
                 upper = df_mb_daily['CMB'] + df_mb_daily['sigma']
                 ax.fill_between(df_mb_daily.index,lower,upper,alpha=0.2,color='gray')
-            
-            # Plot model and beautify plot
-            ax.plot(ds_alltime.time.values,ds_alltime.values,label=label,color=plt.cm.Dark2(0))
+
+            # Plot stake
+            if os.path.exists(fp_stake):
+                df_stake_daily = pd.read_csv(fp_stake.replace('GNSSIR','stake'),index_col=0)
+                df_stake_daily.index = pd.to_datetime(df_stake_daily.index)
+                df_stake_daily['CMB'] -= df_stake_daily['CMB'].iloc[0]
+                df_stake_daily = df_stake_daily.sort_index()
+                ax.plot(df_stake_daily.index,df_stake_daily['CMB'],label='Banded stake',linestyle=':',color='gray')
+
+            # Beautify
             ax.legend(fontsize=12)
             ax.xaxis.set_major_formatter(date_form)
             ax.set_xticks(pd.date_range(start,end,freq='MS'))
