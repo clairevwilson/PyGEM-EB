@@ -168,13 +168,13 @@ grainsize_ds = xr.open_dataset(grainsize_fp.replace('##',str(initSSA)))
 # <<<<<< Climate downscaling >>>>>
 sky_view = 0.936            # Sky-view factor [-]
 wind_factor = 1             # Wind factor [-]
-kp = 3.2                    # Precipitation factor [-]
+kp = 3                      # Precipitation factor [-]
 precgrad = 0.0001           # Precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # Temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 dep_factor = 1              # Multiplicative factor to adjust MERRA-2 deposition
 albedo_ice = 0.47           # Ice albedo [-] 
-snow_threshold_low = 0      # Lower threshold for linear snow-rain scaling [C]
-snow_threshold_high = 2     # Upper threshold for linear snow-rain scaling [C]
+snow_threshold_low = 0.2      # Lower threshold for linear snow-rain scaling [C]
+snow_threshold_high = 2.2     # Upper threshold for linear snow-rain scaling [C]
 # <<<<<< Discretization >>>>>
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
 layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6

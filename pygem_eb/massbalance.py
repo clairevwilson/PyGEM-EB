@@ -166,17 +166,13 @@ class massBalance():
             Specific mass of liquid and solid precipitation [kg m-2]
         """
         # CONSTANTS
-        # SNOW_THRESHOLD_LOW = eb_prms.snow_threshold_low
-        # SNOW_THRESHOLD_HIGH = eb_prms.snow_threshold_high
-        SNOW_THRESHOLD_LOW, SNOW_THRESHOLD_HIGH = self.args.snow_threshold
+        SNOW_THRESHOLD_LOW = eb_prms.snow_threshold_low
+        SNOW_THRESHOLD_HIGH = eb_prms.snow_threshold_high
         DENSITY_WATER = eb_prms.density_water
 
         # Define rain vs snow scaling 
         rain_scale = np.arange(0,1,20)
-        try:
-            temp_scale = np.arange(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
-        except:
-            print(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH)
+        temp_scale = np.arange(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
 
         if enbal.tempC <= SNOW_THRESHOLD_LOW: 
             # precip falls as snow

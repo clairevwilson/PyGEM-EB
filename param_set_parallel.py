@@ -15,13 +15,12 @@ use_AWS = False
 eb_prms.AWS_fn = '../climate_data/AWS/Preprocessed/gulkana2024.csv'
 
 # Define sets of parameters
-# params = {'k_snow':['Sauter','Douville','Jansson','OstinAndersson','VanDusen']}
 params = {'kw':[1,2,2.5,3,4],
           'Boone_c5':[0.018,0.025,0.032],
           'kp':[2,2.5,3,3.5,4]}
+
 # Set the ones you want constant
 # kw = 2
-threshold = [0,2]
 # c5 = 0.025
 # kp = 2.5
 k_snow = 'VanDusen'
@@ -64,26 +63,28 @@ else: # Long MERRA-2 run
     args.enddate = pd.to_datetime('2024-08-20 00:00:00')
 
 # Make directory for the output
+if 'trace' in eb_prms.machine:
+    eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
 date = str(pd.Timestamp.today()).replace('-','_')[5:10]
 n_today = 0
 out_fp = f'{date}_{n_today}/'
-while os.path.exists('../Output/EB/' + out_fp):
+while os.path.exists(eb_prms.output_filepath + out_fp):
     n_today += 1
     out_fp = f'{date}_{n_today}/'
-os.mkdir('../Output/EB/' + out_fp)
+os.mkdir(eb_prms.output_filepath + out_fp)
 
 # Parse list for inputs to Pool function
 packed_vars = [[] for _ in range(n_processes)]
 run_no = 0  # Counter for runs added to each set
 set_no = 0  # Index for the parallel process
+
 # Loop through sites
 for site in sites:
-    # Initialize the model
+    # Initialize the model for the site
     args_site = copy.deepcopy(args)
     args_site.site = site
     climate = sim.initialize_model(args.glac_no[0],args_site)
     # Loop through parameters
-    # for threshold in params['T_threshold']:
     # for k_snow in params['k_snow']:
     for kw in params['kw']:
         for kp in params['kp']:
@@ -95,7 +96,6 @@ for site in sites:
                 args_run.k_snow = k_snow
                 args_run.kw = kw
                 args_run.site = site
-                args_run.snow_threshold = threshold
                 args_run.Boone_c5 = c5
                 args_run.kp = kp
 
@@ -104,8 +104,6 @@ for site in sites:
 
                 # Specify attributes for output file
                 store_attrs = {'k_snow':str(k_snow),'kw':str(kw),
-                                'threshold_low':str(threshold[0]),
-                                'threshold_high':str(threshold[1]),
                                 'c5':str(c5),'kp':str(kp),'site':site}
 
                 # Set task ID for SNICAR input file
@@ -122,9 +120,6 @@ for site in sites:
 
                 # Advance counter
                 run_no += 1
-
-print(len(packed_vars),len(packed_vars[0]))
-assert 1==0
 
 def run_model_parallel(list_inputs):
     # Loop through the variable sets

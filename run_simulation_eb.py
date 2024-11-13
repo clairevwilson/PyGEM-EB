@@ -68,8 +68,6 @@ def get_args(parse=True):
                         help='Multiplicative wind factor')
     parser.add_argument('-kp',default=eb_prms.kp,action='store',type=float,
                         help='Multiplicative precipitation factor')
-    parser.add_argument('-snow_threshold',action='store',help='Snow temperature thresholds',
-                        default=[eb_prms.snow_threshold_low,eb_prms.snow_threshold_high])
     parser.add_argument('-Boone_c5',default=eb_prms.Boone_c5,action='store',type=float,
                         help='Parameter for Boone densification scheme')
     
@@ -149,10 +147,10 @@ def initialize_model(glac_no,args):
         args.initial_firn_depth = site_df.loc[site]['firndepth']
 
         # Set scaling albedo
-        slope = (0.47 - 0.3)/(site_df.loc['B','elevation'] - site_df.loc['A','elevation'])
-        intercept = 0.3
+        slope = (0.485 - 0.315)/(site_df.loc['B','elevation'] - site_df.loc['A','elevation'])
+        intercept = 0.315
         args.a_ice = intercept + (args.elev - site_df.loc['A','elevation'])*slope
-        args.a_ice = min(0.47,args.a_ice)
+        args.a_ice = min(0.485,args.a_ice)
 
         # Set filepaths
         eb_prms.shading_fp = os.getcwd() + f'/shading/out/{eb_prms.glac_name}{site}_shade.csv'

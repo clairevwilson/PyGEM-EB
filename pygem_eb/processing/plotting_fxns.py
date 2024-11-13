@@ -1098,8 +1098,9 @@ def plot_layers(ds,vars,dates):
     return
 
 def visualize_layers(ds,dates,vars,force_layers=False,
-                     t='Visualization of Snow ',
-                     plot_firn=True,plot_ice=False,ylim=False):
+                     t='Visualization of Snow ',plot_ax=False,
+                     plot_firn=True,plot_ice=False,ylim=False,
+                     colorbar=True):
     """
     force_layers:
         Three options:
@@ -1123,7 +1124,10 @@ def visualize_layers(ds,dates,vars,force_layers=False,
         return c
 
     fig,axes = plt.subplots(len(vars),figsize=(5,1.7*len(vars)),sharex=True,layout='constrained')
-    if len(vars) == 1:
+    if plot_ax:
+        assert len(plot_ax) == len(vars)
+        axes = plot_ax
+    if len(vars) == 1 and '__iter__' not in dir(axes):
         axes = [axes]
     for i,var in enumerate(vars):
         if var in ['layerBC']:
@@ -1194,14 +1198,15 @@ def visualize_layers(ds,dates,vars,force_layers=False,
         units = {'layerBC':'ppb','layerdust':'ppm','layertemp':'$^{\circ}$C',
                 'layerdensity':'kg m$^{-3}$','layerwater':'%','layergrainsize':'um',
                 'layerrefreeze':'kg m-2'}
-        sm = mpl.cm.ScalarMappable(cmap=ctype,norm=plt.Normalize(bounds[0],bounds[1]))
-        leg = plt.colorbar(sm,ax=ax,aspect=7)
-        leg.ax.tick_params(labelsize=9)
-        # leg.set_label(units[var],loc='top',rotation=0)
-        ax.yaxis.set_label_position('right')
-        ax.yaxis.set_label_coords(1.1,0)
-        label = varprops[var]['label']+' ('+units[var]+')'
-        ax.set_ylabel(label,fontsize=10)
+        if colorbar:
+            sm = mpl.cm.ScalarMappable(cmap=ctype,norm=plt.Normalize(bounds[0],bounds[1]))
+            leg = plt.colorbar(sm,ax=ax,aspect=7)
+            leg.ax.tick_params(labelsize=9)
+            # leg.set_label(units[var],loc='top',rotation=0)
+            ax.yaxis.set_label_position('right')
+            ax.yaxis.set_label_coords(1.2,0)
+            label = varprops[var]['label']+' ('+units[var]+')'
+            ax.set_ylabel(label,fontsize=10)
         ax.grid(axis='y')
         ax.tick_params(length=5)
         if ylim:
@@ -1225,7 +1230,10 @@ def visualize_layers(ds,dates,vars,force_layers=False,
 
     # Show plot
     # plt.show()
-    return fig,ax
+    if not plot_ax:
+        return fig,ax
+    else:
+        return axes
 
 def plot_single_layer(ds,layer,vars,time,cumMB=False,t='',vline=None,res='h',resample=False):
     if len(time) == 2:
