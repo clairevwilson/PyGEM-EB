@@ -16,14 +16,14 @@ eb_prms.AWS_fn = '../climate_data/AWS/Preprocessed/gulkana2024.csv'
 
 # Define sets of parameters
 # params = {'k_snow':['Sauter','Douville','Jansson','OstinAndersson','VanDusen']}
-params = { # 'kw':[1,2,2.5,3,4],
-          'Boone_c5':[0.018,0.025,0.032,0.04]}
-        #   'kp':[2,2.5,3,3.5,4]}
+params = {'kw':[1,2,2.5,3,4],
+          'Boone_c5':[0.018,0.025,0.032],
+          'kp':[2,2.5,3,3.5,4]}
 # Set the ones you want constant
-kw = 2
+# kw = 2
 threshold = [0,2]
 # c5 = 0.025
-kp = 2.5
+# kp = 2.5
 k_snow = 'VanDusen'
 
 # Define sites
@@ -59,8 +59,7 @@ if args.use_AWS: # Short AWS run
     args.startdate = pd.to_datetime('2024-04-18 00:00:00')
     args.enddate = pd.to_datetime('2024-08-20 00:00:00')
 else: # Long MERRA-2 run
-    eb_prms.store_vars = ['MB','layers']     # Only store mass balance results
-    print('STORING LAYERS FOR LONG RUN')
+    eb_prms.store_vars = ['MB']     # Only store mass balance results
     args.startdate = pd.to_datetime('2000-04-20 00:00:00')
     args.enddate = pd.to_datetime('2024-08-20 00:00:00')
 
@@ -86,43 +85,46 @@ for site in sites:
     # Loop through parameters
     # for threshold in params['T_threshold']:
     # for k_snow in params['k_snow']:
-    # for kw in params['kw']:
-    #     for kp in params['kp']:
-    for c5 in params['Boone_c5']:
-        # Get args for the current run
-        args_run = copy.deepcopy(args_site)
+    for kw in params['kw']:
+        for kp in params['kp']:
+            for c5 in params['Boone_c5']:
+                # Get args for the current run
+                args_run = copy.deepcopy(args_site)
 
-        # Set parameters
-        args_run.k_snow = k_snow
-        args_run.kw = kw
-        args_run.site = site
-        args_run.snow_threshold = threshold
-        args_run.Boone_c5 = c5
-        args_run.kp = kp
+                # Set parameters
+                args_run.k_snow = k_snow
+                args_run.kw = kw
+                args_run.site = site
+                args_run.snow_threshold = threshold
+                args_run.Boone_c5 = c5
+                args_run.kp = kp
 
-        # Set identifying output filename
-        args_run.out = out_fp + f'grid_{date}_set{set_no}_run{run_no}_'
+                # Set identifying output filename
+                args_run.out = out_fp + f'grid_{date}_set{set_no}_run{run_no}_'
 
-        # Specify attributes for output file
-        store_attrs = {'k_snow':str(k_snow),'kw':str(kw),
-                        'threshold_low':str(threshold[0]),
-                        'threshold_high':str(threshold[1]),
-                        'c5':str(c5),'kp':str(kp),'site':site}
+                # Specify attributes for output file
+                store_attrs = {'k_snow':str(k_snow),'kw':str(kw),
+                                'threshold_low':str(threshold[0]),
+                                'threshold_high':str(threshold[1]),
+                                'c5':str(c5),'kp':str(kp),'site':site}
 
-        # Set task ID for SNICAR input file
-        args_run.task_id = set_no
-    
-        # Store model inputs
-        packed_vars[set_no].append((args_run,climate,store_attrs))
+                # Set task ID for SNICAR input file
+                args_run.task_id = set_no
+            
+                # Store model inputs
+                packed_vars[set_no].append((args_run,climate,store_attrs))
 
-        # Check if moving to the next set of runs
-        n_runs_set = n_runs_per_process + (1 if set_no < n_runs_with_extra else 0)
-        if run_no >= n_runs_set:
-            set_no += 1
-            run_no = -1
+                # Check if moving to the next set of runs
+                n_runs_set = n_runs_per_process + (1 if set_no < n_runs_with_extra else 0)
+                if run_no >= n_runs_set:
+                    set_no += 1
+                    run_no = -1
 
-        # Advance counter
-        run_no += 1
+                # Advance counter
+                run_no += 1
+
+print(len(packed_vars),len(packed_vars[0]))
+assert 1==0
 
 def run_model_parallel(list_inputs):
     # Loop through the variable sets
