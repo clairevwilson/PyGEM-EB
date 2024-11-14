@@ -10,7 +10,7 @@ import pygem_eb.massbalance as mb
 import pygem_eb.input as eb_prms
 
 # User info
-sites = ['AB','ABB','B','BD','D','T'] # Sites to run in parallel     
+sites = ['B'] # Sites to run in parallel     'AB','ABB','B','BD','D','T'
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
 params_fn = '../Output/params/11_08.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[5:10]
