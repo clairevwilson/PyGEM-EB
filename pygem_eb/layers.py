@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import pygem_eb.input as eb_prms
-import warnings
+import warnings, sys
 warnings.simplefilter('error', RuntimeWarning)
 
 class Layers():
@@ -194,7 +194,7 @@ class Layers():
             ltemp = np.ones(self.nlayers)*0
         else:
             print('Choose between ripe and interpolate in initialize_temp')
-            quit()
+            self.exit()
         
         # GRAIN SIZE [um]
         lgrainsize = np.interp(self.ldepth,grainsize_data['depth'],
@@ -254,7 +254,7 @@ class Layers():
             ldust = cdust * lheight
         else:
             print('Choose between clean and interpolate in initialize_LAPs')
-            quit()
+            self.exit()
         lBC[self.ice_idx] = 0
         ldust[self.ice_idx] = 0
         return lBC, ldust
@@ -319,7 +319,7 @@ class Layers():
         """
         if (self.nlayers+1) > eb_prms.max_nlayers and 'layers' in eb_prms.store_vars:
             print(f'Need bigger max_nlayers: currently have {self.nlayers+1} layers')
-            quit()
+            self.exit()
         l = layer_to_split
         self.nlayers += 1
         self.ltemp = np.insert(self.ltemp,l,self.ltemp[l])
@@ -680,3 +680,10 @@ class Layers():
             self.lgrainsize[self.ice_idx] = ICE_GRAINSIZE
         
         return 
+    
+    def exit(self):
+        if self.args.debug:
+            print('Failed in layers')
+            print('Layer temperature:',self.ltemp)
+            print('Layer density:',self.ldensity)
+        sys.exit()

@@ -3,7 +3,7 @@ Mass balance class and main functions for PyGEM Energy Balance
 
 @author: clairevwilson
 """
-import os
+import os, sys
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -525,7 +525,7 @@ class massBalance():
         else:
             m_BC_in_top = np.array([0],dtype=float) 
             m_dust_in_top = np.array([0],dtype=float)
-        # Incoming aqu
+        # Partition in aqueous phase
         m_BC_in_top *= PARTITION_COEF_BC
         m_dust_in_top *= PARTITION_COEF_DUST
 
@@ -917,6 +917,14 @@ class massBalance():
         self.previous_mass = current_mass
         return
 
+    def exit(self):
+        if self.args.debug:
+            print('Failed in mass balance')
+            print('Current layers',self.ltype)
+            print('Layer temp:',self.ltemp)
+            print('Layer density:',self.ldensity)
+        sys.exit()    
+
 class Output():
     def __init__(self,time,args):
         """
@@ -1122,7 +1130,7 @@ class Output():
                 else:
                     n = len(layertemp_output.columns)
                     print(f'Need to increase max_nlayers: currently have {n} layers')
-                    quit()
+                    self.exit()
 
                 ds['layertemp'].values = layertemp_output
                 ds['layerheight'].values = layerheight_output

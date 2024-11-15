@@ -7,6 +7,7 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import threading
+import sys
 import pygem_eb.input as eb_prms
 
 class Climate():
@@ -275,7 +276,7 @@ class Climate():
             failed.remove('LWin')
         if len(failed) > 0:
             print('Missing data from',failed)
-            quit()
+            self.exit()
 
         # Store the dataset as a netCDF
         if eb_prms.store_climate:
@@ -317,7 +318,7 @@ class Climate():
                 print(f'WARNING: units did not match for {var} but were not updated')
                 print(f'Previously {units_in}; should be {units_out}')
                 print('Make a manual change in check_units (climate.py)')
-                quit()
+                self.exit()
         return ds
     
     def adjust_dep(self):
@@ -459,6 +460,10 @@ class Climate():
             self.var_dict['bcdry']['fn'] = f'./../../MERRA2/BCDP002/MERRA2_BCDP002_{tag}.nc'
             self.var_dict['dustwet']['fn'] = f'./../../MERRA2/DUWT003/MERRA2_DUWT003_{tag}.nc'
             self.var_dict['dustdry']['fn'] = f'./../../MERRA2/DUDP003/MERRA2_DUDP003_{tag}.nc'
+
+    def exit(self):
+        sys.exit()
+ 
 
     # UNUSED --- MOVE TO PYGEM EB GRAVEYARD
     # from sklearn.ensemble import RandomForestRegressor
