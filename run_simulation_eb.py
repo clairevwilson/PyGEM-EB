@@ -169,9 +169,9 @@ def initialize_model(glac_no,args):
     # CHECK FOR PARAMS INPUT FILE
     if args.params_fn != 'None':
         params = pd.read_csv(args.params_fn,index_col=0)
-        kp = params.loc['kp',args.site].astype(float)
-        kw = params.loc['kw',args.site].astype(float)
-        a_ice = params.loc['a_ice',args.site].astype(float)
+        kp = params.loc['kp',args.site]
+        kw = params.loc['kw',args.site]
+        a_ice = params.loc['a_ice',args.site]
         # Command line args override params input
         if args.kp == eb_prms.kp:
             args.kp = kp

@@ -189,7 +189,7 @@ class massBalance():
             snow = 0
         
         # Adjust snow by precipitation factor
-        snow *= self.args.kp
+        snow *= float(self.args.kp)
         
         return rain,snow  # kg m-2
 
@@ -651,7 +651,7 @@ class massBalance():
             c3 = 0.046      # m3 kg-1 (0.046)
             c4 = 0.081      # K-1 (0.081)
             # c5 = eb_prms.Boone_c5      # m3 kg-1 (0.018) --> adjust in input
-            c5 = self.args.Boone_c5
+            c5 = float(self.args.Boone_c5)
 
             for layer in snowfirn_idx:
                 weight_above = GRAVITY*np.sum(lm[:layer]+lw[:layer])

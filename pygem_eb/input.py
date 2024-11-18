@@ -178,7 +178,7 @@ snow_threshold_high = 2.2     # Upper threshold for linear snow-rain scaling [C]
 # <<<<<< Discretization >>>>>
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
 layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
-max_nlayers = 50            # Maximum number of vertical layers allowed (defines output file size)
+max_nlayers = 80            # Maximum number of vertical layers allowed (defines output file size)
 max_dz = 2                  # Max layer height
 # <<<<<< Boundary conditions >>>>>
 temp_temp = -2              # temperature of temperate ice [C]

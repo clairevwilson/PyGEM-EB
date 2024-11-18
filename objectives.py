@@ -9,12 +9,12 @@ to a field dataset. The field datasets included:
 5. Spectral albedo from FieldSpec
 
 All functions use the following notation for the arguments:
-    fp : str
-        Filepath to the field data
+    site : str
+        Field site being examined
     ds : xarray.Dataset
         Output dataset from PyGEM-EB
-    method : str, default 'RMSE'
-        Choose between 'RMSE','MAE'
+    method : str, default 'MAE'
+        Choose between 'RMSE','MAE','ME','MSE'
     plot : Bool, default False
         Plot the result
 
@@ -349,8 +349,6 @@ def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False,
                 return mbs_modeled,mbs_measured
             else:
                 return error 
-    
-    print(f'Modeled MB: {mbs_modeled} m w.e.\nMeasured MB: {mbs_measured} m w.e.')
 
 # ========== 3. SNOW TEMPERATURES ==========
 def snow_temperature(site,ds,method='RMSE',plot=False,plot_heights=[0.5]):
