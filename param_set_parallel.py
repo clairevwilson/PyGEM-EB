@@ -15,7 +15,7 @@ from objectives import *
 # OPTIONS
 run_type = 'long'   # 'long' or '2024'
 # Define sets of parameters
-params = {'kw':[1,1.5,2,2.5,3],
+params = {'kw':[1,1.1,1.2,1.3,1.4,1.5],
           'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028],
           'kp':[2.4,2.5,2.6,2.7,2.8]}
 
@@ -29,7 +29,7 @@ k_snow = 'VanDusen'
 if run_type == '2024':
     sites = ['AB','ABB','B','BD','D','T']
 else:
-    sites = ['A','B','D']
+    sites = ['A','AU','B','D']
 
 # Read command line args
 args = sim.get_args()
@@ -68,13 +68,16 @@ else: # Long MERRA-2 run
 # Create output directory
 if 'trace' in eb_prms.machine:
     eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
-date = str(pd.Timestamp.today()).replace('-','_')[5:10]
-n_today = 0
+# date = str(pd.Timestamp.today()).replace('-','_')[5:10]
+# n_today = 0
+# out_fp = f'{date}_{n_today}/'
+# while os.path.exists(eb_prms.output_filepath + out_fp):
+#     n_today += 1
+#     out_fp = f'{date}_{n_today}/'
+# os.mkdir(eb_prms.output_filepath + out_fp)
+date = '11_19'
+n_today = '0'
 out_fp = f'{date}_{n_today}/'
-while os.path.exists(eb_prms.output_filepath + out_fp):
-    n_today += 1
-    out_fp = f'{date}_{n_today}/'
-os.mkdir(eb_prms.output_filepath + out_fp)
 
 # Transform params to strings for comparison
 for key in params:
@@ -122,8 +125,8 @@ for site in sites:
                 args_run.out = out_fp + f'grid_{date}_set{set_no}_run{run_no}_'
 
                 # Specify attributes for output file
-                store_attrs = {'k_snow':str(k_snow),'kw':str(kw),
-                                'c5':str(c5),'kp':str(kp),'site':site}
+                store_attrs = {'k_snow':k_snow,'kw':kw,
+                                'c5':c5,'kp':kp,'site':site}
 
                 # Set task ID for SNICAR input file
                 args_run.task_id = set_no
@@ -142,58 +145,71 @@ for site in sites:
                 run_no += 1
 
 def run_model_parallel(list_inputs):
+    global outdict
     # Loop through the variable sets
     for inputs in list_inputs:
         # Unpack inputs
         args,climate,store_attrs = inputs
 
         # Check if model run should be performed
-        if not os.path.exists(eb_prms.output_filepath + args.out + '0.nc'):
-            # Start timer
-            start_time = time.time()
+        n_iters = 0
+        while not os.path.exists(eb_prms.output_filepath + args.out + '0.nc') and n_iters <= 10:
+            n_iters += 1
+            if n_iters > 2:
+                print('Beginning repeat run... ')
+            try:
+                # Start timer
+                start_time = time.time()
 
-            # Initialize the mass balance / output
-            massbal = mb.massBalance(args,climate)
+                # Initialize the mass balance / output
+                massbal = mb.massBalance(args,climate)
 
-            # Add attributes to output file in case it crashes
-            massbal.output.add_attrs(store_attrs)
+                # Add attributes to output file in case it crashes
+                massbal.output.add_attrs(store_attrs)
 
-            # Run the model
-            massbal.main()
+                # Run the model
+                massbal.main()
 
-            # End timer
-            time_elapsed = time.time() - start_time
+                # End timer
+                time_elapsed = time.time() - start_time
 
-            # Store output
-            massbal.output.add_vars()
-            massbal.output.add_basic_attrs(args,time_elapsed,climate)
+                # Store output
+                massbal.output.add_vars()
+                massbal.output.add_basic_attrs(args,time_elapsed,climate)
 
-            # Load output dataset
-            ds = massbal.output.get_output()
+                # Grab output dataset
+                ds = massbal.output.get_output()
 
-            # Calculate error
-            if run_type == 'long':
-                winter_MAE,summer_MAE = seasonal_mass_balance(site,ds,method='MAE')
-                winter_ME,summer_ME = seasonal_mass_balance(site,ds,method='ME')
-                results = {'winter_MAE':winter_MAE,'summer_MAE':summer_MAE,
-                        'winter_ME':winter_ME,'summer_ME':summer_ME}
-            else:
-                MAE = cumulative_mass_balance(site,ds,method='MAE')
-                ME = cumulative_mass_balance(site,ds,method='MAE')
-                results = {'MAE':MAE,'ME':ME}
+                # Calculate error
+                if run_type == 'long':
+                    winter_MAE,summer_MAE = seasonal_mass_balance(site,ds,method='MAE')
+                    winter_ME,summer_ME = seasonal_mass_balance(site,ds,method='ME')
+                    results = {'winter_MAE':winter_MAE,'summer_MAE':summer_MAE,
+                            'winter_ME':winter_ME,'summer_ME':summer_ME}
+                else:
+                    MAE = cumulative_mass_balance(site,ds,method='MAE')
+                    ME = cumulative_mass_balance(site,ds,method='MAE')
+                    results = {'MAE':MAE,'ME':ME}
 
-            # Store the set/run for each parameter combination
-            results['set'] = args.task_id
-            results['run'] = args.run_id
+                # Store the set/run for this parameter/site combination
+                results['set'] = args.task_id
+                results['run'] = args.run_id
 
-            # Add the results to a dictionary
-            for result in results:
-                outdict[site][kw][c5][kp][result] = results[result]
-                
-    # Pickle output
-    out_fn = eb_prms.output_filepath + out_fp + f'{date}_{n_today}_out.pkl'
-    with open(out_fn, 'wb') as file:
-        pickle.dump(outdict,file)
+                # Add the results to a dictionary
+                for result in results:
+                    outdict[args.site][args.kw][args.Boone_c5][args.kp][result] = results[result]
+                    
+                # Pickle output
+                out_fn = eb_prms.output_filepath + out_fp + f'{date}_{n_today}_out.pkl'
+                with open(out_fn, 'wb') as file:
+                    pickle.dump(outdict,file)
+                break
+            except:
+                print('Failed site',args.site,'with kw=',args.kw,'c5=',args.Boone_c5,'kp=',args.kp)
+                print('Removing:',args.out + '0.nc')
+                os.remove(eb_prms.output_filepath + args.out + '0.nc')
+                print()
+                print('Retrying...')
 
     return
 

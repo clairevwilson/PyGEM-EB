@@ -1,13 +1,12 @@
 import socket
 import pickle
-import argparse
 # Local libraries
 from pygem_eb.processing.plotting_fxns import *
 from objectives import *
 
 # Define some information on the model runs
 sitedict = {'2024':['AB','ABB','B','BD','D','T'],
-            'long':['A','B','D']}
+            'long':['AU','B','D']}
 # Number of runs to assess
 n_sets = 200    # Doesn't matter as long as it's above the actual number of sets/runs
 n_runs = 5
@@ -38,11 +37,20 @@ def process_grid_search(date,run_type,params,date_idx=0):
     
     """
     # Define filepaths
-    data_path += f'{date}_{date_idx}/'
-    output_fn = f'{date}_{date_idx}_out.pkl'
+    data_path = '/trace/group/rounce/cvwilson/Output/' + f'{date}_{date_idx}/'
+    output_fn = f'{date}_{date_idx}_out2.pkl'
 
     # Store which runs are missing
     missing = []
+    dsdict = {}
+    for site in sitedict[run_type]:
+        dsdict[site] = {}
+        for kw in params['kw']:
+            dsdict[site][kw] = {}
+            for c5 in params['Boone_c5']:
+                dsdict[site][kw][c5] = {}
+                for kp in params['kp']:
+                    dsdict[site][kw][c5][kp] = {}
 
     # Loop through sets and runs
     for set in range(n_sets):
@@ -50,9 +58,14 @@ def process_grid_search(date,run_type,params,date_idx=0):
             # Open the files that exist
             try:
                 fn = f'grid_{date}_set{set}_run{run}_0.nc'
-                ds,startdate,enddate = getds(data_path+fn)
+                ds,_,_ = getds(data_path+fn)
             except FileNotFoundError:
                 missing.append(f'set{set}_run{run}')
+                continue
+
+            if ds.melt.sum().values <= 1e-5:
+                # Found an empty file: skip
+                print(set,run,'is empty')
                 continue
             
             # Parse the parameters
@@ -80,6 +93,7 @@ def process_grid_search(date,run_type,params,date_idx=0):
             if kp in params['kp'] and kw in params['kw'] and c5 in params['Boone_c5']:
                 for result in results:
                     dsdict[site][kw][c5][kp][result] = results[result]
+            print(dsdict[site][kw][c5][kp]['summer_MAE'],run,set)
 
     # Pickle the dict
     with open(data_path + output_fn, 'wb') as file:

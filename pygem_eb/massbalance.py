@@ -65,8 +65,8 @@ class massBalance():
             self.time = time
 
             # Initiate the energy balance to unpack climate data
-            self.enbal = eb.energyBalance(self.climate,time,dt,self.args)
-            enbal = self.enbal
+            enbal = eb.energyBalance(self.climate,time,dt,self.args)
+            self.enbal = enbal 
 
             # Get rain and snowfall amounts [kg m-2]
             rainfall,snowfall = self.get_precip(enbal)
@@ -104,7 +104,7 @@ class massBalance():
             runoff = self.percolation(enbal,layers,layermelt,rainfall)
             
             # Recalculate the temperature profile considering conduction
-            self.solve_heat_eq(layers,surface.stemp)
+            self.thermal_conduction(layers,surface.stemp)
 
             # Calculate refreeze
             refreeze = self.refreezing(layers)
@@ -760,7 +760,7 @@ class massBalance():
         assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, f'phase change failed mass conservation in {self.output.out_fn}'
         return
       
-    def solve_heat_eq(self,layers,surftemp,dt_heat=eb_prms.dt_heateq):
+    def thermal_conduction(self,layers,surftemp,dt_heat=eb_prms.dt_heateq):
         """
         Resolves the temperature profile from conduction of heat using 
         Forward-in-Time-Central-in-Space (FTCS) scheme
@@ -907,10 +907,13 @@ class massBalance():
         mass_in:    sum of precipitation (kg m-2)
         mass_out:   sum of runoff (kg m-2)
         """
-         # Difference in mass since the last timestep
+        # Difference in mass since the last timestep
         current_mass = np.sum(self.layers.lice + self.layers.lwater)
         diff = current_mass - self.previous_mass
         in_out = mass_in - mass_out
+        if np.abs(diff - in_out) >= eb_prms.mb_threshold:
+            print('discrepancy of',np.abs(diff - in_out) - eb_prms.mb_threshold)
+            print('in',mass_in,'out',mass_out,'currently',self.layers.lice,self.layers.lwater,current_mass,'was',self.previous_mass)
         assert np.abs(diff - in_out) < eb_prms.mb_threshold, f'Timestep {self.time} failed mass conservation in {self.output.out_fn}'
         
         # New initial mass
@@ -1054,6 +1057,15 @@ class Output():
         self.latent_output.append(float(enbal.lat))
         self.meltenergy_output.append(float(surface.Qm))
         self.albedo_output.append(float(surface.bba))
+
+        list_flux = [enbal.SWin,enbal.SWout,enbal.LWin,enbal.LWout,enbal.sens,enbal.lat]
+        if np.sum(list_flux)  - surface.Qm > 100 and surface.Qm > 0:
+            print(step,'melt',massbal.melt,'Qm',surface.Qm)
+            print('SWnet',int(list_flux[0]+list_flux[1]))
+            print('LWnet',int(list_flux[2]+list_flux[3]))
+            print('Qs',int(list_flux[4]),'Ql',int(list_flux[5]))
+            print('sum',np.sum(list_flux))
+            print('')
 
         self.melt_output.append(float(massbal.melt))
         self.refreeze_output.append(float(massbal.refreeze))
