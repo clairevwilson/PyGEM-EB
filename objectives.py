@@ -45,7 +45,7 @@ def objective(model,data,method):
         return np.mean(model - data)
     
 # ========== 1. SEASONAL MASS BALANCE ==========
-def seasonal_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
+def seasonal_mass_balance(site,ds,method='MAE'):
     """
     Compares seasonal mass balance measurements from
     USGS stake surveys to a model output.
@@ -110,53 +110,103 @@ def seasonal_mass_balance(site,ds,method='MAE',plot=False,plot_ax=False):
     winter_error = objective(winter_model,winter_data,method) 
     summer_error = objective(summer_model,summer_data,method) 
 
-    # Plot
-    if plot:
-        if plot_ax:
-            ax = plot_ax
-        else:
-            fig,ax = plt.subplots()
-        if plot == 'w-s+':
-            ax.plot(years,mb_dict['w-'],label='Winter Melt',color='turquoise',linewidth=2)
-            ax.plot(years,mb_dict['s+'],label='Summer Acc.',color='orange',linewidth=2)
-            ax.plot(years,wabl_data,color='turquoise',linestyle='--')
-            ax.plot(years,sacc_data,color='orange',linestyle='--')
-            ax.set_ylabel('Partitioned seasonal mass balance (m w.e.)',fontsize=14)
-            ax.set_title(f'Summer accumulation and winter ablation at site {site}')
-        else:
-            ax.plot(years,winter_model,label='Winter',color='turquoise',linewidth=2)
-            ax.plot(years,summer_model,label='Summer',color='orange',linewidth=2)
-            ax.plot(years,winter_data,color='turquoise',linestyle='--')
-            ax.plot(years,summer_data,color='orange',linestyle='--')
-            ax.axhline(0,color='grey',linewidth=0.5)
-            min_all = np.nanmin(np.array([winter_model,summer_model,winter_data,summer_data]))
-            max_all = np.nanmax(np.array([winter_model,summer_model,winter_data,summer_data]))
-            ax.set_xticks(np.arange(years[0],years[-1],4))
-            ax.set_yticks(np.arange(np.round(min_all,0),np.round(max_all,0)+1,1))
-            ax.set_ylabel('Seasonal mass balance (m w.e.)',fontsize=14)
-            title = f'Summer {method} = {summer_error:.3f}   Winter {method} = {winter_error:.3f}'
-            if method == 'MAE':
-                winter_error = objective(winter_model,winter_data,'ME') 
-                summer_error = objective(summer_model,summer_data,'ME')
-                method = 'Mean Error' 
-                title += f'\nSummer {method} = {summer_error:.3f}   Winter {method} = {winter_error:.3f}'
-            ax.set_title(title)
-        ax.plot(np.nan,np.nan,linestyle='--',color='grey',label='Data')
-        ax.plot(np.nan,np.nan,color='grey',label='Modeled')
-        ax.legend(fontsize=12,ncols=2)
-        ax.tick_params(labelsize=12,length=5,width=1)
-        ax.set_xlim(years[0],years[-1])
-        ax.set_xticks(np.arange(years[0],years[-1],4))
-        if plot_ax:
-            return ax
-        else:
-            return fig,ax
+    return winter_error, summer_error
+
+def plot_seasonal_mass_balance(site,ds,plot_ax=False,label=None,plot_var='mb',color='default'):
+    """
+    plot_var : 'mb' (default) or 'w-s+' (winter melt, summer accumulation)
+    """
+    # Make or get plot ax
+    if plot_ax:
+        ax = plot_ax
     else:
-        return winter_error, summer_error
+        fig,ax = plt.subplots()
+    
+    # Load dataset
+    df_mb = pd.read_csv(USGS_fp)
+    df_mb = df_mb.loc[df_mb['site_name'] == site]
+    df_mb.index = df_mb['Year']
+
+    # Get overlapping years
+    years_model = np.unique(pd.to_datetime(ds.time.values).year)
+    years_measure = np.unique(df_mb.index)
+    years = np.sort(list(set(years_model) & set(years_measure)))[1:]
+
+    # Retrieve the model data
+    mb_dict = {'bw':[],'bs':[],'w-':[],'s+':[]}
+    for year in years:
+        spring_date = str(year)+'-04-20 00:00'
+        fall_date = str(year)+'-08-20 00:00'
+        last_fall_date = str(year-1)+'-08-20 00:00'
+        melt_dates = pd.date_range(spring_date,fall_date,freq='h')
+        acc_dates = pd.date_range(last_fall_date,spring_date,freq='h')
+        if pd.to_datetime(ds.time.values[0]).minute == 30:
+            melt_dates = melt_dates + pd.Timedelta(minutes=30)
+            acc_dates = acc_dates + pd.Timedelta(minutes=30)
+        # sum mass balance
+        try:
+            wds = ds.sel(time=acc_dates).sum()
+            sds = ds.sel(time=melt_dates).sum()
+        except:
+            if year == years[-1]:
+                years = years[:-1]
+                break
+        winter_mb = wds.accum + wds.refreeze - wds.melt
+        internal_acc = ds.sel(time=melt_dates[-2]).cumrefreeze.values
+        summer_mb = sds.accum + sds.refreeze - sds.melt - internal_acc
+        mb_dict['bw'].append(winter_mb.values)
+        mb_dict['bs'].append(summer_mb.values)
+        mb_dict['w-'].append(wds.melt.values*-1)
+        mb_dict['s+'].append(sds.accum.values)
+
+    # Index mass balance data
+    df_mb = df_mb.loc[years]
+    winter_data = df_mb['bw']
+    summer_data = df_mb['ba'] - df_mb['bw']
+    wabl_data = df_mb['winter_ablation']
+    sacc_data = df_mb['summer_accumulation']
+
+    if color == 'default' and plot_var =='mb':
+        cwinter = 'turquoise'
+        csummer = 'orange'
+    elif plot_var == 'bw':
+        cwinter = color
+    elif plot_var == 'bs':
+        csummer = color
+
+    if plot_var == 'w-s+':
+        ax.plot(years,mb_dict['w-'],label='Winter Melt',color=cwinter,linewidth=2)
+        ax.plot(years,mb_dict['s+'],label='Summer Acc.',color=csummer,linewidth=2)
+        ax.plot(years,wabl_data,color='turquoise',linestyle='--')
+        ax.plot(years,sacc_data,color='orange',linestyle='--')
+        ax.set_ylabel('Partitioned seasonal mass balance (m w.e.)',fontsize=14)
+        ax.set_title(f'Summer accumulation and winter ablation at site {site}')
+    else:
+        if plot_var in ['mb','bw']:
+            ax.plot(years,mb_dict['bw'],label='Winter',color=cwinter,linewidth=2)
+            ax.plot(years,winter_data,color=cwinter,linestyle='--')
+        if plot_var in ['mb','bs']:
+            ax.plot(years,mb_dict['bs'],label='Summer',color=csummer,linewidth=2)
+            ax.plot(years,summer_data,color=csummer,linestyle='--')
+        ax.axhline(0,color='grey',linewidth=0.5)
+        min_all = np.nanmin(np.array([mb_dict['bw'],mb_dict['bs'],winter_data,summer_data]))
+        max_all = np.nanmax(np.array([mb_dict['bw'],mb_dict['bs'],winter_data,summer_data]))
+        ax.set_xticks(np.arange(years[0],years[-1],4))
+        ax.set_yticks(np.arange(np.round(min_all,0),np.round(max_all,0)+1,1))
+        ax.set_ylabel('Seasonal mass balance (m w.e.)',fontsize=14)
+    ax.plot(np.nan,np.nan,linestyle='--',color='grey',label='Data')
+    ax.plot(np.nan,np.nan,color='grey',label='Modeled')
+    ax.legend(fontsize=12,ncols=2)
+    ax.tick_params(labelsize=12,length=5,width=1)
+    ax.set_xlim(years[0],years[-1])
+    ax.set_xticks(np.arange(years[0],years[-1],4))
+    if plot_ax:
+        return ax
+    else:
+        return fig,ax
 
 # ========== 2. CUMULATIVE MASS BALANCE ==========
-def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False,
-                            plot=False,plot_ax=False,label='Model'):
+def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False):
     """
     Compares cumulative mass balance measurements from
     a stake to a model output. 
@@ -170,17 +220,24 @@ def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False,
     fp_stake = fp_gnssir.replace('GNSSIR','stake')
 
     # Load GNSSIR daily MB
+    df_mb_dict = {}
     if os.path.exists(fp_gnssir):
         df_mb_daily = pd.read_csv(fp_gnssir)
         df_mb_daily.index = pd.to_datetime(df_mb_daily['Date'])
         df_mb_daily['CMB'] -= df_mb_daily['CMB'].iloc[0]
-        df_mb_daily = df_mb_daily.sort_index()
-    elif os.path.exists(fp_stake):
+        df_mb_dict['GNSS_IR'] = df_mb_daily.sort_index()
+    if os.path.exists(fp_stake):
         df_mb_daily = pd.read_csv(fp_stake)
         df_mb_daily.index = pd.to_datetime(df_mb_daily['Date'])
-        df_mb_daily = df_mb_daily.sort_index()
+        df_mb_dict['stake'] = df_mb_daily.sort_index()
 
-    if out_mbs or plot or plot_ax:
+    if 'stake' in df_mb_dict:
+        df_mb_daily = df_mb_dict['stake']
+    if 'GNSS_IR' in df_mb_dict:
+        df_mb_daily = df_mb_dict['GNSS_IR']
+
+    # Get the summer mass balance
+    if out_mbs:
         # Load USGS seasonal MB
         if site not in ['ABB','BD']:
             year = pd.to_datetime(ds.time.values[0]).year
@@ -212,7 +269,7 @@ def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False,
         if end > ds.time.values[-1]:
             end = pd.to_datetime(ds.time.values[-1])
 
-        # Index state data
+        # Index daily data
         df_mb_daily = df_mb_daily.loc[start:end]
         df_mb_daily.index = pd.to_datetime(df_mb_daily.index)
         idx_data = []
@@ -222,18 +279,6 @@ def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False,
                 if ~np.isnan(df_mb_daily.loc[date,'CMB']):
                     idx_data.append(i)
                 
-        # Save original ds for plotting all time
-        ds_alltime = ds.copy(deep=True)
-        s = pd.to_datetime(ds_alltime.time.values[0])
-        e = pd.to_datetime(ds_alltime.time.values[-1])
-        if s.hour != 0:
-            s += pd.Timedelta(hours=24-s.hour)
-            e -= pd.Timedelta(hours=s.hour)
-            if s > start:
-                s == start
-        ds_alltime = ds_alltime.dh.cumsum().sel(time=pd.date_range(s,e))
-        ds_alltime -= ds_alltime.sel(time=pd.to_datetime(start))
-
         # Index model data
         if pd.to_datetime(ds.time.values[0]).minute == 30:
             if start.minute != pd.to_datetime(ds.time.values[0]).minute:
@@ -288,67 +333,99 @@ def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False,
 
         # Assess error
         error = objective(model,data,method)
+    else:
+        print('No data available to compare')
+        return
 
-        # Plot
-        if plot or plot_ax:
-            if not plot_ax:
-                fig,ax = plt.subplots(figsize=(3,6))
-            else:
-                ax = plot_ax
-            
-            # Plot model
-            ax.plot(ds_alltime.time.values,ds_alltime.values,label=label,color=plt.cm.Dark2(0))
-            
-            # Plot gnssir
-            if os.path.exists(fp_gnssir):
-                ax.plot(df_mb_daily.index,df_mb_daily['CMB'],label='GNSS-IR',linestyle='--',color='black')
-                # error bounds
-                lower = df_mb_daily['CMB'] - df_mb_daily['sigma']
-                upper = df_mb_daily['CMB'] + df_mb_daily['sigma']
-                ax.fill_between(df_mb_daily.index,lower,upper,alpha=0.2,color='gray')
+    if out_mbs:
+        return mbs_modeled,mbs_measured
+    else:
+        return error
+        
+def plot_2024_mass_balance(site,ds,plot_ax=False,label='Model'):
+    # Update filepath
+    fp_gnssir = GNSSIR_fp.replace('SITE',site)
+    fp_stake = fp_gnssir.replace('GNSSIR','stake')
+    year = '2024'
 
-            # Plot stake
-            if os.path.exists(fp_stake):
-                df_stake_daily = pd.read_csv(fp_stake.replace('GNSSIR','stake'),index_col=0)
-                df_stake_daily.index = pd.to_datetime(df_stake_daily.index)
-                df_stake_daily['CMB'] -= df_stake_daily['CMB'].iloc[0]
-                df_stake_daily = df_stake_daily.sort_index()
-                ax.plot(df_stake_daily.index,df_stake_daily['CMB'],label='Banded stake',linestyle=':',color='gray')
+    # Load GNSSIR daily MB
+    df_mb_dict = {}
+    if os.path.exists(fp_gnssir):
+        df_mb_daily = pd.read_csv(fp_gnssir)
+        df_mb_daily.index = pd.to_datetime(df_mb_daily['Date'])
+        df_mb_daily['CMB'] -= df_mb_daily['CMB'].iloc[0]
+        df_mb_dict['GNSS_IR'] = df_mb_daily.sort_index()
+    if os.path.exists(fp_stake):
+        df_mb_daily = pd.read_csv(fp_stake)
+        df_mb_daily.index = pd.to_datetime(df_mb_daily['Date'])
+        df_mb_dict['stake'] = df_mb_daily.sort_index()
 
-            # Beautify
-            ax.legend(fontsize=12)
-            ax.xaxis.set_major_formatter(date_form)
-            ax.set_xticks(pd.date_range(start,end,freq='MS'))
-            ax.tick_params(labelsize=12,length=5,width=1)
-            ax.set_xlim(start,end)
-            ax.set_ylabel('Surface height change (m)',fontsize=14)
-            if error < 1:
-                if method in ['ME']:
-                    direction = '' if error < 0 else '+'
-                    ax_title = f'{direction}{error:.3f} m'
-                else:
-                    ax_title = f'{method}: {error:.3f} m'
-            else:
-                ax_title = f'{method}: {error:.3e} m'
-            if site not in ['ABB','BD']:
-                mb_bias = mbs_modeled - mbs_measured
-                # ax_title += f'\nMBMOD: {mbs_modeled:.3f} m w.e.\nMBMEAS: {mbs_measured:.3f} m w.e.'
-                # ax_title.replace('MOD','$_{mod}$')
-                # ax_title.replace('MEAS','$_{meas}$')
-                # direction = '' if mb_bias < 0 else '+'
-                # ax_title += f'\n{direction}{mb_bias:.3f} m w.e.'
-            else:
-                ax_title = ax_title + '\n' 
-            ax.set_title(ax_title,y=1.03)
-            if not plot_ax:
-                return fig, ax
-            else:
-                return ax, error
-        else:
-            if out_mbs:
-                return mbs_modeled,mbs_measured
-            else:
-                return error 
+    # Retrieve the dates
+    start = df_mb_dict[list(df_mb_dict.keys())[0]].index[0]
+    end = pd.to_datetime(ds.time.values[-1])
+
+    # Get the summer mass balance
+    # Load USGS seasonal MB
+    if site not in ['ABB','BD']:
+        year = pd.to_datetime(ds.time.values[0]).year
+        df_mb = pd.read_csv(USGS_fp)
+        df_mb = df_mb.loc[df_mb['site_name'] == site]
+        mba = df_mb.loc[df_mb['Year'] == year,'ba'].values[0]
+        mbw = df_mb.loc[df_mb['Year'] == year,'bw'].values[0]
+        mbs_measured = mba - mbw
+
+    # Retrieve modeled summer MB
+    spring_date = str(year)+'-04-20 00:00'
+    fall_date = str(year)+'-08-20 00:00'
+    melt_dates = pd.date_range(spring_date,fall_date,freq='h')
+    ds_summer = ds.sel(time=melt_dates)
+    mbs_ds = ds_summer.accum + ds_summer.refreeze - ds_summer.melt
+    internal_acc = ds.sel(time=melt_dates[-2]).cumrefreeze.values
+    mbs_modeled = mbs_ds.sum().values - internal_acc
+
+    # Cumululative sum of dh
+    ds = ds.sel(time=pd.date_range(start,end,freq='h'))
+    ds['dh'].values = ds.dh.cumsum().values - ds.dh.isel(time=0).values
+    # Select data daily
+    ds = ds.sel(time=pd.date_range(start,end)).dh
+
+    # Plot
+    if not plot_ax:
+        fig,ax = plt.subplots(figsize=(3,6))
+    else:
+        ax = plot_ax
+    
+    # Plot model
+    ax.plot(ds.time.values,ds.values,label=label,color=plt.cm.Dark2(0))
+    
+    # Plot gnssir
+    if 'GNSS_IR' in df_mb_dict:
+        df_mb_daily = df_mb_dict['GNSS_IR']
+        ax.plot(df_mb_daily.index,df_mb_daily['CMB'],label='GNSS-IR',linestyle='--',color='black')
+        # error bounds
+        lower = df_mb_daily['CMB'] - df_mb_daily['sigma']
+        upper = df_mb_daily['CMB'] + df_mb_daily['sigma']
+        ax.fill_between(df_mb_daily.index,lower,upper,alpha=0.2,color='gray')
+
+    # Plot stake
+    if 'stake' in df_mb_dict:
+        df_stake_daily = df_mb_dict['stake']
+        df_stake_daily.index = pd.to_datetime(df_stake_daily.index)
+        df_stake_daily['CMB'] -= df_stake_daily['CMB'].iloc[0]
+        df_stake_daily = df_stake_daily.sort_index()
+        ax.plot(df_stake_daily.index,df_stake_daily['CMB'],label='Banded stake',linestyle=':',color='gray')
+
+    # Beautify
+    ax.legend(fontsize=12)
+    ax.xaxis.set_major_formatter(date_form)
+    ax.set_xticks(pd.date_range(start,end,freq='MS'))
+    ax.tick_params(labelsize=12,length=5,width=1)
+    ax.set_xlim(start,end)
+    ax.set_ylabel('Surface height change (m)',fontsize=14)
+    if not plot_ax:
+        return fig, ax
+    else:
+        return ax
 
 # ========== 3. SNOW TEMPERATURES ==========
 def snow_temperature(site,ds,method='RMSE',plot=False,plot_heights=[0.5]):

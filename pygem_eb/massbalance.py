@@ -64,6 +64,9 @@ class massBalance():
             # BEGIN MASS BALANCE
             self.time = time
 
+            # Check we still have glacier
+            self.check_glacier()
+
             # Initiate the energy balance to unpack climate data
             enbal = eb.energyBalance(self.climate,time,dt,self.args)
             self.enbal = enbal 
@@ -919,6 +922,31 @@ class massBalance():
         # New initial mass
         self.previous_mass = current_mass
         return
+    
+    def check_glacier(self):
+        """
+        Checks there is still a glacier. If not, ends the run and
+        saves the output.
+        """
+        # Load layer height
+        layerheight = np.sum(self.layers.lheight)
+        if layerheight < 1: # Cuts off at 1 meter
+            # New end date
+            end = self.time
+            start = self.time_list[0]
+            new_time = pd.date_range(start,end,freq='h')
+
+            # Load the output
+            with xr.open_dataset(self.output.out_fn) as dataset:
+                ds = dataset.load()
+                # Chop it to the new end date and save
+                ds = ds.sel(time=new_time)
+            ds.to_netcdf(self.output.out_fn)
+
+            # Save the data
+            if self.args.store_data:
+                self.output.store_data()
+        return
 
     def exit(self):
         if self.args.debug:
@@ -1057,15 +1085,6 @@ class Output():
         self.latent_output.append(float(enbal.lat))
         self.meltenergy_output.append(float(surface.Qm))
         self.albedo_output.append(float(surface.bba))
-
-        list_flux = [enbal.SWin,enbal.SWout,enbal.LWin,enbal.LWout,enbal.sens,enbal.lat]
-        if np.sum(list_flux)  - surface.Qm > 100 and surface.Qm > 0:
-            print(step,'melt',massbal.melt,'Qm',surface.Qm)
-            print('SWnet',int(list_flux[0]+list_flux[1]))
-            print('LWnet',int(list_flux[2]+list_flux[3]))
-            print('Qs',int(list_flux[4]),'Ql',int(list_flux[5]))
-            print('sum',np.sum(list_flux))
-            print('')
 
         self.melt_output.append(float(massbal.melt))
         self.refreeze_output.append(float(massbal.refreeze))
