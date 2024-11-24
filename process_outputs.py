@@ -13,10 +13,6 @@ n_runs = 7
 
 # Filenames: input and output
 machine = socket.gethostname()
-if 'trace' in machine:
-    data_path = '/trace/group/rounce/cvwilson/Output/'
-else:
-    data_path = '/home/claire/research/Output/EB/'
 
 def process_grid_search(dates,run_type,params,date_idx=0):
     """
@@ -37,7 +33,10 @@ def process_grid_search(dates,run_type,params,date_idx=0):
     
     """
     # Define filepaths
-    base_path = '/trace/group/rounce/cvwilson/Output/' 
+    if 'trace' in machine:
+        base_path = '/trace/group/rounce/cvwilson/Output/'
+    else:
+        base_path = '/home/claire/research/Output/EB/'
     output_fn = f'{dates[0]}_{date_idx}_out.pkl'
 
     if os.path.exists(base_path + output_fn):

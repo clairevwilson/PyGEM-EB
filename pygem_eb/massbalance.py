@@ -916,7 +916,7 @@ class massBalance():
         diff = current_mass - self.previous_mass
         in_out = mass_in - mass_out
         if np.abs(diff - in_out) >= eb_prms.mb_threshold:
-            print(self.time,'discrepancy of',np.abs(diff - in_out) - eb_prms.mb_threshold)
+            print(self.time,'discrepancy of',np.abs(diff - in_out) - eb_prms.mb_threshold,self.output.out_fn)
             print('in',mass_in,'out',mass_out,'currently',self.layers.lice,self.layers.lwater,current_mass,'was',self.previous_mass)
         assert np.abs(diff - in_out) < eb_prms.mb_threshold, f'Timestep {self.time} failed mass conservation in {self.output.out_fn}'
         

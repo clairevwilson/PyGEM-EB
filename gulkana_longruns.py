@@ -13,7 +13,7 @@ import pygem_eb.input as eb_prms
 use_AWS = False
 sites = ['B'] # Sites to run in parallel # ,'AU','B','D'
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
-params_fn = '../Output/params/11_04_MERRA2.csv'
+params_fn = False # '../Output/params/11_04_MERRA2.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
 n_runs_ahead = 200    # Step if you're going to run this script more than once
 
