@@ -11,19 +11,17 @@ import pygem_eb.input as eb_prms
 
 # User info
 use_AWS = False
-sites = ['AU'] # Sites to run in parallel
+sites = ['B'] # Sites to run in parallel # ,'AU','B','D'
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
 params_fn = '../Output/params/11_04_MERRA2.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
-n_runs_ahead = 1    # Step if you're going to run this script more than once
+n_runs_ahead = 200    # Step if you're going to run this script more than once
 
 # Read command line args
 args = sim.get_args()
-args.debug=True 
-print('TURN OFF DEBVUG')
 args.startdate = '2000-04-20 00:00'
 args.enddate = '2024-08-20 12:00'
-args.store_data = False              # Ensures output is stored
+args.store_data = True              # Ensures output is stored
 args.glac_no = ['01.00570']
 args.use_AWS = use_AWS
 eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana_22yrs.csv'

@@ -18,7 +18,7 @@ if 'trace' in machine:
 else:
     data_path = '/home/claire/research/Output/EB/'
 
-def process_grid_search(date,run_type,params,date_idx=0):
+def process_grid_search(dates,run_type,params,date_idx=0):
     """
     Takes in a given output run and processes an output
     pickle file containing the MAE, ME, and run/set number
@@ -37,11 +37,11 @@ def process_grid_search(date,run_type,params,date_idx=0):
     
     """
     # Define filepaths
-    data_path = '/trace/group/rounce/cvwilson/Output/' + f'{date}_{date_idx}/'
-    output_fn = f'{date}_{date_idx}_out2.pkl'
+    base_path = '/trace/group/rounce/cvwilson/Output/' 
+    output_fn = f'{dates[0]}_{date_idx}_out.pkl'
 
-    if os.path.exists(data_path + output_fn):
-        with open(data_path + output_fn, 'rb') as file:
+    if os.path.exists(base_path + output_fn):
+        with open(base_path + output_fn, 'rb') as file:
             dsdict = pickle.load(file)
     else:
         dsdict = {}
@@ -57,47 +57,48 @@ def process_grid_search(date,run_type,params,date_idx=0):
     # Loop through sets and runs
     for set in range(n_sets):
         for run in range(n_runs):
-            # Open the files that exist
-            try:
-                fn = f'grid_{date}_set{set}_run{run}_0.nc'
-                ds,_,_ = getds(data_path+fn)
-            except FileNotFoundError:
-                continue
+            for date in dates:
+                # Open the files that exist
+                try:
+                    fn = f'{date}_{date_idx}/grid_{date}_set{set}_run{run}_0.nc'
+                    ds,_,_ = getds(base_path+fn)
+                except FileNotFoundError:
+                    continue
 
-            if ds.melt.sum().values <= 1e-5:
-                # Found an empty file: skip
-                print(set,run,'is empty')
-                continue
-            
-            # Parse the parameters
-            kp = ds.attrs['kp']
-            c5 = ds.attrs['c5']
-            kw = ds.attrs['kw']
-            site = ds.attrs['site']
+                if ds.melt.sum().values <= 1e-5:
+                    # Found an empty file: skip
+                    print(set,run,'is empty')
+                    continue
+                
+                # Parse the parameters
+                kp = ds.attrs['kp']
+                c5 = ds.attrs['c5']
+                kw = ds.attrs['kw']
+                site = ds.attrs['site']
 
-            # if 'set' not in dsdict[site][kw][c5][kp]:
-            if 'A' in site and float(kw) > 1.4:
-                # Calculate error
-                if run_type == 'long':
-                    winter_MAE,summer_MAE = seasonal_mass_balance(site,ds,method='MAE')
-                    winter_ME,summer_ME = seasonal_mass_balance(site,ds,method='ME')
-                    results = {'winter_MAE':winter_MAE,'summer_MAE':summer_MAE,
-                            'winter_ME':winter_ME,'summer_ME':summer_ME}
-                else:
-                    MAE = cumulative_mass_balance(site,ds,method='MAE')
-                    ME = cumulative_mass_balance(site,ds,method='MAE')
-                    results = {'MAE':MAE,'ME':ME}
+                if 'set' not in dsdict[site][kw][c5][kp]:
+                    # Calculate error
+                    if run_type == 'long':
+                        winter_MAE,summer_MAE = seasonal_mass_balance(site,ds,method='MAE')
+                        winter_ME,summer_ME = seasonal_mass_balance(site,ds,method='ME')
+                        results = {'winter_MAE':winter_MAE,'summer_MAE':summer_MAE,
+                                'winter_ME':winter_ME,'summer_ME':summer_ME}
+                    else:
+                        MAE = cumulative_mass_balance(site,ds,method='MAE')
+                        ME = cumulative_mass_balance(site,ds,method='MAE')
+                        results = {'MAE':MAE,'ME':ME}
 
-                # Store the set/run for each parameter combination
-                results['set'] = set
-                results['run'] = run
+                    # Store the set/run for each parameter combination
+                    results['set'] = set
+                    results['run'] = run
 
-                # Add the result to a dictionary
-                if kp in params['kp'] and kw in params['kw'] and c5 in params['Boone_c5']:
-                    for result in results:
-                        dsdict[site][kw][c5][kp][result] = results[result]
-                print(dsdict[site][kw][c5][kp]['summer_MAE'],run,set)
+                    # Add the result to a dictionary
+                    if kp in params['kp'] and kw in params['kw'] and c5 in params['Boone_c5']:
+                        for result in results:
+                            dsdict[site][kw][c5][kp][result] = results[result]
+                    
+                    print('Done run',run,'set',set)
 
     # Pickle the dict
-    with open(data_path + output_fn, 'wb') as file:
+    with open(base_path + output_fn, 'wb') as file:
         pickle.dump(dsdict,file)

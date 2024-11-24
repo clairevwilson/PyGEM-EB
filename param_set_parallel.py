@@ -13,11 +13,13 @@ import pygem_eb.massbalance as mb
 from objectives import *
 
 # OPTIONS
+repeat_run = True  # True if restarting an already begun run
 run_type = 'long'   # 'long' or '2024'
 # Define sets of parameters
-params = {'kw':[1,1.1,1.2,1.3,1.4,1.5],
+params = {'kw':[1,1.5,2,2.5,3],
           'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028],
-          'kp':[2.4,2.5,2.6,2.7,2.8]}
+          'kp':[2.4,2.5,2.6,2.7,2.8,3]}
+# params = {'kw':[1.5,2],'Boone_c5':[0.018],'kp':[2.8]}
 
 # Set the ones you want constant
 # kw = 2
@@ -27,9 +29,9 @@ k_snow = 'VanDusen'
 
 # Define sites
 if run_type == '2024':
-    sites = ['AB','ABB','B','BD','D','T']
+    sites = ['AB','ABB','B','BD','D','T'] # 
 else:
-    sites = ['A','AU','B','D']
+    sites = ['A','AU','B','D'] # 
 
 # Read command line args
 args = sim.get_args()
@@ -44,14 +46,13 @@ print(f'Beginning {n_runs} model runs on {n_processes} CPUs')
 # Check if we need multiple (serial) runs per (parallel) set
 if n_runs <= n_processes:
     n_runs_per_process = 0
-    n_runs_with_extra = 0
+    n_process_with_extra = 0
 else:
     n_runs_per_process = n_runs // n_processes  # Base number of runs per CPU
-    n_runs_with_extra = n_runs % n_processes    # Number of CPUs with one extra run
+    n_process_with_extra = n_runs % n_processes    # Number of CPUs with one extra run
 
 # Force some args
 args.store_data = True              # Ensures output is stored
-args.debug = False                  # Don't need debug prints
 if run_type == '2024': # Short AWS run
     args.use_AWS = True
     eb_prms.AWS_fn = '../climate_data/AWS/Preprocessed/gulkana2024.csv'
@@ -60,40 +61,31 @@ if run_type == '2024': # Short AWS run
     args.enddate = pd.to_datetime('2024-08-20 00:00:00')
 else: # Long MERRA-2 run
     args.use_AWS = False
-    eb_prms.store_vars = ['MB','layers','EB']     # Only store mass balance results
-    print('storing all results')
+    eb_prms.store_vars = ['MB']     # Only store mass balance results
     args.startdate = pd.to_datetime('2000-04-20 00:00:00')
     args.enddate = pd.to_datetime('2024-08-20 00:00:00')
 
 # Create output directory
 if 'trace' in eb_prms.machine:
     eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
-# date = str(pd.Timestamp.today()).replace('-','_')[5:10]
-# n_today = 0
-# out_fp = f'{date}_{n_today}/'
-# while os.path.exists(eb_prms.output_filepath + out_fp):
-#     n_today += 1
-#     out_fp = f'{date}_{n_today}/'
-# os.mkdir(eb_prms.output_filepath + out_fp)
-date = '11_19'
-n_today = '0'
-out_fp = f'{date}_{n_today}/'
+
+if repeat_run:
+    date = '11_22'
+    n_today = '1'
+    out_fp = f'{date}_{n_today}/'
+else:
+    date = str(pd.Timestamp.today()).replace('-','_')[5:10]
+    n_today = 0
+    out_fp = f'{date}_{n_today}/'
+    while os.path.exists(eb_prms.output_filepath + out_fp):
+        n_today += 1
+        out_fp = f'{date}_{n_today}/'
+    os.mkdir(eb_prms.output_filepath + out_fp)
 
 # Transform params to strings for comparison
 for key in params:
     for v,value in enumerate(params[key]):
         params[key][v] = str(value)
-
-# Set up dictionary to store outputs
-outdict = {}
-for site in sites:
-    outdict[site] = {}
-    for kw in params['kw']:
-        outdict[site][kw] = {}
-        for c5 in params['Boone_c5']:
-            outdict[site][kw][c5] = {}
-            for kp in params['kp']:
-                outdict[site][kw][c5][kp] = {}
 
 # Parse list for inputs to Pool function
 packed_vars = [[] for _ in range(n_processes)]
@@ -136,8 +128,8 @@ for site in sites:
                 packed_vars[set_no].append((args_run,climate,store_attrs))
 
                 # Check if moving to the next set of runs
-                n_runs_set = n_runs_per_process + (1 if set_no < n_runs_with_extra else 0)
-                if run_no >= n_runs_set:
+                n_runs_set = n_runs_per_process + (1 if set_no < n_process_with_extra else 0)
+                if run_no == n_runs_set - 1:
                     set_no += 1
                     run_no = -1
 
@@ -153,11 +145,12 @@ def run_model_parallel(list_inputs):
 
         # Check if model run should be performed
         n_iters = 0
-        while not os.path.exists(eb_prms.output_filepath + args.out + '0.nc') and n_iters <= 10:
+        while not os.path.exists(eb_prms.output_filepath + args.out + '0.nc') and n_iters <= 5:
             n_iters += 1
-            if n_iters > 2:
+            if n_iters > 1:
                 print('Beginning repeat run... ')
             try:
+            # for aaaa in [0]:
                 # Start timer
                 start_time = time.time()
 
@@ -177,40 +170,12 @@ def run_model_parallel(list_inputs):
                 massbal.output.add_vars()
                 massbal.output.add_basic_attrs(args,time_elapsed,climate)
 
-                # Grab output dataset
-                ds = massbal.output.get_output()
-
-                # Calculate error
-                if run_type == 'long':
-                    winter_MAE,summer_MAE = seasonal_mass_balance(site,ds,method='MAE')
-                    winter_ME,summer_ME = seasonal_mass_balance(site,ds,method='ME')
-                    results = {'winter_MAE':winter_MAE,'summer_MAE':summer_MAE,
-                            'winter_ME':winter_ME,'summer_ME':summer_ME}
-                else:
-                    MAE = cumulative_mass_balance(site,ds,method='MAE')
-                    ME = cumulative_mass_balance(site,ds,method='MAE')
-                    results = {'MAE':MAE,'ME':ME}
-
-                # Store the set/run for this parameter/site combination
-                results['set'] = args.task_id
-                results['run'] = args.run_id
-
-                # Add the results to a dictionary
-                for result in results:
-                    outdict[args.site][args.kw][args.Boone_c5][args.kp][result] = results[result]
-                    
-                # Pickle output
-                out_fn = eb_prms.output_filepath + out_fp + f'{date}_{n_today}_out.pkl'
-                with open(out_fn, 'wb') as file:
-                    pickle.dump(outdict,file)
-                break
             except:
-                print('Failed site',args.site,'with kw=',args.kw,'c5=',args.Boone_c5,'kp=',args.kp)
+                print('Failed site',args.site,'with kw =',args.kw,'c5 =',args.Boone_c5,'kp =',args.kp)
                 print('Removing:',args.out + '0.nc')
                 os.remove(eb_prms.output_filepath + args.out + '0.nc')
                 print()
                 print('Retrying...')
-
     return
 
 # Run model in parallel

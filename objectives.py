@@ -69,24 +69,32 @@ def seasonal_mass_balance(site,ds,method='MAE'):
     # Retrieve the model data
     mb_dict = {'bw':[],'bs':[],'w-':[],'s+':[]}
     for year in years:
-        spring_date = str(year)+'-04-20 00:00'
-        fall_date = str(year)+'-08-20 00:00'
-        last_fall_date = str(year-1)+'-08-20 00:00'
-        melt_dates = pd.date_range(spring_date,fall_date,freq='h')
-        acc_dates = pd.date_range(last_fall_date,spring_date,freq='h')
+        spring_date = df_mb.loc[year,'spring_date']
+        fall_date = df_mb.loc[year,'fall_date']
+        last_fall_date = df_mb.loc[year-1,'fall_date']
+        # Fill nans
+        if str(spring_date) == 'nan':
+            spring_date = str(year)+'-04-20 00:00'
+        if str(fall_date) == 'nan':
+            fall_date = str(year)+'-08-20 00:00'
+        if str(last_fall_date) == 'nan':
+            last_fall_date = str(year-1)+'-08-20 00:00'
+        # Split into winter and summer
+        summer_dates = pd.date_range(spring_date,fall_date,freq='h')
+        winter_dates = pd.date_range(last_fall_date,spring_date,freq='h')
         if pd.to_datetime(ds.time.values[0]).minute == 30:
-            melt_dates = melt_dates + pd.Timedelta(minutes=30)
-            acc_dates = acc_dates + pd.Timedelta(minutes=30)
+            summer_dates = summer_dates + pd.Timedelta(minutes=30)
+            winter_dates = winter_dates + pd.Timedelta(minutes=30)
         # sum mass balance
         try:
-            wds = ds.sel(time=acc_dates).sum()
-            sds = ds.sel(time=melt_dates).sum()
+            wds = ds.sel(time=winter_dates).sum()
+            sds = ds.sel(time=summer_dates).sum()
         except:
             if year == years[-1]:
                 years = years[:-1]
                 break
         winter_mb = wds.accum + wds.refreeze - wds.melt
-        internal_acc = ds.sel(time=melt_dates[-2]).cumrefreeze.values
+        internal_acc = ds.sel(time=summer_dates[-2]).cumrefreeze.values
         summer_mb = sds.accum + sds.refreeze - sds.melt - internal_acc
         mb_dict['bw'].append(winter_mb.values)
         mb_dict['bs'].append(summer_mb.values)
@@ -135,24 +143,32 @@ def plot_seasonal_mass_balance(site,ds,plot_ax=False,label=None,plot_var='mb',co
     # Retrieve the model data
     mb_dict = {'bw':[],'bs':[],'w-':[],'s+':[]}
     for year in years:
-        spring_date = str(year)+'-04-20 00:00'
-        fall_date = str(year)+'-08-20 00:00'
-        last_fall_date = str(year-1)+'-08-20 00:00'
-        melt_dates = pd.date_range(spring_date,fall_date,freq='h')
-        acc_dates = pd.date_range(last_fall_date,spring_date,freq='h')
+        spring_date = df_mb.loc[year,'spring_date']
+        fall_date = df_mb.loc[year,'fall_date']
+        last_fall_date = df_mb.loc[year-1,'fall_date']
+        # Fill nans
+        if str(spring_date) == 'nan':
+            spring_date = str(year)+'-04-20 00:00'
+        if str(fall_date) == 'nan':
+            fall_date = str(year)+'-08-20 00:00'
+        if str(last_fall_date) == 'nan':
+            last_fall_date = str(year-1)+'-08-20 00:00'
+        # Split into winter and summer
+        summer_dates = pd.date_range(spring_date,fall_date,freq='h')
+        winter_dates = pd.date_range(last_fall_date,spring_date,freq='h')
         if pd.to_datetime(ds.time.values[0]).minute == 30:
-            melt_dates = melt_dates + pd.Timedelta(minutes=30)
-            acc_dates = acc_dates + pd.Timedelta(minutes=30)
+            summer_dates = summer_dates + pd.Timedelta(minutes=30)
+            winter_dates = winter_dates + pd.Timedelta(minutes=30)
         # sum mass balance
         try:
-            wds = ds.sel(time=acc_dates).sum()
-            sds = ds.sel(time=melt_dates).sum()
+            wds = ds.sel(time=winter_dates).sum()
+            sds = ds.sel(time=summer_dates).sum()
         except:
             if year == years[-1]:
                 years = years[:-1]
                 break
         winter_mb = wds.accum + wds.refreeze - wds.melt
-        internal_acc = ds.sel(time=melt_dates[-2]).cumrefreeze.values
+        internal_acc = ds.sel(time=summer_dates[-2]).cumrefreeze.values
         summer_mb = sds.accum + sds.refreeze - sds.melt - internal_acc
         mb_dict['bw'].append(winter_mb.values)
         mb_dict['bs'].append(summer_mb.values)

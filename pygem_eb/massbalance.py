@@ -44,6 +44,7 @@ class massBalance():
 
         # Initialize mass balance check variable
         self.previous_mass = np.sum(self.layers.lice + self.layers.lwater)
+        print('initial mass, site',args.site,'with',args.kw,args.Boone_c5,args.kp,':    ',self.previous_mass)
         return
     
     def main(self):
@@ -915,7 +916,7 @@ class massBalance():
         diff = current_mass - self.previous_mass
         in_out = mass_in - mass_out
         if np.abs(diff - in_out) >= eb_prms.mb_threshold:
-            print('discrepancy of',np.abs(diff - in_out) - eb_prms.mb_threshold)
+            print(self.time,'discrepancy of',np.abs(diff - in_out) - eb_prms.mb_threshold)
             print('in',mass_in,'out',mass_out,'currently',self.layers.lice,self.layers.lwater,current_mass,'was',self.previous_mass)
         assert np.abs(diff - in_out) < eb_prms.mb_threshold, f'Timestep {self.time} failed mass conservation in {self.output.out_fn}'
         
@@ -941,6 +942,7 @@ class massBalance():
                 ds = dataset.load()
                 # Chop it to the new end date and save
                 ds = ds.sel(time=new_time)
+            # Store output
             ds.to_netcdf(self.output.out_fn)
 
             # Save the data
@@ -1171,6 +1173,7 @@ class Output():
                 ds['layerdust'].values = layerdust_output
                 ds['layergrainsize'].values = layergrainsize_output
                 ds['layerrefreeze'].values = layerrefreeze_output
+
         # Save NetCDF
         ds.to_netcdf(self.out_fn)
         return ds
@@ -1187,7 +1190,7 @@ class Output():
             with xr.open_dataset(self.out_fn) as dataset:
                 ds = dataset.load()
 
-                # add summed radiation terms
+                # Add summed radiation terms
                 SWnet = ds['SWin'] + ds['SWout']
                 LWnet = ds['LWin'] + ds['LWout']
                 NetRad = SWnet + LWnet
@@ -1195,9 +1198,11 @@ class Output():
                 ds['LWnet'] = (['time'],LWnet.values,{'units':'W m-2'})
                 ds['NetRad'] = (['time'],NetRad.values,{'units':'W m-2'})
 
-                # add summed mass balance term
+                # Add summed mass balance term
                 MB = ds['accum'] + ds['refreeze'] - ds['melt']
                 ds['MB'] = (['time'],MB.values,{'units':'m w.e.'})
+
+            # Save NetCDF 
             ds.to_netcdf(self.out_fn)
         return
     
@@ -1251,6 +1256,8 @@ class Output():
 
             if args.task_id != -1:
                 ds.assign_attrs(task_id=str(args.task_id))
+
+        # Save NetCDF
         ds.to_netcdf(self.out_fn)
         print('Success: saved to '+self.out_fn)
         return
