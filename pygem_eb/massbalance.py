@@ -44,6 +44,8 @@ class massBalance():
 
         # Initialize mass balance check variable
         self.previous_mass = np.sum(self.layers.lice + self.layers.lwater)
+        self.lice_before = np.sum(self.layers.lice)
+        self.lwater_before = np.sum(self.layers.lwater)
         print('initial mass, site',args.site,'with',args.kw,args.Boone_c5,args.kp,':    ',self.previous_mass)
         return
     
@@ -121,7 +123,7 @@ class massBalance():
             self.phase_changes(enbal,surface,layers)
 
             # Check and update layer sizes
-            layers.check_layers(time)
+            layers.check_layers(time,self.output.out_fn)
 
             # Check mass conserves
             self.check_mass_conservation(snowfall+rainfall, runoff)
@@ -339,7 +341,7 @@ class massBalance():
         change = np.sum(layers.lice + layers.lwater) - initial_mass
         if len(fully_melted) > 0:
             change += np.sum(self.melted_layers.mass)
-        assert np.abs(change) < eb_prms.mb_threshold, f'melt_layers failed mass conservation in {self.output.out_fn}'
+        assert np.abs(change) < eb_prms.mb_threshold, f'melting failed mass conservation in {self.output.out_fn}'
         return layermelt
         
     def percolation(self,enbal,layers,layermelt,rainfall=0):
@@ -917,11 +919,16 @@ class massBalance():
         in_out = mass_in - mass_out
         if np.abs(diff - in_out) >= eb_prms.mb_threshold:
             print(self.time,'discrepancy of',np.abs(diff - in_out) - eb_prms.mb_threshold,self.output.out_fn)
-            print('in',mass_in,'out',mass_out,'currently',self.layers.lice,self.layers.lwater,current_mass,'was',self.previous_mass)
+            print('in',mass_in,'out',mass_out,'currently',current_mass,'was',self.previous_mass)
+            print('ice before',self.lice_before,'ice after',np.sum(self.layers.lice))
+            print('w before',self.lwater_before,'w after',np.sum(self.layers.lwater))
+            print('melt',self.melt,'rfz',self.refreeze,'accum',self.accum)
         assert np.abs(diff - in_out) < eb_prms.mb_threshold, f'Timestep {self.time} failed mass conservation in {self.output.out_fn}'
         
         # New initial mass
         self.previous_mass = current_mass
+        self.lice_before = np.sum(self.layers.lice)
+        self.lwater_before = np.sum(self.layers.lwater)
         return
     
     def check_glacier(self):

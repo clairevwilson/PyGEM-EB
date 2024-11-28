@@ -232,7 +232,7 @@ albedo_fresh_snow = 0.85    # Albedo of fresh snow [-] (Moelg et al. 2012, TC)
 albedo_firn = 0.5           # Albedo of firn [-]
 # <<<<<< BC and dust >>>>>
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
-ksp_BC = 0.1                # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
+ksp_BC = 0.5                # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
 ksp_dust = 0.2              # Meltwater scavenging efficiency of dust (0.015 from CLM5)
 BC_freshsnow = 0            # Concentration of BC in fresh snow for initialization [kg m-3]
 dust_freshsnow = 0          # Concentration of dust in fresh snow for initilization [kg m-3] 

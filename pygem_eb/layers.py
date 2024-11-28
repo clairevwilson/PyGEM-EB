@@ -365,12 +365,16 @@ class Layers():
         self.remove_layer(l)
         return
     
-    def check_layers(self,time):
+    def check_layers(self,time,out):
         """
         Checks the layer heights against the initial size scheme. If layers have become
         too small, they are merged with the layer below. If layers have become too large,
         they are split into two identical layers of half the size.
         """
+        # Initialize mass conservation check
+        initial_mass = np.sum(self.lice + self.lwater)
+ 
+        # Layer heights
         if self.ltype[0] in ['snow','firn']:
             DZ0 = eb_prms.dz_toplayer
         else:
@@ -379,6 +383,8 @@ class Layers():
         min_heights = lambda i: DZ0 * np.exp((i-1)*eb_prms.layer_growth)/2
         max_heights = lambda i: DZ0 * np.exp((i-1)*eb_prms.layer_growth)*2
         firn_min_height,firn_max_height = [0.5,2.5]
+
+        # Loop through layers 
         while layer < self.nlayers:
             layer_split = False
             dz = self.lheight[layer]
@@ -419,6 +425,10 @@ class Layers():
                     print(merge_count+1,'layers merged into firn')
             # reset cumulative refreeze
             self.cumrefreeze *= 0
+
+        # CHECK MASS CONSERVATION
+        change = np.sum(self.lice + self.lwater) - initial_mass
+        assert np.abs(change) < eb_prms.mb_threshold, f'check_layers failed mass conservation in {out}'
         return
     
     def update_layer_props(self,do=['depth','density']):

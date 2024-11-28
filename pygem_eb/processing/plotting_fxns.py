@@ -1202,11 +1202,13 @@ def visualize_layers(ds,dates,vars,force_layers=False,
             sm = mpl.cm.ScalarMappable(cmap=ctype,norm=plt.Normalize(bounds[0],bounds[1]))
             leg = plt.colorbar(sm,ax=ax,aspect=7)
             leg.ax.tick_params(labelsize=9)
+            
             # leg.set_label(units[var],loc='top',rotation=0)
             ax.yaxis.set_label_position('right')
             ax.yaxis.set_label_coords(1.2,0)
             label = varprops[var]['label']+' ('+units[var]+')'
-            ax.set_ylabel(label,fontsize=10)
+            # ax.set_ylabel(label,fontsize=10)
+            leg.set_label(label,rotation=270,labelpad=15,fontsize=12)
         ax.grid(axis='y')
         ax.tick_params(length=5)
         if ylim:

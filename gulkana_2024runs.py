@@ -10,7 +10,7 @@ import pygem_eb.massbalance as mb
 import pygem_eb.input as eb_prms
 
 # User info
-sites = ['AB','ABB','B','BD','D','T'] # Sites to run in parallel     'AB','ABB','B','BD','D','T'
+sites = ['B'] # Sites to run in parallel     'AB','ABB','B','BD','D','T'
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
 params_fn = False # '../Output/params/11_08.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[5:10]
@@ -26,6 +26,8 @@ args.use_AWS = True                 # Use AWS and set filepath
 eb_prms.glac_no = ['01.00570']
 # Set AWS filename
 eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana2024.csv'   
+if 'trace' in eb_prms.machine:
+    eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
 
 # Determine number of runs for each process
 n_processes = len(sites)

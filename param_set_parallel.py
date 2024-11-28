@@ -13,19 +13,31 @@ import pygem_eb.massbalance as mb
 from objectives import *
 
 # OPTIONS
-repeat_run = True  # True if restarting an already begun run
-run_type = 'long'   # 'long' or '2024'
+repeat_run = False  # True if restarting an already begun run
+run_type = '2024'   # 'long' or '2024'
 # Define sets of parameters
-params = {'kw':[1,1.5,2,2.5,3],
+params = {'kw':[1], # ,1.5,2,2.5,3
           'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028],
           'kp':[2.4,2.5,2.6,2.7,2.8,3]}
-# params = {'kw':[1.5,2],'Boone_c5':[0.018],'kp':[2.8]}
-
 # Set the ones you want constant
-# kw = 2
-# c5 = 0.025
-# kp = 3
 k_snow = 'VanDusen'
+
+# Create output directory
+if 'trace' in eb_prms.machine:
+    eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
+
+if repeat_run:
+    date = '11_22'
+    n_today = '1'
+    out_fp = f'{date}_{n_today}/'
+else:
+    date = str(pd.Timestamp.today()).replace('-','_')[5:10]
+    n_today = 0
+    out_fp = f'{date}_{n_today}/'
+    while os.path.exists(eb_prms.output_filepath + out_fp):
+        n_today += 1
+        out_fp = f'{date}_{n_today}/'
+    os.mkdir(eb_prms.output_filepath + out_fp)
 
 # Define sites
 if run_type == '2024':
@@ -56,7 +68,7 @@ args.store_data = True              # Ensures output is stored
 if run_type == '2024': # Short AWS run
     args.use_AWS = True
     eb_prms.AWS_fn = '../climate_data/AWS/Preprocessed/gulkana2024.csv'
-    eb_prms.store_vars = ['MB','layers']
+    eb_prms.store_vars = ['MB','EB','layers','temp']
     args.startdate = pd.to_datetime('2024-04-18 00:00:00')
     args.enddate = pd.to_datetime('2024-08-20 00:00:00')
 else: # Long MERRA-2 run
@@ -64,23 +76,6 @@ else: # Long MERRA-2 run
     eb_prms.store_vars = ['MB']     # Only store mass balance results
     args.startdate = pd.to_datetime('2000-04-20 00:00:00')
     args.enddate = pd.to_datetime('2024-08-20 00:00:00')
-
-# Create output directory
-if 'trace' in eb_prms.machine:
-    eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
-
-if repeat_run:
-    date = '11_22'
-    n_today = '1'
-    out_fp = f'{date}_{n_today}/'
-else:
-    date = str(pd.Timestamp.today()).replace('-','_')[5:10]
-    n_today = 0
-    out_fp = f'{date}_{n_today}/'
-    while os.path.exists(eb_prms.output_filepath + out_fp):
-        n_today += 1
-        out_fp = f'{date}_{n_today}/'
-    os.mkdir(eb_prms.output_filepath + out_fp)
 
 # Transform params to strings for comparison
 for key in params:
@@ -92,12 +87,26 @@ packed_vars = [[] for _ in range(n_processes)]
 run_no = 0  # Counter for runs added to each set
 set_no = 0  # Index for the parallel process
 
+# Storage for failed runs
+all_runs = []
+missing_fn = eb_prms.output_filepath + out_fp + 'missing.txt'
+
 # Loop through sites
 for site in sites:
     # Initialize the model for the site
     args_site = copy.deepcopy(args)
     args_site.site = site
-    climate = sim.initialize_model(args.glac_no[0],args_site)
+
+    # Special dates for low sites
+    if run_type == 'long':
+        if site == 'A':
+            args_site.enddate = pd.to_datetime('2014-04-20 00:00:00')
+        elif site == 'AU':
+            args_site.startdate = pd.to_datetime('2012-04-20 00:00:00')
+
+    # Get the climate
+    # climate = sim.initialize_model(args.glac_no[0],args_site)
+    climate = 0
 
     # Loop through parameters
     for kw in params['kw']:
@@ -115,6 +124,7 @@ for site in sites:
 
                 # Set identifying output filename
                 args_run.out = out_fp + f'grid_{date}_set{set_no}_run{run_no}_'
+                all_runs.append((site, kw, c5, kp, args_run.out))
 
                 # Specify attributes for output file
                 store_attrs = {'k_snow':k_snow,'kw':kw,
@@ -145,12 +155,9 @@ def run_model_parallel(list_inputs):
 
         # Check if model run should be performed
         n_iters = 0
-        while not os.path.exists(eb_prms.output_filepath + args.out + '0.nc') and n_iters <= 5:
+        while not os.path.exists(eb_prms.output_filepath + args.out + '0.nc') and n_iters <= 3:
             n_iters += 1
-            if n_iters > 1:
-                print('Beginning repeat run... ')
             try:
-            # for aaaa in [0]:
                 # Start timer
                 start_time = time.time()
 
@@ -175,9 +182,18 @@ def run_model_parallel(list_inputs):
                 print('Removing:',args.out + '0.nc')
                 os.remove(eb_prms.output_filepath + args.out + '0.nc')
                 print()
-                print('Retrying...')
+        
     return
 
 # Run model in parallel
 with Pool(n_processes) as processes_pool:
     processes_pool.map(run_model_parallel,packed_vars)
+
+missing = []
+for run in all_runs:
+    fn = run[4]
+    if not os.path.exists(eb_prms.output_filepath + fn + '0.nc'):
+        missing.append(run)
+
+# Store missing as .txt
+np.savetxt(missing_fn,np.array(missing),fmt='%s',delimiter=',')

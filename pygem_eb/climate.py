@@ -229,6 +229,7 @@ class Climate():
         # PRECIP: correct according to lapse rate
         tp_elev = self.AWS_elev if 'tp' in self.measured_vars else self.reanalysis_elev
         new_tp = self.cds.tp.values*(1+PREC_GRAD*(self.elev-tp_elev))
+        print(self.args.site,(1+PREC_GRAD*(self.elev-tp_elev)))
 
         # SURFACE PRESSURE: correct according to barometric law
         sp_elev = self.AWS_elev if 'sp' in self.measured_vars else self.reanalysis_elev
