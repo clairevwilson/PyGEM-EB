@@ -500,10 +500,9 @@ def plot_by(ds,time,vars,t='Monthly EB Outputs',by='doy'):
         axis.set_xticks(np.arange(1,13),month_names)
     if by == 'doy':
         axis.set_xlabel('Day of year')
-    axis.set_ylabel('Melt (m w.e.)')
+    axis.set_ylabel('Cumulative accum.')
     axis.tick_params(length=5)
     fig.suptitle(t)
-    print(np.cumsum(var_out)[231] / np.cumsum(var_out)[-1])
 
 def panel_dh_compare(ds_list,time,labels,units,stake_df,rows=2,t=''):
     """
@@ -1131,7 +1130,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
         axes = [axes]
     for i,var in enumerate(vars):
         if var in ['layerBC']:
-            bounds = [-2,30]
+            bounds = [-5,30]
         if var in ['layerdust']:
             bounds = [-5,30]
         elif var in ['layerdensity']:
@@ -1189,6 +1188,8 @@ def visualize_layers(ds,dates,vars,force_layers=False,
                 elif not first:
                     first = step
                 color = get_color(data,bounds,ctype)
+                if 'density' in var and data > 800:
+                    color = '0.1'
                 ax.bar(step,dh, bottom=bottom, width=diff, color=color,linewidth=0.5,edgecolor='none')
                 bottom += dh  # Update bottom for the next set of bars
             max_snowdepth = max(max_snowdepth,np.sum(height))
@@ -1202,6 +1203,9 @@ def visualize_layers(ds,dates,vars,force_layers=False,
             sm = mpl.cm.ScalarMappable(cmap=ctype,norm=plt.Normalize(bounds[0],bounds[1]))
             leg = plt.colorbar(sm,ax=ax,aspect=7)
             leg.ax.tick_params(labelsize=9)
+            if 'BC' in var:
+                leg.ax.set_ylim(0, 30)
+                leg.ax.set_yticks([0,15,30])
             
             # leg.set_label(units[var],loc='top',rotation=0)
             ax.yaxis.set_label_position('right')

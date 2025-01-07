@@ -22,8 +22,8 @@ def process_grid_search(dates,run_type,params,date_idx=0):
 
     Parameters
     ----------
-    date : str
-        'MM_DD' formatted string of the run date
+    dates : list of str
+        list of 'MM_DD' formatted string(s) of the run date(s)
     run_type : str
         'long' or '2024' 
     params : dict

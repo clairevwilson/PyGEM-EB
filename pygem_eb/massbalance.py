@@ -32,6 +32,7 @@ class massBalance():
         self.dt = eb_prms.dt
         self.days_since_snowfall = 0
         self.time_list = climate.dates
+        self.firn_converted = False
 
         # Initialize climate, layers and surface classes
         self.args = args
@@ -46,7 +47,6 @@ class massBalance():
         self.previous_mass = np.sum(self.layers.lice + self.layers.lwater)
         self.lice_before = np.sum(self.layers.lice)
         self.lwater_before = np.sum(self.layers.lwater)
-        print('initial mass, site',args.site,'with',args.kw,args.Boone_c5,args.kp,':    ',self.previous_mass)
         return
     
     def main(self):
@@ -59,7 +59,7 @@ class massBalance():
         surface = self.surface
         dt = self.dt
 
-        # Constants
+        # CONSTANTS
         DENSITY_WATER = eb_prms.density_water
 
         # ===== ENTER TIME LOOP =====
@@ -124,6 +124,11 @@ class massBalance():
 
             # Check and update layer sizes
             layers.check_layers(time,self.output.out_fn)
+            
+            # If towards the end of summer, check if old snow should become firn
+            if time.day_of_year >= eb_prms.end_summer_doy and time.hour == 0:
+                if not self.firn_converted:
+                    self.end_of_summer()
 
             # Check mass conserves
             self.check_mass_conservation(snowfall+rainfall, runoff)
@@ -141,6 +146,10 @@ class massBalance():
             # Debugging: print current state and monthly melt at the end of each month
             if time.is_month_start and time.hour == 0 and self.args.debug:
                 self.current_state(time,enbal.tempC)
+
+            # Updated yearly properties
+            if time.day_of_year == 1 and time.hour == 0:
+                self.firn_converted = False
 
             # Advance timestep
             pass
@@ -177,8 +186,8 @@ class massBalance():
         DENSITY_WATER = eb_prms.density_water
 
         # Define rain vs snow scaling 
-        rain_scale = np.arange(0,1,20)
-        temp_scale = np.arange(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
+        rain_scale = np.linspace(0,1,20)
+        temp_scale = np.linspace(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
 
         if enbal.tempC <= SNOW_THRESHOLD_LOW: 
             # precip falls as snow
@@ -656,7 +665,6 @@ class massBalance():
             c2 = 0.042      # K-1 (0.042)
             c3 = 0.046      # m3 kg-1 (0.046)
             c4 = 0.081      # K-1 (0.081)
-            # c5 = eb_prms.Boone_c5      # m3 kg-1 (0.018) --> adjust in input
             c5 = float(self.args.Boone_c5)
 
             for layer in snowfirn_idx:
@@ -815,8 +823,8 @@ class massBalance():
 
         # get conductivity 
         ice_idx = layers.ice_idx
-        if type(self.args.k_snow) == float:
-            lcond = self.args.k_snow*np.ones_like(lp)
+        if len(self.args.k_snow) < 5:
+            lcond = float(self.args.k_snow)*np.ones_like(lp)
         elif self.args.k_snow in ['Sauter']:
             f_ice = (lm/DENSITY_ICE) / lh
             f_liq = (lw/DENSITY_WATER) / lh
@@ -871,6 +879,42 @@ class massBalance():
         # LAYERS OUT
         layers.ltemp[diffusing_idx] = lT
         return 
+    
+    def end_of_summer(self):
+        # CONSTANTS
+        NDAYS = eb_prms.new_snow_timing
+        SNOW_THRESHOLD = eb_prms.new_snow_threshold
+        T_LOW = eb_prms.snow_threshold_low
+        T_HIGH = eb_prms.snow_threshold_high
+
+        # Define rain vs snow scaling 
+        rain_scale = np.linspace(1,0,20)
+        temp_scale = np.linspace(T_LOW,T_HIGH,20)
+
+        # Index the temperature and precipitation of the upcoming period
+        end_time = min(self.time_list[-1],self.time+pd.Timedelta(days=NDAYS))
+        check_dates = pd.date_range(self.time,end_time,freq='h')
+        check_temp = self.climate.cds.sel(time=check_dates)['temp'].values
+        check_tp = self.climate.cds.sel(time=check_dates)['tp'].values
+
+        # Create array to mask tp to snow amounts
+        mask = np.interp(check_temp,temp_scale,rain_scale)
+        upcoming_snow = np.sum(check_tp*mask)
+        if upcoming_snow < SNOW_THRESHOLD:
+            # Not getting new snow, so we are not at the end of summer yet
+            return
+        
+        # We're getting new snow, so today is the end of summer: merge snow to firn
+        if len(self.layers.snow_idx) > 0:
+            # Merge all snow layers into firn
+            merge_count = max(0,len(self.layers.snow_idx) - 1)
+            for _ in range(merge_count):
+                self.layers.merge_layers(0)
+                self.layers.ltype[0] = 'firn'
+
+        # Reset cumulative refreeze
+        self.layers.cumrefreeze *= 0
+        self.firn_converted = True
 
     def current_state(self,time,airtemp):
         """Prints some useful information to keep track of a model run"""

@@ -69,7 +69,7 @@ class energyBalance():
         self.nanalbedo = True if np.isnan(self.albedo_ds) else False
         return
 
-    def surface_EB(self,surftemp,layers,albedo,days_since_snowfall,mode='sum'):
+    def surface_EB(self,surftemp,layers,surface,days_since_snowfall,mode='sum'):
         """
         Calculates the surface heat fluxes for the current timestep.
 
@@ -79,8 +79,8 @@ class energyBalance():
             Temperature of the surface snow in Celsius
         layers
             class object from pygem_eb.layers
-        albedo : float
-            Albedo of the surface
+        surface : float
+            class object from pygem_eb.surface
         days_since_snowfall : int
             Number of days since fresh snowfall
         method_turbulent : str
@@ -98,7 +98,7 @@ class energyBalance():
                     [SWin, SWout, LWin, LWout, sensible, latent, rain, ground]
         """
         # SHORTWAVE RADIATION  (Snet)
-        SWin,SWout = self.get_SW(albedo)
+        SWin,SWout = self.get_SW(surface)
         Snet_surf = SWin + SWout
         self.SWin = SWin
         self.SWout = SWout[0] if '__iter__' in dir(SWout) else SWout

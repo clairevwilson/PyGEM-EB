@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
 import pandas as pd
+import pickle
 import itertools
 
 # User options
@@ -45,7 +46,7 @@ def objective(model,data,method):
         return np.mean(model - data)
     
 # ========== 1. SEASONAL MASS BALANCE ==========
-def seasonal_mass_balance(site,ds,method='MAE'):
+def seasonal_mass_balance(ds,method='MAE'):
     """
     Compares seasonal mass balance measurements from
     USGS stake surveys to a model output.
@@ -56,6 +57,9 @@ def seasonal_mass_balance(site,ds,method='MAE'):
     ** Additional argument site : str
     Name of the USGS site.
     """
+    # Determine the site
+    site = ds.attrs['site']
+
     # Load dataset
     df_mb = pd.read_csv(USGS_fp)
     df_mb = df_mb.loc[df_mb['site_name'] == site]
@@ -120,10 +124,13 @@ def seasonal_mass_balance(site,ds,method='MAE'):
 
     return winter_error, summer_error
 
-def plot_seasonal_mass_balance(site,ds,plot_ax=False,label=None,plot_var='mb',color='default'):
+def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='default'):
     """
-    plot_var : 'mb' (default) or 'w-s+' (winter melt, summer accumulation)
+    plot_var : 'mb' (default), 'w-s+' (winter melt, summer accumulation), 'bw','bs'
     """
+    # Determine the site
+    site = ds.attrs['site']
+
     # Make or get plot ax
     if plot_ax:
         ax = plot_ax
@@ -146,6 +153,7 @@ def plot_seasonal_mass_balance(site,ds,plot_ax=False,label=None,plot_var='mb',co
         spring_date = df_mb.loc[year,'spring_date']
         fall_date = df_mb.loc[year,'fall_date']
         last_fall_date = df_mb.loc[year-1,'fall_date']
+        print(year,spring_date,fall_date)
         # Fill nans
         if str(spring_date) == 'nan':
             spring_date = str(year)+'-04-20 00:00'
@@ -182,7 +190,7 @@ def plot_seasonal_mass_balance(site,ds,plot_ax=False,label=None,plot_var='mb',co
     wabl_data = df_mb['winter_ablation']
     sacc_data = df_mb['summer_accumulation']
 
-    if color == 'default' and plot_var =='mb':
+    if color == 'default' and plot_var in ['mb','w-s+']:
         cwinter = 'turquoise'
         csummer = 'orange'
     elif plot_var == 'bw':
@@ -221,8 +229,73 @@ def plot_seasonal_mass_balance(site,ds,plot_ax=False,label=None,plot_var='mb',co
     else:
         return fig,ax
 
-# ========== 2. CUMULATIVE MASS BALANCE ==========
-def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False):
+# ========== 3. END-OF-WINTER SNOWPACK ==========
+def snowpits(ds,method='MAE'):
+    all_years = np.arange(2000,2025)
+
+    # Open the mass balance
+    with open('../MB_data/pits.pkl', 'rb') as file:
+        site_profiles = pickle.load(file)
+
+    # Determine and load the site
+    site = ds.attrs['site']
+    profiles = site_profiles[site]
+
+    # Storage to determine error
+    error_dict = {}
+    for var in ['snowmass_','snowdepth_','snowdensity_']:
+        error_dict[var+method] = {}
+
+    # Loop through years
+    for year in all_years:
+        # Some years don't have data: skip
+        if year in profiles['sbd']:
+            # Load data
+            sbd = profiles['sbd'][year]
+            dens_meas = profiles['density'][year]
+
+            # Load dataset on the date the snowpit was taken
+            sample_date = profiles['date'][year]
+            print(pd.to_datetime(f'{year}-{sample_date}'),ds.time.values)
+            dsyear = ds.sel(time=pd.to_datetime(f'{year}-{sample_date}'))
+
+            # Calculate layer density and determine snow indices
+            ldz = dsyear.layerheight.values
+            depth_mod = np.array([np.sum(ldz[:i+1])-(ldz[i]/2) for i in range(len(ldz))])
+            dens_mod = dsyear['layerdensity'].values
+            snow_idx = np.where(depth_mod < dsyear.snowdepth.values)[0]
+
+            # Interpolate modeled density to the snowpit depths
+            dens_interp = np.interp(sbd,depth_mod,dens_mod)
+
+            # Find the snow depth
+            snowdepth_mod = depth_mod[snow_idx[-1]]
+            snowdepth_pit = sbd[~np.isnan(sbd)][-1]
+
+            # Calculate mass of snow
+            snowmass_mod = np.sum(dsyear.layerheight.values[snow_idx] * dsyear.layerdensity.values[snow_idx]) / 1000
+            sample_heights = np.append(np.array([profiles['sbd'][year][0]]),np.diff(np.array(profiles['sbd'][year])))
+            snowmass_meas = np.sum(profiles['density'][year] * sample_heights) / 1000
+
+            # Calculate error from mass and density 
+            density_error = objective(dens_interp, dens_meas, method) # kg/m3
+            mass_error = objective(snowmass_mod, snowmass_meas, method) # m w.e.
+            depth_error = objective(snowdepth_mod, snowdepth_pit, method) # m
+
+            # Store
+            error_dict['snowmass_'+method][str(year)] = mass_error
+            error_dict['snowdepth_'+method][str(year)] = depth_error
+            error_dict['snowdensity_'+method][str(year)] = density_error
+
+    # Aggregate to time mean
+    for var in error_dict:
+        data_arr = list(error_dict[var].values())
+        error_dict[var]['mean'] = np.mean(data_arr)
+
+    return error_dict
+
+# ========== 3. CUMULATIVE MASS BALANCE ==========
+def cumulative_mass_balance(ds,method='MAE',out_mbs=False):
     """
     Compares cumulative mass balance measurements from
     a stake to a model output. 
@@ -231,6 +304,9 @@ def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False):
     columns: 'Date' and 'CMB' where 'CMB' is the surface 
     height change in meters.
     """
+    # Load the site
+    site = ds.attrs['site']
+
     # Update filepath
     fp_gnssir = GNSSIR_fp.replace('SITE',site)
     fp_stake = fp_gnssir.replace('GNSSIR','stake')
@@ -358,7 +434,10 @@ def cumulative_mass_balance(site,ds,method='MAE',out_mbs=False):
     else:
         return error
         
-def plot_2024_mass_balance(site,ds,plot_ax=False,label='Model'):
+def plot_2024_mass_balance(ds,plot_ax=False,label='Model'):
+    # Determine the site
+    site = ds.attrs['site']
+
     # Update filepath
     fp_gnssir = GNSSIR_fp.replace('SITE',site)
     fp_stake = fp_gnssir.replace('GNSSIR','stake')
@@ -444,7 +523,7 @@ def plot_2024_mass_balance(site,ds,plot_ax=False,label='Model'):
         return ax
 
 # ========== 3. SNOW TEMPERATURES ==========
-def snow_temperature(site,ds,method='RMSE',plot=False,plot_heights=[0.5]):
+def snow_temperature(ds,method='RMSE',plot=False,plot_heights=[0.5]):
     """
     Compares modeled snow temperatures to measurements from
     iButton temperature sensors.
@@ -460,6 +539,9 @@ def snow_temperature(site,ds,method='RMSE',plot=False,plot_heights=[0.5]):
     ** Additional argument plot_heights:
     List of heights above the ice in meters to plot the timeseries.
     """
+    # Determine the site
+    site = ds.attrs['site']
+
     # Load dataset
     year = pd.to_datetime(ds.time.values[0]).year
     data_fp = f'../Data/iButtons/iButtons_{year}_{site}.csv'

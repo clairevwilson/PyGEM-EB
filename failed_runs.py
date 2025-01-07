@@ -4,6 +4,7 @@ import time
 import copy
 # External libraries
 import pandas as pd
+import xarray as xr
 from multiprocessing import Pool
 # Internal libraries
 import pygem_eb.input as eb_prms
@@ -12,22 +13,29 @@ import pygem_eb.massbalance as mb
 from objectives import *
 
 # OPTIONS
-run_type = 'long'   # 'long' or '2024'
-date = '11_22'
-idx = '1'
+run_type = '2024'   # 'long' or '2024'
+date = '12_06'
+idx = '0'
 
 # Create output directory
 if 'trace' in eb_prms.machine:
     eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
 out_fp = f'{date}_{idx}/'
+
 # Load in failed dataset
-failed = np.genfromtxt(eb_prms.output_filepath + out_fp + 'missing.txt',delimiter=',',dtype=str)
+missing_fn = eb_prms.output_filepath + out_fp + 'missing.txt'
+failed = np.genfromtxt(missing_fn,delimiter=',',dtype=str)
+if len(failed) < 1:
+    print('Successfully finished all runs!')
+    quit()
+if '__iter__' not in failed[0]:
+    failed = [failed]
 
 # Define sites
 if run_type == '2024':
     sites = ['AB','ABB','B','BD','D','T'] # 
 else:
-    sites = ['A','AU'] # ,'B','D'
+    sites = ['AU'] # 'A','AU','B','D'
 
 # Read command line args
 args = sim.get_args()
@@ -55,7 +63,7 @@ if run_type == '2024': # Short AWS run
     args.enddate = pd.to_datetime('2024-08-20 00:00:00')
 else: # Long MERRA-2 run
     args.use_AWS = False
-    eb_prms.store_vars = ['MB']     # Only store mass balance results
+    eb_prms.store_vars = ['MB','layers']     # Only store mass balance results
     args.startdate = pd.to_datetime('2000-04-20 00:00:00')
     args.enddate = pd.to_datetime('2024-08-20 00:00:00')
 
@@ -74,7 +82,7 @@ for site in sites:
 
     # Special dates for low sites
     if site == 'A':
-        args_site.enddate = pd.to_datetime('2014-04-20 00:00:00')
+        args_site.enddate = pd.to_datetime('2015-05-20 00:00:00')
     elif site == 'AU':
         args_site.startdate = pd.to_datetime('2012-04-20 00:00:00')
 
@@ -129,34 +137,77 @@ def run_model_parallel(list_inputs):
     for inputs in list_inputs:
         # Unpack inputs
         args,climate,store_attrs = inputs
-        print('beginning',args.out)
 
-        # try:
-        # Start timer
-        start_time = time.time()
+        try:
+            # Start timer
+            start_time = time.time()
 
-        # Initialize the mass balance / output
-        massbal = mb.massBalance(args,climate)
+            # Initialize the mass balance / output
+            massbal = mb.massBalance(args,climate)
 
-        # Add attributes to output file in case it crashes
-        massbal.output.add_attrs(store_attrs)
+            # Add attributes to output file in case it crashes
+            massbal.output.add_attrs(store_attrs)
 
-        # Run the model
-        massbal.main()
+            # Run the model
+            massbal.main()
 
-        # End timer
-        time_elapsed = time.time() - start_time
+            # End timer
+            time_elapsed = time.time() - start_time
 
-        # Store output
-        massbal.output.add_vars()
-        massbal.output.add_basic_attrs(args,time_elapsed,climate)
-        # except:
-        #     print('Failed site',args.site,'with kw =',args.kw,'c5 =',args.Boone_c5,'kp =',args.kp)
-        #     print('Removing:',args.out + '0.nc')
-        #     os.remove(eb_prms.output_filepath + args.out + '0.nc')
-        #     print()
+            # Store output
+            massbal.output.add_vars()
+            massbal.output.add_basic_attrs(args,time_elapsed,climate)
+        except:
+            print('Failed site',args.site,'with kw =',args.kw,'c5 =',args.Boone_c5,'kp =',args.kp)
+            print('Removing:',args.out + '0.nc')
+            os.remove(eb_prms.output_filepath + args.out + '0.nc')
+            print()
+
+        # If succeeded, process and save only the stats
+        if os.path.exists(eb_prms.output_filepath + args.out + '0.nc'):
+            with xr.open_dataset(eb_prms.output_filepath + args.out + '0.nc') as dataset:
+                ds = dataset.load()
+                if run_type == 'long':
+                    # seasonal mass balance
+                    winter_MAE,summer_MAE = seasonal_mass_balance(ds,method='MAE')
+                    winter_ME,summer_ME = seasonal_mass_balance(ds,method='ME')
+                    results = {'winter_MAE':winter_MAE,'summer_MAE':summer_MAE,
+                            'winter_ME':winter_ME,'summer_ME':summer_ME}
+
+                    # snowpits
+                    for method in ['MAE','ME']:
+                        snowpit_dict = snowpits(ds,method=method)
+                        for var in snowpit_dict:
+                            results[var] = snowpit_dict[var]
+
+                elif run_type == '2024':
+                    MAE = cumulative_mass_balance(ds,method='MAE')
+                    ME = cumulative_mass_balance(ds,method='MAE')
+                    results = {'MAE':MAE,'ME':ME}
+
+                # Store the attributes in the results dict
+                for attr in ds.attrs:
+                    results[attr] = ds.attrs[attr]
+
+            # Pickle the dict
+            stats_fn = eb_prms.output_filepath + args.out + '0.pkl'
+            with open(stats_fn, 'wb') as file:
+                pickle.dump(results,file)
+
+            # Remove the .nc
+            os.remove(eb_prms.output_filepath + args.out + '0.nc')
     return
 
 # Run model in parallel
 with Pool(n_processes) as processes_pool:
     processes_pool.map(run_model_parallel,packed_vars)
+
+missing = []
+for run in failed:
+    fn = run[4]
+    if not os.path.exists(eb_prms.output_filepath + fn + '0.pkl'):
+        missing.append(run)
+
+# Store missing as .txt
+np.savetxt(missing_fn,np.array(missing),fmt='%s',delimiter=',')
+print(f'Finished param_set_parallel, saved missing to {missing_fn}')

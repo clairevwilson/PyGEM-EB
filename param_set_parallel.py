@@ -4,6 +4,7 @@ import time
 import copy
 # External libraries
 import pandas as pd
+import xarray as xr
 import pickle
 from multiprocessing import Pool
 # Internal libraries
@@ -16,7 +17,7 @@ from objectives import *
 repeat_run = False  # True if restarting an already begun run
 run_type = '2024'   # 'long' or '2024'
 # Define sets of parameters
-params = {'kw':[1], # ,1.5,2,2.5,3
+params = {'kw':[1], #,1.5,2,2.5,3
           'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028],
           'kp':[2.4,2.5,2.6,2.7,2.8,3]}
 # Set the ones you want constant
@@ -27,8 +28,8 @@ if 'trace' in eb_prms.machine:
     eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
 
 if repeat_run:
-    date = '11_22'
-    n_today = '1'
+    date = '12_04'
+    n_today = '0'
     out_fp = f'{date}_{n_today}/'
 else:
     date = str(pd.Timestamp.today()).replace('-','_')[5:10]
@@ -73,7 +74,7 @@ if run_type == '2024': # Short AWS run
     args.enddate = pd.to_datetime('2024-08-20 00:00:00')
 else: # Long MERRA-2 run
     args.use_AWS = False
-    eb_prms.store_vars = ['MB']     # Only store mass balance results
+    eb_prms.store_vars = ['MB','layers']     # Only store mass balance results
     args.startdate = pd.to_datetime('2000-04-20 00:00:00')
     args.enddate = pd.to_datetime('2024-08-20 00:00:00')
 
@@ -100,13 +101,12 @@ for site in sites:
     # Special dates for low sites
     if run_type == 'long':
         if site == 'A':
-            args_site.enddate = pd.to_datetime('2014-04-20 00:00:00')
+            args_site.enddate = pd.to_datetime('2015-05-20 00:00:00')
         elif site == 'AU':
             args_site.startdate = pd.to_datetime('2012-04-20 00:00:00')
 
     # Get the climate
-    # climate = sim.initialize_model(args.glac_no[0],args_site)
-    climate = 0
+    climate = sim.initialize_model(args.glac_no[0],args_site)
 
     # Loop through parameters
     for kw in params['kw']:
@@ -124,7 +124,7 @@ for site in sites:
 
                 # Set identifying output filename
                 args_run.out = out_fp + f'grid_{date}_set{set_no}_run{run_no}_'
-                all_runs.append((site, kw, c5, kp, args_run.out))
+                all_runs.append(( site, kw, c5, kp, args_run.out ))
 
                 # Specify attributes for output file
                 store_attrs = {'k_snow':k_snow,'kw':kw,
@@ -154,9 +154,7 @@ def run_model_parallel(list_inputs):
         args,climate,store_attrs = inputs
 
         # Check if model run should be performed
-        n_iters = 0
-        while not os.path.exists(eb_prms.output_filepath + args.out + '0.nc') and n_iters <= 3:
-            n_iters += 1
+        if not os.path.exists(eb_prms.output_filepath + args.out + '0.pkl'):
             try:
                 # Start timer
                 start_time = time.time()
@@ -178,22 +176,55 @@ def run_model_parallel(list_inputs):
                 massbal.output.add_basic_attrs(args,time_elapsed,climate)
 
             except:
-                print('Failed site',args.site,'with kw =',args.kw,'c5 =',args.Boone_c5,'kp =',args.kp)
-                print('Removing:',args.out + '0.nc')
+                print('Failed site',args.site,'with kw =',args.kw,'c5 =',args.Boone_c5,'kp =',args.kp,' ... removing',args.out)
                 os.remove(eb_prms.output_filepath + args.out + '0.nc')
-                print()
-        
+
+        # If succeeded, process and save only the stats
+        if os.path.exists(eb_prms.output_filepath + args.out + '0.nc'):
+            with xr.open_dataset(eb_prms.output_filepath + args.out + '0.nc') as dataset:
+                ds = dataset.load()
+                if run_type == 'long':
+                    # seasonal mass balance
+                    winter_MAE,summer_MAE = seasonal_mass_balance(ds,method='MAE')
+                    winter_ME,summer_ME = seasonal_mass_balance(ds,method='ME')
+                    results = {'winter_MAE':winter_MAE,'summer_MAE':summer_MAE,
+                            'winter_ME':winter_ME,'summer_ME':summer_ME}
+
+                    # snowpits
+                    for method in ['MAE','ME']:
+                        snowpit_dict = snowpits(ds,method=method)
+                        for var in snowpit_dict:
+                            results[var] = snowpit_dict[var]
+
+                elif run_type == '2024':
+                    MAE = cumulative_mass_balance(ds,method='MAE')
+                    ME = cumulative_mass_balance(ds,method='MAE')
+                    results = {'MAE':MAE,'ME':ME}
+
+                # Store the attributes in the results dict
+                for attr in ds.attrs:
+                    results[attr] = ds.attrs[attr]
+
+            # Pickle the dict
+            stats_fn = eb_prms.output_filepath + args.out + '0.pkl'
+            with open(stats_fn, 'wb') as file:
+                pickle.dump(results,file)
+
+            # Remove the .nc
+            os.remove(eb_prms.output_filepath + args.out + '0.nc')
+
     return
 
 # Run model in parallel
 with Pool(n_processes) as processes_pool:
     processes_pool.map(run_model_parallel,packed_vars)
-
+    
 missing = []
 for run in all_runs:
     fn = run[4]
-    if not os.path.exists(eb_prms.output_filepath + fn + '0.nc'):
+    if not os.path.exists(eb_prms.output_filepath + fn + '0.pkl'):
         missing.append(run)
 
 # Store missing as .txt
 np.savetxt(missing_fn,np.array(missing),fmt='%s',delimiter=',')
+print(f'Finished param_set_parallel, saved missing to {missing_fn}')

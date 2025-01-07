@@ -20,7 +20,7 @@ mb_threshold = 0.1       # Threshold to consider not conserving mass (kg m-2 = m
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/gulkana2024.csv'}, 
+                            'AWS_fn':'Preprocessed/gulkana2024_walbedo.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -110,7 +110,7 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2024-04-20 00:00:00') 
+    startdate = pd.to_datetime('2023-04-20 00:00:00') 
     enddate = pd.to_datetime('2024-08-20 00:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
@@ -136,7 +136,6 @@ store_climate = False   # Store climate dataset .nc
 dt = 3600                   # Model timestep [s]
 daily_dt = 3600*24          # Seconds in a day [s]
 dt_heateq = 3600/5          # Time resolution of heat eq [s], should be integer multiple of 3600s so data can be stored on the hour
-end_summer = '2024-08-20'   # Date to consider the end of summer (year is irrelevant) (snow -> firn)
 
 # METHODS
 method_turbulent = 'BulkRichardson'     # 'MO-similarity' or 'BulkRichardson' 
@@ -173,16 +172,16 @@ precgrad = 0.0001           # Precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # Temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 dep_factor = 1              # Multiplicative factor to adjust MERRA-2 deposition
 albedo_ice = 0.47           # Ice albedo [-] 
-snow_threshold_low = 0.2      # Lower threshold for linear snow-rain scaling [C]
-snow_threshold_high = 2.2     # Upper threshold for linear snow-rain scaling [C]
+snow_threshold_low = 0.2    # Lower threshold for linear snow-rain scaling [C]
+snow_threshold_high = 2.2   # Upper threshold for linear snow-rain scaling [C]
 # <<<<<< Discretization >>>>>
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
 layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
 max_nlayers = 80            # Maximum number of vertical layers allowed (defines output file size)
 max_dz = 2                  # Max layer height
 # <<<<<< Boundary conditions >>>>>
-temp_temp = -2              # temperature of temperate ice [C]
-temp_depth = 100            # depth of temperate ice [m]
+temp_temp = -0.5            # temperature of temperate ice [C]
+temp_depth = 10             # depth of temperate ice [m]
 # <<<<<< Physical properties of snow, ice, water and air >>>>>
 density_ice = 900           # Density of ice [kg m-3]
 density_water = 1000        # Density of water [kg m-3]
@@ -245,10 +244,12 @@ ratio_DU_bin3 = 0.481675    # " SNICAR Bin 3 (1.25-2.5um)
 ratio_DU_bin4 = 0.203775    # " SNICAR Bin 4 (2.5-5um)
 ratio_DU_bin5 = 0.034       # " SNICAR Bin 5 (5-50um)
 # <<<<<< MERRA-2: temperature bias >>>>>
-# temp_bias_slope = 0.72801   # Slope of linear regression MERRA-2 --> OFF-ICE AWS
-# temp_bias_intercept = 2.234 # Intercept of linear regression MERRA-2 --> OFF-ICE AWS
 temp_bias_slope = 0.57596   # Slope of MERRA-2 --> ON-ICE AWS
 temp_bias_intercept = 1.799 # Intercept of MERRA-2 --> ON-ICE AWS
+# <<<<<< End-of-summer >>>>>
+end_summer_doy = 228        # Day of year to starting checking for end of summer (snow -> firn)
+new_snow_threshold = 0.05   # Threshold for new snow to consider the start of winter (m w.e.)
+new_snow_timing = 7         # Number of days to check for start of winter
 
 # ========== OTHER PYGEM INPUTS ========== 
 rgi_regionsO1 = [1]
