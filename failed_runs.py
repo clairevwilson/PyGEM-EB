@@ -13,8 +13,8 @@ import pygem_eb.massbalance as mb
 from objectives import *
 
 # OPTIONS
-run_type = '2024'   # 'long' or '2024'
-date = '12_06'
+run_type = 'long'   # 'long' or '2024'
+date = '01_09'
 idx = '0'
 
 # Create output directory

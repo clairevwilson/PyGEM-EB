@@ -68,11 +68,11 @@ def seasonal_mass_balance(ds,method='MAE'):
     # Get overlapping years
     years_model = np.unique(pd.to_datetime(ds.time.values).year)
     years_measure = np.unique(df_mb.index)
-    years = np.sort(list(set(years_model) & set(years_measure)))[1:]
+    years = np.sort(list(set(years_model) & set(years_measure)))
 
     # Retrieve the model data
     mb_dict = {'bw':[],'bs':[],'w-':[],'s+':[]}
-    for year in years:
+    for year in years[1:]:
         spring_date = df_mb.loc[year,'spring_date']
         fall_date = df_mb.loc[year,'fall_date']
         last_fall_date = df_mb.loc[year-1,'fall_date']
@@ -107,10 +107,11 @@ def seasonal_mass_balance(ds,method='MAE'):
 
     # Index mass balance data
     df_mb = df_mb.loc[years]
-    winter_data = df_mb['bw']
-    summer_data = df_mb['ba'] - df_mb['bw']
-    wabl_data = df_mb['winter_ablation']
-    sacc_data = df_mb['summer_accumulation']
+    this_winter_abl_data = df_mb['winter_ablation'].iloc[1:].values
+    past_summer_acc_data = df_mb['summer_accumulation'].iloc[:-1].values
+    this_summer_acc_data = df_mb['summer_accumulation'].iloc[1:].values
+    winter_data = df_mb['bw'].iloc[1:] - past_summer_acc_data + this_winter_abl_data
+    summer_data = df_mb['ba'].iloc[1:] - df_mb['bw'].iloc[1:] + this_summer_acc_data
 
     # Clean up arrays
     winter_model = np.array(mb_dict['bw'])
@@ -145,15 +146,14 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
     # Get overlapping years
     years_model = np.unique(pd.to_datetime(ds.time.values).year)
     years_measure = np.unique(df_mb.index)
-    years = np.sort(list(set(years_model) & set(years_measure)))[1:]
+    years = np.sort(list(set(years_model) & set(years_measure)))
 
     # Retrieve the model data
     mb_dict = {'bw':[],'bs':[],'w-':[],'s+':[]}
-    for year in years:
+    for year in years[1:]:
         spring_date = df_mb.loc[year,'spring_date']
         fall_date = df_mb.loc[year,'fall_date']
         last_fall_date = df_mb.loc[year-1,'fall_date']
-        print(year,spring_date,fall_date)
         # Fill nans
         if str(spring_date) == 'nan':
             spring_date = str(year)+'-04-20 00:00'
@@ -185,10 +185,13 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
 
     # Index mass balance data
     df_mb = df_mb.loc[years]
-    winter_data = df_mb['bw']
-    summer_data = df_mb['ba'] - df_mb['bw']
-    wabl_data = df_mb['winter_ablation']
-    sacc_data = df_mb['summer_accumulation']
+    this_winter_abl_data = df_mb['winter_ablation'].iloc[1:].values
+    past_summer_acc_data = df_mb['summer_accumulation'].iloc[:-1].values
+    this_summer_acc_data = df_mb['summer_accumulation'].iloc[1:].values
+    winter_data = df_mb['bw'].iloc[1:] - past_summer_acc_data + this_winter_abl_data
+    summer_data = df_mb['ba'].iloc[1:] - df_mb['bw'].iloc[1:] + this_summer_acc_data
+    wabl_data = df_mb['winter_ablation'].iloc[1:]
+    sacc_data = df_mb['summer_accumulation'].iloc[1:]
 
     if color == 'default' and plot_var in ['mb','w-s+']:
         cwinter = 'turquoise'
@@ -198,6 +201,7 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
     elif plot_var == 'bs':
         csummer = color
 
+    years = years[1:]
     if plot_var == 'w-s+':
         ax.plot(years,mb_dict['w-'],label='Winter Melt',color=cwinter,linewidth=2)
         ax.plot(years,mb_dict['s+'],label='Summer Acc.',color=csummer,linewidth=2)
@@ -256,7 +260,6 @@ def snowpits(ds,method='MAE'):
 
             # Load dataset on the date the snowpit was taken
             sample_date = profiles['date'][year]
-            print(pd.to_datetime(f'{year}-{sample_date}'),ds.time.values)
             dsyear = ds.sel(time=pd.to_datetime(f'{year}-{sample_date}'))
 
             # Calculate layer density and determine snow indices

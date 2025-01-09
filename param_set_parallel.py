@@ -15,9 +15,9 @@ from objectives import *
 
 # OPTIONS
 repeat_run = False  # True if restarting an already begun run
-run_type = '2024'   # 'long' or '2024'
+run_type = 'long'   # 'long' or '2024'
 # Define sets of parameters
-params = {'kw':[1], #,1.5,2,2.5,3
+params = {'kw':[1,1.5,2,2.5,3],
           'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028],
           'kp':[2.4,2.5,2.6,2.7,2.8,3]}
 # Set the ones you want constant
@@ -28,7 +28,7 @@ if 'trace' in eb_prms.machine:
     eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
 
 if repeat_run:
-    date = '12_04'
+    date = '01_07'
     n_today = '0'
     out_fp = f'{date}_{n_today}/'
 else:
