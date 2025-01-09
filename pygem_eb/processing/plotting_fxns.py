@@ -500,10 +500,9 @@ def plot_by(ds,time,vars,t='Monthly EB Outputs',by='doy'):
         axis.set_xticks(np.arange(1,13),month_names)
     if by == 'doy':
         axis.set_xlabel('Day of year')
-    axis.set_ylabel('Melt (m w.e.)')
+    axis.set_ylabel('Cumulative accum.')
     axis.tick_params(length=5)
     fig.suptitle(t)
-    print(np.cumsum(var_out)[231] / np.cumsum(var_out)[-1])
 
 def panel_dh_compare(ds_list,time,labels,units,stake_df,rows=2,t=''):
     """
@@ -1098,8 +1097,9 @@ def plot_layers(ds,vars,dates):
     return
 
 def visualize_layers(ds,dates,vars,force_layers=False,
-                     t='Visualization of Snow ',
-                     plot_firn=True,plot_ice=False,ylim=False):
+                     t='Visualization of Snow ',plot_ax=False,
+                     plot_firn=True,plot_ice=False,ylim=False,
+                     colorbar=True):
     """
     force_layers:
         Three options:
@@ -1123,11 +1123,14 @@ def visualize_layers(ds,dates,vars,force_layers=False,
         return c
 
     fig,axes = plt.subplots(len(vars),figsize=(5,1.7*len(vars)),sharex=True,layout='constrained')
-    if len(vars) == 1:
+    if plot_ax:
+        assert len(plot_ax) == len(vars)
+        axes = plot_ax
+    if len(vars) == 1 and '__iter__' not in dir(axes):
         axes = [axes]
     for i,var in enumerate(vars):
         if var in ['layerBC']:
-            bounds = [-2,30]
+            bounds = [-5,30]
         if var in ['layerdust']:
             bounds = [-5,30]
         elif var in ['layerdensity']:
@@ -1185,6 +1188,8 @@ def visualize_layers(ds,dates,vars,force_layers=False,
                 elif not first:
                     first = step
                 color = get_color(data,bounds,ctype)
+                if 'density' in var and data > 800:
+                    color = '0.1'
                 ax.bar(step,dh, bottom=bottom, width=diff, color=color,linewidth=0.5,edgecolor='none')
                 bottom += dh  # Update bottom for the next set of bars
             max_snowdepth = max(max_snowdepth,np.sum(height))
@@ -1194,14 +1199,20 @@ def visualize_layers(ds,dates,vars,force_layers=False,
         units = {'layerBC':'ppb','layerdust':'ppm','layertemp':'$^{\circ}$C',
                 'layerdensity':'kg m$^{-3}$','layerwater':'%','layergrainsize':'um',
                 'layerrefreeze':'kg m-2'}
-        sm = mpl.cm.ScalarMappable(cmap=ctype,norm=plt.Normalize(bounds[0],bounds[1]))
-        leg = plt.colorbar(sm,ax=ax,aspect=7)
-        leg.ax.tick_params(labelsize=9)
-        # leg.set_label(units[var],loc='top',rotation=0)
-        ax.yaxis.set_label_position('right')
-        ax.yaxis.set_label_coords(1.1,0)
-        label = varprops[var]['label']+' ('+units[var]+')'
-        ax.set_ylabel(label,fontsize=10)
+        if colorbar:
+            sm = mpl.cm.ScalarMappable(cmap=ctype,norm=plt.Normalize(bounds[0],bounds[1]))
+            leg = plt.colorbar(sm,ax=ax,aspect=7)
+            leg.ax.tick_params(labelsize=9)
+            if 'BC' in var:
+                leg.ax.set_ylim(0, 30)
+                leg.ax.set_yticks([0,15,30])
+            
+            # leg.set_label(units[var],loc='top',rotation=0)
+            ax.yaxis.set_label_position('right')
+            ax.yaxis.set_label_coords(1.2,0)
+            label = varprops[var]['label']+' ('+units[var]+')'
+            # ax.set_ylabel(label,fontsize=10)
+            leg.set_label(label,rotation=270,labelpad=15,fontsize=12)
         ax.grid(axis='y')
         ax.tick_params(length=5)
         if ylim:
@@ -1225,7 +1236,10 @@ def visualize_layers(ds,dates,vars,force_layers=False,
 
     # Show plot
     # plt.show()
-    return fig,ax
+    if not plot_ax:
+        return fig,ax
+    else:
+        return axes
 
 def plot_single_layer(ds,layer,vars,time,cumMB=False,t='',vline=None,res='h',resample=False):
     if len(time) == 2:

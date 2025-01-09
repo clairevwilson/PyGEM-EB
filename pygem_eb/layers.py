@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import pygem_eb.input as eb_prms
+import warnings, sys
+warnings.simplefilter('error', RuntimeWarning)
 
 class Layers():
     """
@@ -74,9 +76,6 @@ class Layers():
         # Initialize bucket for 'delayed snow' and running max snow mass
         self.delayed_snow = 0
         self.max_snow = np.sum(self.lice[self.snow_idx])
-
-        # Define day of year to merge snow into firn
-        self.firn_doy = pd.to_datetime(eb_prms.end_summer).day_of_year
         
         if args.debug:
             print(f'{self.nlayers} layers initialized')
@@ -192,7 +191,7 @@ class Layers():
             ltemp = np.ones(self.nlayers)*0
         else:
             print('Choose between ripe and interpolate in initialize_temp')
-            quit()
+            self.exit()
         
         # GRAIN SIZE [um]
         lgrainsize = np.interp(self.ldepth,grainsize_data['depth'],
@@ -252,7 +251,7 @@ class Layers():
             ldust = cdust * lheight
         else:
             print('Choose between clean and interpolate in initialize_LAPs')
-            quit()
+            self.exit()
         lBC[self.ice_idx] = 0
         ldust[self.ice_idx] = 0
         return lBC, ldust
@@ -317,7 +316,7 @@ class Layers():
         """
         if (self.nlayers+1) > eb_prms.max_nlayers and 'layers' in eb_prms.store_vars:
             print(f'Need bigger max_nlayers: currently have {self.nlayers+1} layers')
-            quit()
+            self.exit()
         l = layer_to_split
         self.nlayers += 1
         self.ltemp = np.insert(self.ltemp,l,self.ltemp[l])
@@ -363,12 +362,16 @@ class Layers():
         self.remove_layer(l)
         return
     
-    def check_layers(self,time):
+    def check_layers(self,time,out):
         """
         Checks the layer heights against the initial size scheme. If layers have become
         too small, they are merged with the layer below. If layers have become too large,
         they are split into two identical layers of half the size.
         """
+        # Initialize mass conservation check
+        initial_mass = np.sum(self.lice + self.lwater)
+ 
+        # Layer heights
         if self.ltype[0] in ['snow','firn']:
             DZ0 = eb_prms.dz_toplayer
         else:
@@ -376,7 +379,8 @@ class Layers():
         layer = 0
         min_heights = lambda i: DZ0 * np.exp((i-1)*eb_prms.layer_growth)/2
         max_heights = lambda i: DZ0 * np.exp((i-1)*eb_prms.layer_growth)*2
-        firn_min_height,firn_max_height = [0.5,2.5]
+
+        # Loop through layers 
         while layer < self.nlayers:
             layer_split = False
             dz = self.lheight[layer]
@@ -388,27 +392,21 @@ class Layers():
                     # Layer too big. Split into two equal size layers
                     self.split_layer(layer)
                     layer_split = True
-            elif self.ltype[layer] in ['firn']:
-                if dz < firn_min_height and self.ltype[layer]==self.ltype[layer+1]:
+            if self.ltype[layer] in ['ice']:
+                if dz < min_heights(layer) and layer < self.nlayers - 1:
+                    # Layer too small. Merge if it is not the bottom layer
                     self.merge_layers(layer)
-                elif dz > firn_max_height:
+                elif dz > max_heights(layer):
+                    # Layer too big. Split into two equal size layers
                     self.split_layer(layer)
                     layer_split = True
+            # Firn layers are not checked
             if not layer_split:
                 layer += 1
 
-        # End of summer: transform old snow into firn
-        if time.day_of_year == self.firn_doy and time.hour == 23:
-            if len(self.snow_idx) > 0:
-                # merge snow into single firn layer
-                merge_count = max(0,len(self.snow_idx) - 1)
-                for _ in range(merge_count):
-                    self.merge_layers(0)
-                    self.ltype[0] = 'firn'
-                if self.args.debug:
-                    print(merge_count+1,'layers merged into firn')
-            # reset cumulative refreeze
-            self.cumrefreeze *= 0
+        # CHECK MASS CONSERVATION
+        change = np.sum(self.lice + self.lwater) - initial_mass
+        assert np.abs(change) < eb_prms.mb_threshold, f'check_layers failed mass conservation in {out}'
         return
     
     def update_layer_props(self,do=['depth','density']):
@@ -651,9 +649,9 @@ class Layers():
                 drdrydt = []
                 for r,t,k,g in zip(dr0,tau,kap,grainsize):
                     if t + g < FRESH_GRAINSIZE:
-                        drdrydt.append(r*np.power(t/(t + 1e-6),1/k)/3600)
+                        drdrydt.append(r*np.power(t/(t + 1e-6),1/k)/dt)
                     else:
-                        drdrydt.append(r*np.power(t/(t + g - FRESH_GRAINSIZE),1/k)/3600)
+                        drdrydt.append(r*np.power(t/(t + g - FRESH_GRAINSIZE),1/k)/dt)
                 drdry = np.array(drdrydt) * dt
 
             # Wet metamorphism
@@ -678,3 +676,10 @@ class Layers():
             self.lgrainsize[self.ice_idx] = ICE_GRAINSIZE
         
         return 
+    
+    def exit(self):
+        if self.args.debug:
+            print('Failed in layers')
+            print('Layer temperature:',self.ltemp)
+            print('Layer density:',self.ldensity)
+        sys.exit()

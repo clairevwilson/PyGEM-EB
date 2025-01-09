@@ -124,10 +124,10 @@ class Surface():
                 self.stemp = 0
                 Qm = Qm_check
                 if layers.ltemp[0] < 0.: 
-                    # need to heat surface layer to 0.
+                    # check heat with a surftemp of 0
                     Qm_check = enbal.surface_EB(self.stemp,layers,self,
                                                self.days_since_snowfall)
-                    # warm top layer
+                    # heat the top layer
                     temp_change = Qm_check*dt/(HEAT_CAPACITY_ICE*layers.lice[0])
                     layers.ltemp[0] += temp_change
 
@@ -195,7 +195,6 @@ class Surface():
         enbal.surface_EB(self.stemp,layers,self,self.days_since_snowfall)
         self.Qm = Qm
         self.tcc = enbal.tcc
-
         return
 
     def get_albedo(self,layers,time):

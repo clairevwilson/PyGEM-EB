@@ -68,8 +68,6 @@ def get_args(parse=True):
                         help='Multiplicative wind factor')
     parser.add_argument('-kp',default=eb_prms.kp,action='store',type=float,
                         help='Multiplicative precipitation factor')
-    parser.add_argument('-snow_threshold',action='store',help='Snow temperature thresholds',
-                        default=[eb_prms.snow_threshold_low,eb_prms.snow_threshold_high])
     parser.add_argument('-Boone_c5',default=eb_prms.Boone_c5,action='store',type=float,
                         help='Parameter for Boone densification scheme')
     
@@ -147,6 +145,14 @@ def initialize_model(glac_no,args):
         eb_prms.sky_view = site_df.loc[site]['sky_view']
         args.initial_snow_depth = site_df.loc[site]['snowdepth']
         args.initial_firn_depth = site_df.loc[site]['firndepth']
+
+        # Set scaling albedo
+        slope = (0.485 - 0.315)/(site_df.loc['B','elevation'] - site_df.loc['A','elevation'])
+        intercept = 0.315
+        args.a_ice = intercept + (args.elev - site_df.loc['A','elevation'])*slope
+        args.a_ice = min(0.485,args.a_ice)
+
+        # Set filepaths
         eb_prms.shading_fp = os.getcwd() + f'/shading/out/{eb_prms.glac_name}{site}_shade.csv'
         if site not in ['AB','ABB','BD']:
             if pd.to_datetime(args.startdate) > pd.to_datetime('2023-12-31'):
@@ -158,14 +164,14 @@ def initialize_model(glac_no,args):
         elif site in ['AB']:
             eb_prms.initial_density_fp = 'data/Gulkana/gulkanaAUdensity24.csv'
         if site not in eb_prms.output_name:
-            eb_prms.output_name += f'{site}_'    
+            eb_prms.output_name += f'{site}_'
 
     # CHECK FOR PARAMS INPUT FILE
     if args.params_fn != 'None':
         params = pd.read_csv(args.params_fn,index_col=0)
-        kp = params.loc['kp',args.site].astype(float)
-        kw = params.loc['kw',args.site].astype(float)
-        a_ice = params.loc['a_ice',args.site].astype(float)
+        kp = params.loc['kp',args.site]
+        kw = params.loc['kw',args.site]
+        a_ice = params.loc['a_ice',args.site]
         # Command line args override params input
         if args.kp == eb_prms.kp:
             args.kp = kp

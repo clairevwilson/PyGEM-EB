@@ -10,20 +10,23 @@ import pygem_eb.massbalance as mb
 import pygem_eb.input as eb_prms
 
 # User info
-sites = ['A'] # Sites to run in parallel
+use_AWS = False
+sites = ['D'] # Sites to run in parallel # ,'AU','B','D'
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
-params_fn = '../Output/params/11_04_MERRA2.csv'
+params_fn = '../Output/params/11_26_best.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
-n_runs_ahead = 0    # Step if you're going to run this script more than once
+n_runs_ahead = 200    # Step if you're going to run this script more than once
 
 # Read command line args
 args = sim.get_args()
 args.startdate = '2000-04-20 00:00'
 args.enddate = '2024-08-20 12:00'
 args.store_data = True              # Ensures output is stored
-args.use_AWS = False
 args.glac_no = ['01.00570']
+args.use_AWS = use_AWS
 eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana_22yrs.csv'
+if 'trace' in eb_prms.machine:
+    eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
 
 # Determine number of runs for each process
 n_processes = len(sites)
@@ -46,8 +49,6 @@ def pack_vars():
             kw = params.loc['kw',args_run.site].astype(float)
             a_ice = params.loc['a_ice',args_run.site].astype(float)
             c5 = params.loc['Boone_c5',args_run.site].astype(float)
-            t_low = params.loc['t_low',args_run.site].astype(float)
-            t_high = params.loc['t_high',args_run.site].astype(float)
             # Command line args override params input
             if args_run.kp == eb_prms.kp:
                 args_run.kp = kp
@@ -57,12 +58,9 @@ def pack_vars():
                 args_run.a_ice = a_ice
             if args_run.Boone_c5 == eb_prms.Boone_c5:
                 args_run.Boone_c5 = c5
-            if args_run.snow_threshold == [eb_prms.snow_threshold_low,eb_prms.snow_threshold_high]:
-                args_run.snow_threshold = [t_low,t_high]
             store_attrs = {'params_fn':params_fn,'site':site,
                         'kp':str(args_run.kp),'kw':str(args_run.kw),
-                            'AWS':eb_prms.AWS_fn,
-                            'c5':str(c5),'t_low':str(t_low),'t_high':str(t_high)}
+                            'AWS':eb_prms.AWS_fn,'c5':str(c5)}
         else:
             store_attrs = {'site':site}
 
