@@ -162,7 +162,7 @@ class Shading():
                 df['shaded'].astype(bool).to_csv(self.shade_fp,
                                                 header=f'skyview={self.sky_view}')
             if get_direct:
-                df['dirirrslope'].astype(bool).to_csv(self.irr_fp,
+                df['dirirrslope'].astype(float).to_csv(self.irr_fp,
                                                 header=f'skyview={self.sky_view}')
 
         # get diffuse fraction from incoming solar data
@@ -277,7 +277,7 @@ class Shading():
 
         # get UTM coordinates from lat/lon
         transformer = Transformer.from_crs('EPSG:4326', dem.rio.crs, always_xy=True)
-        xx, yy = transformer.transform(args.lon, args.lat)
+        xx, yy = transformer.transform(self.args.lon, self.args.lat)
         # check point is in bounds
         bounds = np.array(dem.rio.bounds())
         x_in = xx >= bounds[0] and xx <= bounds[2]
@@ -561,10 +561,10 @@ class Shading():
             plt.show()
 
     def store_site_info(self):
-        self.site_df.loc[args.site,'sky_view'] = self.sky_view
-        self.site_df.loc[args.site,'slope'] = self.point_slope*180/pi
-        self.site_df.loc[args.site,'aspect'] = self.point_aspect*180/pi
-        self.site_df.loc[args.site,'elevation'] = int(self.point_elev)
+        self.site_df.loc[self.args.site,'sky_view'] = self.sky_view
+        self.site_df.loc[self.args.site,'slope'] = self.point_slope*180/pi
+        self.site_df.loc[self.args.site,'aspect'] = self.point_aspect*180/pi
+        self.site_df.loc[self.args.site,'elevation'] = int(self.point_elev)
         self.site_df.to_csv(site_fp)
         print(f'Saved sky view, slope, aspect and elevation to {site_fp}')
 

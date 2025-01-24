@@ -17,7 +17,7 @@ class Climate():
     to reanalysis data to fill the necessary variables. If use_AWS = False,
     only reanalysis data will be used.
     """
-    def __init__(self,args,glacier_table):
+    def __init__(self,args):
         """
         Initializes glacier information and creates the dataset where 
         climate data will be stored.
@@ -30,19 +30,18 @@ class Climate():
         self.elev = args.elev
 
         # glacier cenlat and lon
-        # if eb_prms.glac_no == ['01.00570']:
-        #     self.lat = args.site_df.loc[args.site]['lat']
-        #     self.lon = eb_prms.site_df.loc[args.site]['lon']
-        # else:
-        self.lat = glacier_table['CenLat'].values
-        self.lon = glacier_table['CenLon'].values
+        self.lat = args.lat
+        self.lon = args.lon
 
         # define reanalysis variables
         self.get_vardict()
-        self.all_vars = ['temp','tp','rh','wind','sp','SWin',
+        self.all_vars = ['temp','tp','rh','uwind','vwind','sp','SWin',
                             'LWin','bcwet','bcdry','dustwet','dustdry']
         if not self.args.use_AWS:
             self.measured_vars = []
+        
+        # default to wind direction being calculated
+        self.wind_direction = True
 
         # create empty dataset
         nans = np.ones(n_time)*np.nan
@@ -58,7 +57,7 @@ class Climate():
                 uwind = (['time'],nans,{'units':'m s-1'}),
                 vwind = (['time'],nans,{'units':'m s-1'}),
                 wind = (['time'],nans,{'units':'m s-1'}),
-                winddir = (['time'],nans,{'units':'deg'}),
+                winddir = (['time'],nans,{'units':'o'}),
                 bcdry = (['time'],nans,{'units':'kg m-2 s-1'}),
                 bcwet = (['time'],nans,{'units':'kg m-2 s-1'}),
                 dustdry = (['time'],nans,{'units':'kg m-2 s-1'}),
@@ -95,10 +94,17 @@ class Climate():
         self.AWS_elev = df.iloc[0]['z']
 
         # get the available variables
-        all_AWS_vars = ['temp','tp','rh','wind','sp','SWin','SWout','albedo','NR',
-                    'LWin','LWout','bcwet','bcdry','dustwet','dustdry']
+        all_AWS_vars = ['temp','tp','rh','uwind','vwind','sp','SWin','SWout','albedo',
+                            'NR','LWin','LWout','bcwet','bcdry','dustwet','dustdry']
         AWS_vars = df.columns
         self.measured_vars = list(set(all_AWS_vars) & set(AWS_vars))
+
+        # warning about wind speed
+        uwind_measured = 'uwind' in AWS_vars
+        vwind_measured = 'vwind' in AWS_vars
+        if uwind_measured ^ vwind_measured:
+            self.wind_direction = False
+            print('WARNING: Wind speed was input as a scalar. Wind shading is not handled')
         
         # extract and store data
         for var in self.measured_vars:
@@ -106,8 +112,19 @@ class Climate():
 
         # figure out which data is still needed from reanalysis
         need_vars = [e for e in self.all_vars if e not in AWS_vars]
+
+        # if net radiation was measured, don't need LWin
         if 'NR' in self.measured_vars:
             need_vars.remove('LWin')
+
+        # if wind was input as a scalar, don't need the other direction of wind
+        if not self.wind_direction:
+            if uwind_measured:
+                self.cds['vwind'].values = np.zeros(self.n_time)
+                need_vars.remove('vwind')
+            elif vwind_measured:
+                self.cds['uwind'].values = np.zeros(self.n_time)
+                need_vars.remove('uwind')
         return need_vars
     
     def get_reanalysis(self,vars):
@@ -120,6 +137,7 @@ class Climate():
         self.need_vars = vars
         use_threads = self.args.use_threads
         
+        # interpolate data if time was input on the hour instead of half-hour
         interpolate = dates[0].minute != 30 and eb_prms.reanalysis == 'MERRA2'
         
         # get reanalysis data geopotential
@@ -169,16 +187,6 @@ class Climate():
         threads = []
         # loop through vars to initiate threads
         for var in vars:
-            if var == 'wind':
-                fn = self.reanalysis_fp + self.var_dict['uwind']['fn']
-                if use_threads:
-                    thread = threading.Thread(target=access_cell,
-                                            args=(fn, 'uwind', all_data))
-                    thread.start()
-                    threads.append(thread)
-                else:
-                    all_data = access_cell(fn, 'uwind', all_data)
-                var = 'vwind'
             fn = self.reanalysis_fp + self.var_dict[var]['fn']
             if use_threads:
                 thread = threading.Thread(target=access_cell,
@@ -194,14 +202,7 @@ class Climate():
 
         # store data
         for var in vars:
-            if var == 'wind':
-                varname = 'uwind'
-                self.cds[varname].values = all_data[varname]
-                varname = 'vwind'
-                var = 'vwind'
-            else:
-                varname = var
-            self.cds[varname].values = all_data[var].ravel()
+            self.cds[var].values = all_data[var].ravel()
         return
 
     def adjust_to_elevation(self):
@@ -243,16 +244,6 @@ class Climate():
         return
     
     def check_ds(self):
-        # If using reanalysis wind, get wind from u/v components  
-        wind = self.cds['wind'].values
-        if np.all(np.isnan(wind)):
-            uwind = self.cds['uwind'].values
-            vwind = self.cds['vwind'].values
-            wind = np.sqrt(np.power(uwind,2)+np.power(vwind,2))
-            winddir = np.arctan2(-uwind,-vwind) * 180 / np.pi
-            self.cds['wind'].values = wind
-            self.cds['winddir'].values = winddir
-
         # Add MERRA-2 temperature bias
         temp_filled = True if not self.args.use_AWS else 'temp' in self.need_vars
         if eb_prms.temp_bias_adjust and temp_filled:
@@ -260,6 +251,15 @@ class Climate():
 
         # Adjust elevation dependence
         self.adjust_to_elevation()
+
+        # Calculate wind speed and direction from u and v components
+        # *** Add function which sends to WindMapper or uses a lookup table
+        uwind = self.cds['uwind'].values
+        vwind = self.cds['vwind'].values
+        wind = np.sqrt(np.power(uwind,2)+np.power(vwind,2))
+        winddir = np.arctan2(-uwind,-vwind) * 180 / np.pi
+        self.cds['wind'].values = wind
+        self.cds['winddir'].values = winddir
         
         # Adjust MERRA-2 deposition by reduction coefficient
         if eb_prms.reanalysis == 'MERRA2':
@@ -281,7 +281,7 @@ class Climate():
         # Store the dataset as a netCDF
         if eb_prms.store_climate:
             out_fp = eb_prms.output_filepath + self.args.out + 'climate'
-            self.cds.to_netcdf(out_fp+'.nc')
+            self.cds.to_netcdf(out_fp+'_'+self.args.site +'.nc')
             print('Climate dataset saved to',out_fp+'.nc')
         return
     

@@ -53,9 +53,6 @@ def seasonal_mass_balance(ds,method='MAE'):
 
     The stake data comes directly from the USGS Data
     Release (Input_Glaciological_Data.csv).
-
-    ** Additional argument site : str
-    Name of the USGS site.
     """
     # Determine the site
     site = ds.attrs['site']
@@ -71,11 +68,13 @@ def seasonal_mass_balance(ds,method='MAE'):
     years = np.sort(list(set(years_model) & set(years_measure)))
 
     # Retrieve the model data
-    mb_dict = {'bw':[],'bs':[],'w-':[],'s+':[]}
+    mb_dict = {'bw':[],'bs':[],'ba':[]}
     for year in years[1:]:
+        # Get sample dates
         spring_date = df_mb.loc[year,'spring_date']
         fall_date = df_mb.loc[year,'fall_date']
         last_fall_date = df_mb.loc[year-1,'fall_date']
+
         # Fill nans
         if str(spring_date) == 'nan':
             spring_date = str(year)+'-04-20 00:00'
@@ -83,51 +82,62 @@ def seasonal_mass_balance(ds,method='MAE'):
             fall_date = str(year)+'-08-20 00:00'
         if str(last_fall_date) == 'nan':
             last_fall_date = str(year-1)+'-08-20 00:00'
+
         # Split into winter and summer
         summer_dates = pd.date_range(spring_date,fall_date,freq='h')
         winter_dates = pd.date_range(last_fall_date,spring_date,freq='h')
+        annual_dates = pd.date_range(last_fall_date,fall_date,freq='h')
         if pd.to_datetime(ds.time.values[0]).minute == 30:
-            summer_dates = summer_dates + pd.Timedelta(minutes=30)
-            winter_dates = winter_dates + pd.Timedelta(minutes=30)
-        # sum mass balance
-        try:
+            summer_dates += pd.Timedelta(minutes=30)
+            winter_dates += pd.Timedelta(minutes=30)
+            annual_dates += pd.Timedelta(minutes=30)
+
+        # Sum model mass balance
+        if year == years[-1]:
+            years = years[:-1]
+            break
+        else:
             wds = ds.sel(time=winter_dates).sum()
             sds = ds.sel(time=summer_dates).sum()
-        except:
-            if year == years[-1]:
-                years = years[:-1]
-                break
+            ads = ds.sel(time=annual_dates).sum()
         winter_mb = wds.accum + wds.refreeze - wds.melt
         internal_acc = ds.sel(time=summer_dates[-2]).cumrefreeze.values
         summer_mb = sds.accum + sds.refreeze - sds.melt - internal_acc
+        annual_mb = ads.accum + ads.refreeze - ads.melt - internal_acc
         mb_dict['bw'].append(winter_mb.values)
         mb_dict['bs'].append(summer_mb.values)
-        mb_dict['w-'].append(wds.melt.values*-1)
-        mb_dict['s+'].append(sds.accum.values)
+        mb_dict['ba'].append(annual_mb.values)
 
     # Index mass balance data
     df_mb = df_mb.loc[years]
     this_winter_abl_data = df_mb['winter_ablation'].iloc[1:].values
     past_summer_acc_data = df_mb['summer_accumulation'].iloc[:-1].values
     this_summer_acc_data = df_mb['summer_accumulation'].iloc[1:].values
+    past_summer_acc_data[np.isnan(past_summer_acc_data)] = 0
+    this_summer_acc_data[np.isnan(this_summer_acc_data)] = 0
+    this_winter_abl_data[np.isnan(this_winter_abl_data)] = 0
     winter_data = df_mb['bw'].iloc[1:] - past_summer_acc_data + this_winter_abl_data
     summer_data = df_mb['ba'].iloc[1:] - df_mb['bw'].iloc[1:] + this_summer_acc_data
+    annual_data = winter_data + summer_data
 
     # Clean up arrays
     winter_model = np.array(mb_dict['bw'])
     summer_model = np.array(mb_dict['bs'])
+    annual_model = np.array(mb_dict['ba'])
     assert winter_model.shape == winter_data.shape
     assert summer_model.shape == summer_data.shape    
+    assert annual_model.shape == annual_data.shape    
 
     # Assess error
     winter_error = objective(winter_model,winter_data,method) 
     summer_error = objective(summer_model,summer_data,method) 
+    annual_error = objective(annual_model,annual_data,method)
 
-    return winter_error, summer_error
+    return winter_error, summer_error, annual_error
 
 def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='default'):
     """
-    plot_var : 'mb' (default), 'w-s+' (winter melt, summer accumulation), 'bw','bs'
+    plot_var : 'mb' (default), 'bw','bs','ba'
     """
     # Determine the site
     site = ds.attrs['site']
@@ -149,7 +159,7 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
     years = np.sort(list(set(years_model) & set(years_measure)))
 
     # Retrieve the model data
-    mb_dict = {'bw':[],'bs':[],'w-':[],'s+':[]}
+    mb_dict = {'bw':[],'bs':[],'ba':[]}
     for year in years[1:]:
         spring_date = df_mb.loc[year,'spring_date']
         fall_date = df_mb.loc[year,'fall_date']
@@ -164,36 +174,42 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
         # Split into winter and summer
         summer_dates = pd.date_range(spring_date,fall_date,freq='h')
         winter_dates = pd.date_range(last_fall_date,spring_date,freq='h')
+        annual_dates = pd.date_range(last_fall_date,fall_date,freq='h')
         if pd.to_datetime(ds.time.values[0]).minute == 30:
-            summer_dates = summer_dates + pd.Timedelta(minutes=30)
-            winter_dates = winter_dates + pd.Timedelta(minutes=30)
-        # sum mass balance
-        try:
+            summer_dates += pd.Timedelta(minutes=30)
+            winter_dates += pd.Timedelta(minutes=30)
+            annual_dates += pd.Timedelta(minutes=30)
+
+        # Sum model mass balance
+        if year == years[-1]:
+            years = years[:-1]
+            break
+        else:
             wds = ds.sel(time=winter_dates).sum()
             sds = ds.sel(time=summer_dates).sum()
-        except:
-            if year == years[-1]:
-                years = years[:-1]
-                break
+            ads = ds.sel(time=annual_dates).sum()
         winter_mb = wds.accum + wds.refreeze - wds.melt
         internal_acc = ds.sel(time=summer_dates[-2]).cumrefreeze.values
         summer_mb = sds.accum + sds.refreeze - sds.melt - internal_acc
+        annual_mb = ads.accum + ads.refreeze - ads.melt - internal_acc
         mb_dict['bw'].append(winter_mb.values)
         mb_dict['bs'].append(summer_mb.values)
-        mb_dict['w-'].append(wds.melt.values*-1)
-        mb_dict['s+'].append(sds.accum.values)
+        mb_dict['ba'].append(annual_mb.values)
 
     # Index mass balance data
     df_mb = df_mb.loc[years]
     this_winter_abl_data = df_mb['winter_ablation'].iloc[1:].values
     past_summer_acc_data = df_mb['summer_accumulation'].iloc[:-1].values
     this_summer_acc_data = df_mb['summer_accumulation'].iloc[1:].values
+    past_summer_acc_data[np.isnan(past_summer_acc_data)] = 0
+    this_summer_acc_data[np.isnan(this_summer_acc_data)] = 0
+    this_winter_abl_data[np.isnan(this_winter_abl_data)] = 0
     winter_data = df_mb['bw'].iloc[1:] - past_summer_acc_data + this_winter_abl_data
     summer_data = df_mb['ba'].iloc[1:] - df_mb['bw'].iloc[1:] + this_summer_acc_data
-    wabl_data = df_mb['winter_ablation'].iloc[1:]
-    sacc_data = df_mb['summer_accumulation'].iloc[1:]
+    annual_data = winter_data + summer_data
 
-    if color == 'default' and plot_var in ['mb','w-s+']:
+    cannual = 'orchid'
+    if color == 'default' and plot_var == 'mb':
         cwinter = 'turquoise'
         csummer = 'orange'
     elif plot_var == 'bw':
@@ -202,31 +218,31 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
         csummer = color
 
     years = years[1:]
-    if plot_var == 'w-s+':
-        ax.plot(years,mb_dict['w-'],label='Winter Melt',color=cwinter,linewidth=2)
-        ax.plot(years,mb_dict['s+'],label='Summer Acc.',color=csummer,linewidth=2)
-        ax.plot(years,wabl_data,color='turquoise',linestyle='--')
-        ax.plot(years,sacc_data,color='orange',linestyle='--')
-        ax.set_ylabel('Partitioned seasonal mass balance (m w.e.)',fontsize=14)
-        ax.set_title(f'Summer accumulation and winter ablation at site {site}')
-    else:
-        if plot_var in ['mb','bw']:
-            ax.plot(years,mb_dict['bw'],label='Winter',color=cwinter,linewidth=2)
-            ax.plot(years,winter_data,color=cwinter,linestyle='--')
-        if plot_var in ['mb','bs']:
-            ax.plot(years,mb_dict['bs'],label='Summer',color=csummer,linewidth=2)
-            ax.plot(years,summer_data,color=csummer,linestyle='--')
-        ax.axhline(0,color='grey',linewidth=0.5)
+    if plot_var in ['mb','bw']:
+        ax.plot(years,mb_dict['bw'],label='Winter',color=cwinter,linewidth=2)
+        ax.plot(years,winter_data,color=cwinter,linestyle='--')
+    if plot_var in ['mb','bs']:
+        ax.plot(years,mb_dict['bs'],label='Summer',color=csummer,linewidth=2)
+        ax.plot(years,summer_data,color=csummer,linestyle='--')
+    if plot_var in ['ba']:
+        ax.plot(years,mb_dict['ba'],color=cannual,linewidth=2)
+        ax.plot(years,annual_data,color=cannual,linestyle='--')
+    ax.axhline(0,color='grey',linewidth=0.5)
+    if plot_var in ['mb','bw','bs']:
         min_all = np.nanmin(np.array([mb_dict['bw'],mb_dict['bs'],winter_data,summer_data]))
         max_all = np.nanmax(np.array([mb_dict['bw'],mb_dict['bs'],winter_data,summer_data]))
-        ax.set_xticks(np.arange(years[0],years[-1],4))
-        ax.set_yticks(np.arange(np.round(min_all,0),np.round(max_all,0)+1,1))
-        ax.set_ylabel('Seasonal mass balance (m w.e.)',fontsize=14)
+    else:
+        min_all = np.nanmin(np.array([mb_dict['ba'],annual_data]))
+        max_all = np.nanmax(np.array([mb_dict['ba'],annual_data]))
+    ax.set_xticks(np.arange(years[0],years[-1],4))
+    ax.set_yticks(np.arange(np.round(min_all,0),np.round(max_all,0)+1,1))
+    ax.set_ylabel('Seasonal mass balance (m w.e.)',fontsize=14)
     ax.plot(np.nan,np.nan,linestyle='--',color='grey',label='Data')
     ax.plot(np.nan,np.nan,color='grey',label='Modeled')
     ax.legend(fontsize=12,ncols=2)
     ax.tick_params(labelsize=12,length=5,width=1)
     ax.set_xlim(years[0],years[-1])
+    ax.set_ylim(min_all-0.5,max_all+0.5)
     ax.set_xticks(np.arange(years[0],years[-1],4))
     if plot_ax:
         return ax
@@ -236,6 +252,8 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
 # ========== 3. END-OF-WINTER SNOWPACK ==========
 def snowpits(ds,method='MAE'):
     all_years = np.arange(2000,2025)
+    years_model = np.unique(pd.to_datetime(ds.time.values).year)
+    years = np.sort(list(set(years_model) & set(all_years)))
 
     # Open the mass balance
     with open('../MB_data/pits.pkl', 'rb') as file:
@@ -251,7 +269,7 @@ def snowpits(ds,method='MAE'):
         error_dict[var+method] = {}
 
     # Loop through years
-    for year in all_years:
+    for year in years:
         # Some years don't have data: skip
         if year in profiles['sbd']:
             # Load data
@@ -340,7 +358,8 @@ def cumulative_mass_balance(ds,method='MAE',out_mbs=False):
             df_mb = df_mb.loc[df_mb['site_name'] == site]
             mba = df_mb.loc[df_mb['Year'] == year,'ba'].values[0]
             mbw = df_mb.loc[df_mb['Year'] == year,'bw'].values[0]
-            mbs_measured = mba - mbw
+            mbsa = df_mb.loc[df_mb['Year'] == year,'summer_accumulation'].values[0]
+            mbs_measured = mba - mbw + mbsa
 
             # Retrieve modeled summer MB
             spring_date = str(year)+'-04-20 00:00'

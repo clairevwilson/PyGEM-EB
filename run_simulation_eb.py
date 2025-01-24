@@ -26,6 +26,14 @@ def get_args(parse=True):
                         help='Elevation in m a.s.l.')
     parser.add_argument('-site',action='store',default='',type=str,
                         help='Site name')
+    parser.add_argument('-lat',action='store',default=eb_prms.lat,type=float,
+                        help='Site latitude')
+    parser.add_argument('-lon',action='store',default=eb_prms.lon,type=float,
+                        help='Site latitude')
+    parser.add_argument('-slope',action='store',default=eb_prms.slope,type=float,
+                        help='Site latitude')
+    parser.add_argument('-aspect',action='store',default=eb_prms.aspect,type=float,
+                        help='Site latitude')
     
     # MODEL TIME
     parser.add_argument('-start','--startdate', action='store', type=str, 
@@ -140,11 +148,13 @@ def initialize_model(glac_no,args):
         site_fp = os.path.join(data_fp,eb_prms.glac_name+'/site_constants.csv')
         site_df = pd.read_csv(site_fp,index_col='site')
         args.elev = site_df.loc[site]['elevation']
-        eb_prms.slope = site_df.loc[site]['slope']
-        eb_prms.aspect = site_df.loc[site]['aspect']
-        eb_prms.sky_view = site_df.loc[site]['sky_view']
+        args.slope = site_df.loc[site]['slope']
+        args.aspect = site_df.loc[site]['aspect']
+        args.sky_view = site_df.loc[site]['sky_view']
         args.initial_snow_depth = site_df.loc[site]['snowdepth']
         args.initial_firn_depth = site_df.loc[site]['firndepth']
+        args.lat = site_df.loc[args.site]['lat']
+        args.lon = site_df.loc[args.site]['lon']
 
         # Set scaling albedo
         slope = (0.485 - 0.315)/(site_df.loc['B','elevation'] - site_df.loc['A','elevation'])
@@ -181,10 +191,8 @@ def initialize_model(glac_no,args):
             args.a_ice = a_ice
 
     # ===== GET GLACIER CLIMATE =====
-    # get glacier properties and initialize the climate class
-    glacier_table = modelsetup.selectglaciersrgitable(np.array([glac_no]),
-                    rgi_regionsO1=eb_prms.rgi_regionsO1)
-    climate = climutils.Climate(args,glacier_table)
+    # Initialize the climate class
+    climate = climutils.Climate(args)
 
     # load in available AWS data, then reanalysis
     if args.use_AWS:

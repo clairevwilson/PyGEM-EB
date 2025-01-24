@@ -20,7 +20,7 @@ mb_threshold = 0.1       # Threshold to consider not conserving mass (kg m-2 = m
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/gulkana2024_walbedo.csv'}, 
+                            'AWS_fn':'Preprocessed/gulkana2024.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -98,7 +98,7 @@ wind_ref_height = 10 if reanalysis in ['ERA5-hourly'] else 2
 if use_AWS:
     assert os.path.exists(AWS_fn), 'Check AWS filepath or glac_no in input.py'
 
-dates_from_data = False
+dates_from_data = True
 if dates_from_data:
     cdf = pd.read_csv(AWS_fn,index_col=0)
     cdf = cdf.set_index(pd.to_datetime(cdf.index))
@@ -174,6 +174,11 @@ dep_factor = 1              # Multiplicative factor to adjust MERRA-2 deposition
 albedo_ice = 0.47           # Ice albedo [-] 
 snow_threshold_low = 0.2    # Lower threshold for linear snow-rain scaling [C]
 snow_threshold_high = 2.2   # Upper threshold for linear snow-rain scaling [C]
+# <<<<<< Slope/aspect >>>>>
+slope = 0
+aspect = 0
+lat = 63.3
+lon = -142.2
 # <<<<<< Discretization >>>>>
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
 layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
@@ -181,7 +186,7 @@ max_nlayers = 80            # Maximum number of vertical layers allowed (defines
 max_dz = 2                  # Max layer height
 # <<<<<< Boundary conditions >>>>>
 temp_temp = -0.5            # temperature of temperate ice [C]
-temp_depth = 10             # depth of temperate ice [m]
+temp_depth = 20             # depth of temperate ice [m]
 # <<<<<< Physical properties of snow, ice, water and air >>>>>
 density_ice = 900           # Density of ice [kg m-3]
 density_water = 1000        # Density of water [kg m-3]
@@ -249,7 +254,7 @@ temp_bias_intercept = 1.799 # Intercept of MERRA-2 --> ON-ICE AWS
 # <<<<<< End-of-summer >>>>>
 end_summer_doy = 228        # Day of year to starting checking for end of summer (snow -> firn)
 new_snow_threshold = 0.05   # Threshold for new snow to consider the start of winter (m w.e.)
-new_snow_timing = 7         # Number of days to check for start of winter
+new_snow_timing = 10        # Number of days to check for start of winter
 
 # ========== OTHER PYGEM INPUTS ========== 
 rgi_regionsO1 = [1]

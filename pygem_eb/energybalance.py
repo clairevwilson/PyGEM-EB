@@ -6,8 +6,7 @@ Energy balance class for PyGEM Energy Balance
 import pandas as pd
 import numpy as np
 import pygem_eb.input as eb_prms
-# import warnings
-# warnings.filterwarnings("error")
+import suncalc
 
 class energyBalance():
     """
@@ -49,13 +48,18 @@ class energyBalance():
         self.dustdry = climateds_now['dustdry'].values
         self.dustwet = climateds_now['dustwet'].values
 
+        # Main variables
+        self.climateds = climate.cds
+        self.args = args
+
         # Define additional useful values
         self.tempK = self.tempC + 273.15
         self.prec =  self.tp / 3600     # tp is hourly total precip, prec is the rate in m/s
-        self.dt = dt
-        self.climateds = climate.cds
-        self.time = time
         self.rh = 100 if self.rh > 100 else self.rh
+        
+        # Time
+        self.time = time
+        self.dt = dt
 
         # Adjust calibrated values
         self.wind *= float(args.kw)
@@ -146,10 +150,25 @@ class energyBalance():
         surface
             class object from surface.py
         """
-        SKY_VIEW = eb_prms.sky_view
+        # Constants
+        SKY_VIEW = self.args.sky_view
+        LAT = self.args.lat
+        LON = self.args.lon
+        SLOPE = self.args.slope
+        ASPECT = self.args.aspect
+
+        # Albedo inputs
         albedo = surface.albedo
         spectral_weights = surface.spectral_weights
         assert np.abs(1-np.sum(spectral_weights)) < 1e-5, 'Solar weights dont sum to 1'
+
+        # Get solar position
+        time_UTC = self.time - eb_prms.timezone
+        sunpos = suncalc.get_position(time_UTC,LON,LAT)
+        sun_elev = sunpos['altitude']       # solar elevation angle
+        # suncalc gives azimuth with 0 = South, we want 0 = North
+        sun_az = sunpos['azimuth'] + np.pi     # solar azimuth angle
+        sun_zen = sunpos['zenith'] + np.pi
         
         # SWin needs to be corrected for shade
         if self.measured_SWin:
@@ -162,7 +181,8 @@ class energyBalance():
                 # if so: COMPLICATED
                 # if not: SWin AWS = SWin point
             SWin = self.SWin_ds/self.dt
-            self.SWin_sky = self.SWin_terr = np.nan
+            self.SWin_sky = np.nan
+            self.SWin_terr = np.nan
         else:
             # get sky (diffuse+direct) and terrain (diffuse) SWin
             SWin_sky = self.SWin_ds/self.dt
@@ -239,8 +259,8 @@ class energyBalance():
         CP_WATER = eb_prms.Cp_water
 
         # Define rain vs snow scaling
-        rain_scale = np.arange(0,1,20)
-        temp_scale = np.arange(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
+        rain_scale = np.linspace(0,1,20)
+        temp_scale = np.linspace(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
         
         # Get fraction of precip that is rain
         if self.tempC < SNOW_THRESHOLD_LOW:
@@ -289,6 +309,7 @@ class energyBalance():
         R_GAS = eb_prms.R_gas
         MM_AIR = eb_prms.molarmass_air
         CP_AIR = eb_prms.Cp_air
+        WIND_REF_Z = eb_prms.wind_ref_height
 
         # ROUGHNESS LENGTHS
         z0 = roughness  # Roughness length for momentum
@@ -303,13 +324,13 @@ class energyBalance():
         # ADJUST WIND SPEED
         z = 2 # reference height in m
         if eb_prms.wind_ref_height != 2:
-            wind_2m *= np.log(2/roughness) / np.log(eb_prms.wind_ref_height/roughness)
+            wind_2m *= np.log(2/roughness) / np.log(WIND_REF_Z/roughness)
         else:
             wind_2m = self.wind
 
         # Transform humidity into mixing ratio (q), get air density from PV=nRT
         Ewz = self.vapor_pressure(self.tempC)  # vapor pressure at 2m
-        Ew0 = self.vapor_pressure(surftemp) # vapor pressure at the surface
+        Ew0 = self.vapor_pressure(surftemp)    # vapor pressure at the surface
         qz = (self.rh/100)*0.622*(Ewz/(self.sp-Ewz))
         q0 = 1.0*0.622*(Ew0/(self.sp-Ew0))
         density_air = self.sp/R_GAS/self.tempK*MM_AIR
@@ -360,52 +381,18 @@ class energyBalance():
             csT = KARMAN**2/(np.log(z/z0) * np.log(z/z0t))
             csQ = KARMAN**2/(np.log(z/z0) * np.log(z/z0q))
             if RICHARDSON <= 0.01:
-                phi = 1
+                psi = 1
             elif 0.01 < RICHARDSON <= 0.2:
-                phi = np.square(1-5*RICHARDSON)
+                psi = np.square(1-5*RICHARDSON)
             else:
-                phi = 0
+                psi = 0
             
             # calculate fluxes
-            Qs = density_air*CP_AIR*csT*phi*wind_2m*(self.tempC - surftemp)
-            Ql = density_air*Lv*csQ*phi*wind_2m*(qz-q0)
+            Qs = density_air*CP_AIR*csT*psi*wind_2m*(self.tempC - surftemp)
+            Ql = density_air*Lv*csQ*psi*wind_2m*(qz-q0)
         else:
             assert 1==0, 'Choose turbulent method from MO-similarity or BulkRichardson'
         
-        # counter = 0
-        # L = 0
-        # while loop:
-        #     # Calculate friction velocity using previous heat flux to get Obukhov length (L)
-        #     Psi = PsiM0 if counter < 1 else PsiM(zeta)
-        #     fric_vel = KARMAN*self.wind/(np.log(z/z0)-Psi)
-        #     Qs = 1e-5 if Qs == 0 else Qs # divide by 0 issue
-        #     L = fric_vel**3*(self.tempK)*density_air*CP_AIR/(KARMAN*GRAVITY*Qs)
-        #     L = max(L,0.3)  # DEBAM uses this correction to ensure it isn't over stablizied
-        #     zeta = z/L
-                
-        #     # Calculate stability factors
-        #     if eb_prms.method_turbulent in ['MO-similarity']:
-        #         cD = KARMAN**2/(np.log(z/z0)-PsiM(zeta)-PsiM(z0/L))**2
-        #         cH = KARMAN*cD**(1/2)/((np.log(z/z0t)-PsiT(zeta)-PsiT(z0t/L)))
-        #         cE = KARMAN*cD**(1/2)/((np.log(z/z0q)-PsiT(zeta)-PsiT(z0q/L)))
-        #     elif eb_prms.method_turbulent in ['BulkRichardson']:
-        #         RICHARDSON = GRAVITY/self.tempK*(self.tempC-surftemp)*(z-z0)/self.wind**2
-        #         PSI = PsiRich(RICHARDSON)
-        #         cH = KARMAN**2*PSI/(np.log(z/z0)*np.log(z/z0t))
-        #         cE = KARMAN**2*PSI/(np.log(z/z0)*np.log(z/z0q))
-
-        #     # Calculate fluxes
-        #     Qs = density_air*CP_AIR*cH*self.wind*(self.tempC-surftemp)
-        #     Ql = density_air*Lv*cE*self.wind*(qz-q0)
-
-        #     counter += 1
-        #     if counter > 10 or abs(previous_zeta - zeta) < .1:
-        #         loop = False
-        #         if counter > 10:
-        #             print('didnt converge')
-        # print(self.time,Qs,Ql)
-        # if self.time.hour == 12 and self.time > pd.to_datetime('06-15-2023'):
-        #         print(self.time,'wind',self.wind,'temp',self.tempC-surftemp,'cH',cH,'rho',density_air)
         return Qs, Ql
     
     def get_dry_deposition(self, layers):
@@ -468,7 +455,7 @@ class energyBalance():
         elif method in ['Sonntag']:
             # follows COSIPY
             T += 273.15
-            if T > 273.15:  # over water
+            if T > 273.15: # over water
                 P = 0.6112*np.exp(17.67*(T-273.15)/(T-29.66))
             else: # over ice
                 P = 0.6112*np.exp(22.46*(T-273.15)/(T-0.55))
