@@ -35,8 +35,8 @@ class Climate():
 
         # define reanalysis variables
         self.get_vardict()
-        self.all_vars = ['temp','tp','rh','uwind','vwind','sp','SWin',
-                            'LWin','bcwet','bcdry','dustwet','dustdry']
+        self.all_vars = ['temp','tp','rh','uwind','vwind','sp','SWin','LWin',
+                            'bcwet','bcdry','ocwet','ocdry','dustwet','dustdry']
         if not self.args.use_AWS:
             self.measured_vars = []
         
@@ -60,6 +60,8 @@ class Climate():
                 winddir = (['time'],nans,{'units':'o'}),
                 bcdry = (['time'],nans,{'units':'kg m-2 s-1'}),
                 bcwet = (['time'],nans,{'units':'kg m-2 s-1'}),
+                ocdry = (['time'],nans,{'units':'kg m-2 s-1'}),
+                ocwet = (['time'],nans,{'units':'kg m-2 s-1'}),
                 dustdry = (['time'],nans,{'units':'kg m-2 s-1'}),
                 dustwet = (['time'],nans,{'units':'kg m-2 s-1'}),
                 temp = (['time'],nans,{'units':'C'}),
@@ -95,7 +97,7 @@ class Climate():
 
         # get the available variables
         all_AWS_vars = ['temp','tp','rh','uwind','vwind','sp','SWin','SWout','albedo',
-                            'NR','LWin','LWout','bcwet','bcdry','dustwet','dustdry']
+                        'NR','LWin','LWout','bcwet','bcdry','ocwet','ocdry','dustwet','dustdry']
         AWS_vars = df.columns
         self.measured_vars = list(set(all_AWS_vars) & set(AWS_vars))
 
@@ -155,7 +157,7 @@ class Climate():
             # index by lat and lon
             vn = self.var_dict[var]['vn'] 
             lat_vn,lon_vn = [self.lat_vn,self.lon_vn]
-            if 'bc' in var or 'dust' in var:
+            if 'bc' in var or 'oc' in var or 'dust' in var:
                 if eb_prms.reanalysis == 'ERA5-hourly':
                     lat_vn,lon_vn = ['lat','lon']
             ds = ds.sel({lat_vn:lat,lon_vn:lon}, method='nearest')[vn]
@@ -164,7 +166,7 @@ class Climate():
             ds = self.check_units(var,ds)
 
             if var != 'elev':
-                dep_var = 'bc' in var or 'dust' in var
+                dep_var = 'bc' in var or 'dust' in var or 'oc' in var
                 if not dep_var and eb_prms.reanalysis == 'ERA5-hourly':
                     assert dates[0] >= pd.to_datetime(ds.time.values[0])
                     assert dates[-1] <= pd.to_datetime(ds.time.values[-1])
@@ -291,6 +293,7 @@ class Climate():
                        'rh':'%','sp':'Pa','tp':'m s-1','elev':'m',
                        'SWin':'J m-2', 'LWin':'J m-2', 'tcc':'-',
                        'bcdry':'kg m-2 s-1', 'bcwet':'kg m-2 s-1',
+                       'ocdry':'kg m-2 s-1', 'ocwet':'kg m-2 s-1',
                        'dustdry':'kg m-2 s-1', 'dustwet':'kg m-2 s-1'}
         
         # Get the current variable's units
@@ -386,6 +389,7 @@ class Climate():
             'SWin':{'fn':[],'vn':[]},'LWin':{'fn':[],'vn':[]},
             'uwind':{'fn':[],'vn':[]},'vwind':{'fn':[],'vn':[]},
             'bcdry':{'fn':[],'vn':[]},'bcwet':{'fn':[],'vn':[]},
+            'ocdry':{'fn':[],'vn':[]},'ocwet':{'fn':[],'vn':[]},
             'dustdry':{'fn':[],'vn':[]},'dustwet':{'fn':[],'vn':[]},
             'elev':{'fn':[],'vn':[]},'time':{'fn':'','vn':''},
             'lat':{'fn':'','vn':''}, 'lon':{'fn':'','vn':''}}
@@ -403,6 +407,8 @@ class Climate():
             self.var_dict['vwind']['vn'] = 'V2M'
             self.var_dict['bcwet']['vn'] = 'BCWT002'
             self.var_dict['bcdry']['vn'] = 'BCDP002'
+            self.var_dict['ocwet']['vn'] = 'OCWT002'
+            self.var_dict['ocdry']['vn'] = 'OCDP002'
             self.var_dict['dustwet']['vn'] = 'DUWT003'
             self.var_dict['dustdry']['vn'] = 'DUDP003'
             self.time_vn = 'time'
@@ -422,6 +428,8 @@ class Climate():
             self.var_dict['elev']['fn'] = f'MERRA2constants.nc4'
             self.var_dict['bcwet']['fn'] = f'BCWT002/MERRA2_BCWT002_{tag}.nc'
             self.var_dict['bcdry']['fn'] = f'BCDP002/MERRA2_BCDP002_{tag}.nc'
+            self.var_dict['ocwet']['fn'] = f'OCWT002/MERRA2_OCWT002_{tag}.nc'
+            self.var_dict['ocdry']['fn'] = f'OCDP002/MERRA2_OCDP002_{tag}.nc'
             self.var_dict['dustwet']['fn'] = f'DUWT003/MERRA2_DUWT003_{tag}.nc'
             self.var_dict['dustdry']['fn'] = f'DUDP003/MERRA2_DUDP003_{tag}.nc'
         elif eb_prms.reanalysis == 'ERA5-hourly':
@@ -439,6 +447,8 @@ class Climate():
             self.var_dict['vwind']['vn'] = 'v10'
             self.var_dict['bcwet']['vn'] = 'BCWT002'
             self.var_dict['bcdry']['vn'] = 'BCDP002'
+            self.var_dict['ocwet']['vn'] = 'OCWT002'
+            self.var_dict['ocdry']['vn'] = 'OCDP002'
             self.var_dict['dustwet']['vn'] = 'DUWT003'
             self.var_dict['dustdry']['vn'] = 'DUDP003'
             self.time_vn = 'time'
@@ -458,6 +468,8 @@ class Climate():
             self.var_dict['elev']['fn'] = 'ERA5_geopotential_2000.nc'
             self.var_dict['bcwet']['fn'] = f'./../../MERRA2/BCWT002/MERRA2_BCWT002_{tag}.nc'
             self.var_dict['bcdry']['fn'] = f'./../../MERRA2/BCDP002/MERRA2_BCDP002_{tag}.nc'
+            self.var_dict['ocwet']['fn'] = f'./../../MERRA2/OCWT002/MERRA2_OCWT002_{tag}.nc'
+            self.var_dict['ocdry']['fn'] = f'./../../MERRA2/OCDP002/MERRA2_OCDP002_{tag}.nc'
             self.var_dict['dustwet']['fn'] = f'./../../MERRA2/DUWT003/MERRA2_DUWT003_{tag}.nc'
             self.var_dict['dustdry']['fn'] = f'./../../MERRA2/DUDP003/MERRA2_DUDP003_{tag}.nc'
 

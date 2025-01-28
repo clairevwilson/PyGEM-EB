@@ -54,11 +54,13 @@ class Layers():
 
         # Initialize LAPs (black carbon and dust)
         if eb_prms.switch_LAPs == 1:
-            lBC,ldust = self.initialize_LAPs()
+            lBC,lOC,ldust = self.initialize_LAPs()
         else:
             lBC = np.zeros(self.nlayers)
+            lOC = np.zeros(self.nlayers)
             ldust = np.zeros(self.nlayers)
         self.lBC = lBC                      # LAYER BLACK CARBON MASS [kg m-2]
+        self.lOC = lOC                      # LAYER ORGANIC CARBON MASS [kg m-2]
         self.ldust = ldust                  # LAYER DUST MASS [kg m-2]
 
         # Initialize RF model for grain size lookups
@@ -230,31 +232,37 @@ class Layers():
         ldepth = self.ldepth
         if eb_prms.initialize_LAPs in ['clean']:
             lBC = np.ones(n)*eb_prms.BC_freshsnow*lheight
+            lOC = np.ones(n)*eb_prms.OC_freshsnow*lheight
             ldust = np.ones(n)*eb_prms.dust_freshsnow*lheight 
         elif eb_prms.initialize_LAPs in ['interpolate']:
             lap_data = pd.read_csv(eb_prms.initial_LAP_fp,index_col=0)
 
             # add boundaries for interpolation
             lap_data.loc[0,'BC'] = eb_prms.BC_freshsnow
+            lap_data.loc[0,'OC'] = eb_prms.OC_freshsnow
             lap_data.loc[0,'dust'] = eb_prms.dust_freshsnow
             lap_data.loc[100,'BC'] = eb_prms.BC_freshsnow
+            lap_data.loc[100,'OC'] = eb_prms.OC_freshsnow
             lap_data.loc[100,'dust'] = eb_prms.dust_freshsnow
             lap_data = lap_data.sort_index()
 
             # interpolate concentration by depth
             data_depth = lap_data.index.to_numpy()
             cBC = np.interp(ldepth,data_depth,lap_data['BC'].values.flatten())
+            cOC = np.interp(ldepth,data_depth,lap_data['OC'].values.flatten())
             cdust = np.interp(ldepth,data_depth,lap_data['dust'].values.flatten())
 
             # calculate mass from concentration
             lBC = cBC * lheight
+            lOC = cOC * lheight
             ldust = cdust * lheight
         else:
             print('Choose between clean and interpolate in initialize_LAPs')
             self.exit()
         lBC[self.ice_idx] = 0
+        lOC[self.ice_idx] = 0
         ldust[self.ice_idx] = 0
-        return lBC, ldust
+        return lBC, lOC, ldust
     
     # ========= UTILITY FUNCTIONS ==========
     def add_layers(self,layers_to_add):
@@ -278,6 +286,8 @@ class Layers():
         self.lgrainsize = np.append(layers_to_add.loc['g'].values,self.lgrainsize).astype(float)
         new_layer_BC = layers_to_add.loc['BC'].values.astype(float)*self.lheight[0]
         self.lBC = np.append(new_layer_BC,self.lBC)
+        new_layer_OC = layers_to_add.loc['OC'].values.astype(float)*self.lheight[0]
+        self.lOC = np.append(new_layer_OC,self.lOC)
         new_layer_dust = layers_to_add.loc['dust'].values.astype(float)*self.lheight[0]
         self.ldust = np.append(new_layer_dust,self.ldust)
         # new layers start with 0 refreeze
@@ -306,6 +316,7 @@ class Layers():
         self.lnewsnow = np.delete(self.lnewsnow,layer_to_remove)
         self.lgrainsize = np.delete(self.lgrainsize,layer_to_remove)
         self.lBC = np.delete(self.lBC,layer_to_remove)
+        self.lOC = np.delete(self.lOC,layer_to_remove)
         self.ldust = np.delete(self.ldust,layer_to_remove)
         self.update_layer_props()
         return
@@ -336,6 +347,8 @@ class Layers():
         self.lnewsnow = np.insert(self.lnewsnow,l,self.lnewsnow[l])
         self.lBC[l] = self.lBC[l]/2
         self.lBC = np.insert(self.lBC,l,self.lBC[l])
+        self.lOC[l] = self.lOC[l]/2
+        self.lOC = np.insert(self.lOC,l,self.lOC[l])
         self.ldust[l] = self.ldust[l]/2
         self.ldust = np.insert(self.ldust,l,self.ldust[l])
         self.update_layer_props()
@@ -358,6 +371,7 @@ class Layers():
         self.lnewsnow[l+1] = np.sum(self.lnewsnow[l:l+2])
         self.lgrainsize[l+1] = np.mean(self.lgrainsize[l:l+2])
         self.lBC[l+1] = np.sum(self.lBC[l:l+2])
+        self.lOC[l+1] = np.sum(self.lOC[l:l+2])
         self.ldust[l+1] = np.sum(self.ldust[l:l+2])
         self.remove_layer(l)
         return
@@ -495,6 +509,7 @@ class Layers():
             new_height = snowfall/new_density
             new_grainsize = self.lgrainsize[0]
             new_BC = self.lBC[0]/self.lheight[0]*new_height
+            new_OC = self.lOC[0]/self.lheight[0]*new_height
             new_dust = self.ldust[0]/self.lheight[0]*new_height
             new_snow = 0
         elif self.args.switch_snow == 1:
@@ -515,12 +530,14 @@ class Layers():
 
             new_height = snowfall/new_density
             new_BC = enbal.bcwet * enbal.dt
+            new_OC = enbal.ocwet * enbal.dt
             new_dust = enbal.dustwet * enbal.dt
             new_snow = snowfall
             surface.snow_timestamp = timestamp
 
         if eb_prms.switch_LAPs != 1:
             new_BC = 0
+            new_OC = 0
             new_dust = 0
             
         # Conditions: if any are TRUE, create a new layer
@@ -534,8 +551,8 @@ class Layers():
                 return 0
             else:
                 new_layer = pd.DataFrame([enbal.tempC,0,snowfall/new_density,'snow',snowfall,
-                                      new_grainsize,new_BC,new_dust,new_snow],
-                                     index=['T','w','h','t','m','g','BC','dust','new'])
+                                      new_grainsize,new_BC,new_OC,new_dust,new_snow],
+                                     index=['T','w','h','t','m','g','BC','OC','dust','new'])
                 self.add_layers(new_layer)
                 self.delayed_snow = 0
         else:
@@ -549,6 +566,7 @@ class Layers():
             self.lice[0] = new_layermass
             self.lheight[0] += snowfall/new_density
             self.lBC[0] = self.lBC[0] + new_BC
+            self.lOC[0] = self.lOC[0] + new_OC
             self.ldust[0] = self.ldust[0] + new_dust
             if self.lheight[0] > (eb_prms.dz_toplayer * 2):
                 self.split_layer(0)

@@ -16,7 +16,7 @@ from objectives import *
 
 # OPTIONS
 repeat_run = False  # True if restarting an already begun run
-run_type = 'long'   # 'long' or '2024'
+run_type = '2024'   # 'long' or '2024'
 # Define sets of parameters
 params = {'kw':[1,1.5,2,2.5,3], # 
           'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028], # 

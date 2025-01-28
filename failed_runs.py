@@ -14,7 +14,7 @@ import pygem_eb.massbalance as mb
 from objectives import *
 
 # Suppress UserWarning messages
-warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
 
 # OPTIONS
 run_type = 'long'   # 'long' or '2024'

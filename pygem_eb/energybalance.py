@@ -45,6 +45,8 @@ class energyBalance():
         self.NR_ds = climateds_now['NR'].values
         self.bcdry = climateds_now['bcdry'].values
         self.bcwet = climateds_now['bcwet'].values
+        self.ocdry = climateds_now['ocdry'].values
+        self.ocwet = climateds_now['ocwet'].values
         self.dustdry = climateds_now['dustdry'].values
         self.dustwet = climateds_now['dustwet'].values
 
@@ -154,8 +156,8 @@ class energyBalance():
         SKY_VIEW = self.args.sky_view
         LAT = self.args.lat
         LON = self.args.lon
-        SLOPE = self.args.slope
-        ASPECT = self.args.aspect
+        SLOPE = self.args.slope * np.pi/180
+        ASPECT = self.args.aspect * np.pi/180
 
         # Albedo inputs
         albedo = surface.albedo
@@ -165,10 +167,15 @@ class energyBalance():
         # Get solar position
         time_UTC = self.time - eb_prms.timezone
         sunpos = suncalc.get_position(time_UTC,LON,LAT)
-        sun_elev = sunpos['altitude']       # solar elevation angle
         # suncalc gives azimuth with 0 = South, we want 0 = North
-        sun_az = sunpos['azimuth'] + np.pi     # solar azimuth angle
-        sun_zen = sunpos['zenith'] + np.pi
+        SUN_AZ = sunpos['azimuth'] + np.pi     # solar azimuth angle
+        SUN_ZEN = np.pi/2 - sunpos['altitude'] # solar zenith angle
+
+        # Calculate slope correction
+        cos_theta = (np.cos(SUN_ZEN)*np.cos(SLOPE) + 
+                    np.sin(SUN_ZEN)*np.sin(SLOPE)*np.cos(SUN_AZ - ASPECT))
+        slope_correction = min(cos_theta / np.cos(SUN_ZEN), 5)
+        slope_correction = max(slope_correction,0)
         
         # SWin needs to be corrected for shade
         if self.measured_SWin:
@@ -180,13 +187,16 @@ class energyBalance():
             # if not: is the point in the sun?
                 # if so: COMPLICATED
                 # if not: SWin AWS = SWin point
-            SWin = self.SWin_ds/self.dt
+            SWin = self.SWin_ds/self.dt * slope_correction
             self.SWin_sky = np.nan
             self.SWin_terr = np.nan
         else:
             # get sky (diffuse+direct) and terrain (diffuse) SWin
             SWin_sky = self.SWin_ds/self.dt
             SWin_terrain = SWin_sky*(1-SKY_VIEW)*surface.albedo_surr
+
+            # correct for slope
+            SWin_sky *= slope_correction
 
             # correct for shade
             time_str = str(self.time).replace(str(self.time.year),'2024')
@@ -195,7 +205,7 @@ class energyBalance():
             SWin = SWin_terrain if self.shade else SWin_terrain + SWin_sky
 
             # store sky and terrain portions
-            self.SWin_sky = np.nan if self.shade else SWin_sky
+            self.SWin_sky = 0 if self.shade else SWin_sky
             self.SWin_terr = SWin_terrain
 
         # get reflected radiation
@@ -282,9 +292,9 @@ class energyBalance():
         surftemp : float
             Surface temperature of snowpack/ice [C]
         """
-        k_ice = eb_prms.k_ice
+        K_ICE = eb_prms.k_ice
         if eb_prms.method_ground in ['MolgHardy']:
-            Qg = -k_ice * (surftemp - eb_prms.temp_temp) / eb_prms.temp_depth
+            Qg = -K_ICE * (surftemp - eb_prms.temp_temp) / eb_prms.temp_depth
         else:
             assert 1==0, 'Ground flux method not accepted; choose from [\'MolgHardy\']'
         return Qg
@@ -396,21 +406,19 @@ class energyBalance():
         return Qs, Ql
     
     def get_dry_deposition(self, layers):
-        DEP_FACTOR = eb_prms.dep_factor
         BC_RATIO = eb_prms.ratio_BC2_BCtot
+        OC_RATIO = eb_prms.ratio_OC2_OCtot
         DUST_RATIO = eb_prms.ratio_DU3_DUtot
-        if np.isnan(self.bcdry):
-            self.bcdry = 1e-14 # kg m-2 s-1
-        if np.isnan(self.dustdry):
-            self.dustdry = 1e-13 # kg m-2 s-1
         
-        # Switch runs have no BC
+        # Switch runs have no LAPs
         if eb_prms.switch_LAPs == 0:
             self.bcdry = 0
+            self.ocdry = 0
             self.dustdry = 0
 
         if layers.ltype[0] != 'ice':
-            layers.lBC[0] += self.bcdry * self.dt * BC_RATIO * DEP_FACTOR
+            layers.lBC[0] += self.bcdry * self.dt * BC_RATIO
+            layers.lOC[0] += self.ocdry * self.dt * OC_RATIO
             layers.ldust[0] += self.dustdry * self.dt * DUST_RATIO
         return 
     

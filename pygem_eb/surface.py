@@ -35,6 +35,7 @@ class Surface():
                             'ice':args.a_ice}
         self.bba = self.albedo_dict[self.stype]
         self.albedo = [self.bba]
+        self.vis_a = 1
         self.spectral_weights = np.ones(1)
 
         # Get shading df and initialize surrounding albedo
@@ -315,6 +316,7 @@ class Surface():
 
         # Convert LAPs from mass to concentration in ppb
         BC = layers.lBC[idx] / layers.lheight[idx] * 1e6
+        OC = layers.lOC[idx] / layers.lheight[idx] * 1e6
         dust1 = layers.ldust[idx] / layers.lheight[idx] * 1e6 * eb_prms.ratio_DU_bin1
         dust2 = layers.ldust[idx] / layers.lheight[idx] * 1e6 * eb_prms.ratio_DU_bin2
         dust3 = layers.ldust[idx] / layers.lheight[idx] * 1e6 * eb_prms.ratio_DU_bin3
@@ -323,6 +325,7 @@ class Surface():
 
         # Convert arrays to lists for making input file
         lBC = (BC.astype(float)).tolist()
+        lOC = (OC.astype(float)).tolist()
         ldust1 = (dust1.astype(float)).tolist()
         ldust2 = (dust2.astype(float)).tolist()
         ldust3 = (dust3.astype(float)).tolist()
@@ -334,6 +337,7 @@ class Surface():
             lgrainsize = [AVG_GRAINSIZE for _ in idx]
         if override_LAPs:
             lBC = [eb_prms.BC_freshsnow*1e6 for _ in idx]
+            lOC = [eb_prms.OC_freshsnow*1e6 for _ in idx]
             ldust1 = np.array([eb_prms.dust_freshsnow*1e6 for _ in idx]).tolist()
             ldust2 = ldust1.copy()
             ldust3 = ldust1.copy()
@@ -352,6 +356,7 @@ class Surface():
             with open(self.snicar_fn) as f:
                 list_doc = yaml.safe_load(f)
             list_doc['IMPURITIES']['BC']['CONC'] = lBC
+        list_doc['IMPURITIES']['OC']['CONC'] = lOC
         list_doc['IMPURITIES']['DUST1']['CONC'] = ldust1
         list_doc['IMPURITIES']['DUST2']['CONC'] = ldust2
         list_doc['IMPURITIES']['DUST3']['CONC'] = ldust3
@@ -394,6 +399,9 @@ class Surface():
         # I adjusted SNICAR code to return spectral weights, rather than BBA
 
         self.bba = np.sum(albedo * spectral_weights) / np.sum(spectral_weights)
+        assert len(albedo) == len(eb_prms.wvs)
+        vis_idx = np.where((eb_prms.wvs <= 0.75) & (eb_prms.wvs >= 0.4))[0]
+        self.vis_a = np.sum(albedo[vis_idx] * spectral_weights[vis_idx]) / np.sum(spectral_weights[vis_idx])
         return albedo,spectral_weights
     
     def reset_SNICAR(self,fp):

@@ -77,7 +77,7 @@ class massBalance():
             # Add fresh snow to layers
             snowfall = layers.add_snow(snowfall,enbal,surface,time)
 
-            # Add dry deposited BC and dust to layers
+            # Add dry deposited BC, OC and dust to layers
             enbal.get_dry_deposition(layers)
 
             # Update daily properties
@@ -335,6 +335,7 @@ class massBalance():
                     print(fully_melted)
                     self.mass = 0
                 self.BC = layers.lBC[fully_melted]
+                self.OC = layers.lOC[fully_melted]
                 self.dust = layers.ldust[fully_melted]
 
         self.melted_layers = MeltedLayers()
@@ -512,8 +513,8 @@ class massBalance():
         """
         # CONSTANTS
         PARTITION_COEF_BC = eb_prms.ksp_BC
+        PARTITION_COEF_OC = eb_prms.ksp_OC
         PARTITION_COEF_DUST = eb_prms.ksp_dust
-        DEP_FACTOR = eb_prms.dep_factor
         dt = eb_prms.dt
 
         # LAYERS IN
@@ -522,46 +523,58 @@ class massBalance():
 
         # Layer mass of each species in kg m-2
         mBC = layers.lBC[snow_firn_idx]
+        mOC = layers.lOC[snow_firn_idx]
         mdust = layers.ldust[snow_firn_idx]
 
         # Get wet deposition into top layer if it's raining
         if rain_bool and eb_prms.switch_LAPs == 1: # Switch runs have no BC
-            mBC[0] += enbal.bcwet * dt * DEP_FACTOR
+            mBC[0] += enbal.bcwet * dt
+            mOC[0] += enbal.ocwet * dt
             mdust[0] += enbal.dustwet * eb_prms.ratio_DU3_DUtot * dt
 
         # Layer mass mixing ratio in kg kg-1
         cBC = mBC / (lw + lm)
+        cOC = mOC / (lw + lm)
         cdust = mdust / (lw + lm)
 
         # Add LAPs from fully melted layers
         if self.melted_layers != 0:
             m_BC_in_top = np.array(np.sum(self.melted_layers.BC) / dt)
+            m_OC_in_top = np.array(np.sum(self.melted_layers.OC) / dt)
             m_dust_in_top = np.array(np.sum(self.melted_layers.dust) / dt)
         else:
             m_BC_in_top = np.array([0],dtype=float) 
+            m_OC_in_top = np.array([0],dtype=float) 
             m_dust_in_top = np.array([0],dtype=float)
         # Partition in aqueous phase
         m_BC_in_top *= PARTITION_COEF_BC
+        m_OC_in_top *= PARTITION_COEF_OC
         m_dust_in_top *= PARTITION_COEF_DUST
 
         # inward fluxes = outward fluxes from previous layer
         m_BC_in = PARTITION_COEF_BC*q_out[:-1]*cBC[:-1]
+        m_OC_in = PARTITION_COEF_OC*q_out[:-1]*cOC[:-1]
         m_dust_in = PARTITION_COEF_DUST*q_out[:-1]*cdust[:-1]
         m_BC_in = np.append(m_BC_in_top,m_BC_in)
+        m_OC_in = np.append(m_OC_in_top,m_OC_in)
         m_dust_in = np.append(m_dust_in_top,m_dust_in)
 
         # outward fluxes are simply (flow out)*(concentration of the layer)
         m_BC_out = PARTITION_COEF_BC*q_out*cBC
+        m_OC_out = PARTITION_COEF_OC*q_out*cOC
         m_dust_out = PARTITION_COEF_DUST*q_out*cdust
 
         # mass balance on each constituent
         dmBC = (m_BC_in - m_BC_out)*dt
+        dmOC = (m_OC_in - m_OC_out)*dt
         dmdust = (m_dust_in - m_dust_out)*dt
         mBC += dmBC.astype(float)
+        mOC += dmOC.astype(float)
         mdust += dmdust.astype(float)
 
         # LAYERS OUT
         layers.lBC[snow_firn_idx] = mBC
+        layers.lOC[snow_firn_idx] = mOC
         layers.ldust[snow_firn_idx] = mdust
         return
     
@@ -826,7 +839,10 @@ class massBalance():
         K_WATER = eb_prms.k_water
         K_AIR = eb_prms.k_air
 
-        # set temperate ice and heat-diffusing layer indices
+        # determine layers that are below temperate ice depth
+        if layers.ice_idx[0] > 0:
+            # if there is snow/firn adjust to be relative to the ice surface
+            TEMP_DEPTH += layers.ldepth[layers.ice_idx[0] - 1]
         temperate_idx = np.where(layers.ldepth > TEMP_DEPTH)[0]
         if len(temperate_idx) < 1:
             temperate_idx = [layers.nlayers - 1]
@@ -1065,12 +1081,12 @@ class Output():
 
         # Create variable name dict
         vn_dict = {'EB':['SWin','SWout','LWin','LWout','rain','ground',
-                         'sensible','latent','meltenergy','albedo',
+                         'sensible','latent','meltenergy','albedo','vis_albedo',
                          'SWin_sky','SWin_terr','surftemp'],
                    'MB':['melt','refreeze','runoff','accum','snowdepth','cumrefreeze','dh'],
                    'climate':['airtemp','wind'],
                    'layers':['layertemp','layerdensity','layerwater','layerheight',
-                             'layerBC','layerdust','layergrainsize','layerrefreeze']}
+                             'layerBC','layerOC','layerdust','layergrainsize','layerrefreeze']}
 
         # Create file to store outputs
         all_variables = xr.Dataset(data_vars = dict(
@@ -1086,6 +1102,7 @@ class Output():
                 latent = (['time'],zeros[:,0],{'units':'W m-2'}),
                 meltenergy = (['time'],zeros[:,0],{'units':'W m-2'}),
                 albedo = (['time'],zeros[:,0],{'units':'0-1'}),
+                vis_albedo = (['time'],zeros[:,0],{'units':'0-1'}),
                 melt = (['time'],zeros[:,0],{'units':'m w.e.'}),
                 refreeze = (['time'],zeros[:,0],{'units':'m w.e.'}),
                 cumrefreeze = (['time'],zeros[:,0],{'units':'m w.e.'}),
@@ -1100,6 +1117,7 @@ class Output():
                 layerheight = (['time','layer'],zeros,{'units':'m'}),
                 layerdensity = (['time','layer'],zeros,{'units':'kg m-3'}),
                 layerBC = (['time','layer'],zeros,{'units':'ppb'}),
+                layerOC = (['time','layer'],zeros,{'units':'ppb'}),
                 layerdust = (['time','layer'],zeros,{'units':'ppm'}),
                 layergrainsize = (['time','layer'],zeros,{'units':'um'}),
                 snowdepth = (['time'],zeros[:,0],{'units':'m'}),
@@ -1112,6 +1130,7 @@ class Output():
         # Select variables from the specified input
         vars_list = vn_dict[eb_prms.store_vars[0]]
         for var in eb_prms.store_vars[1:]:
+            assert var in vn_dict, 'Choose store_vars from [MB,EB,climate,layers]'
             vars_list.extend(vn_dict[var])
         self.vars_list = vars_list
         
@@ -1132,6 +1151,7 @@ class Output():
         self.latent_output = []     # latent energy [W m-2]
         self.meltenergy_output = [] # melt energy [W m-2]
         self.albedo_output = []     # surface broadband albedo [-]
+        self.vis_albedo_output = [] # surface visible albedo [-]
 
         # Initialize mass balance outputs
         self.snowdepth_output = []  # depth of snow [m]
@@ -1151,6 +1171,7 @@ class Output():
         self.layerdensity_output = dict()   # layer density [kg m-3]
         self.layerheight_output = dict()    # layer height [m]
         self.layerBC_output = dict()        # layer black carbon content [ppb]
+        self.layerOC_output = dict()        # layer organic carbon content [ppb]
         self.layerdust_output = dict()      # layer dust content [ppm]
         self.layergrainsize_output = dict() # layer grain size [um]
         self.layerrefreeze_output = dict()  # layer refreeze [kg m-2]
@@ -1171,6 +1192,7 @@ class Output():
         self.latent_output.append(float(enbal.lat))
         self.meltenergy_output.append(float(surface.Qm))
         self.albedo_output.append(float(surface.bba))
+        self.vis_albedo_output.append(float(surface.vis_a))
         self.surftemp_output.append(float(surface.stemp))
 
         self.melt_output.append(float(massbal.melt))
@@ -1190,6 +1212,7 @@ class Output():
         self.layerheight_output[step] = layers.lheight.copy()
         self.layerdensity_output[step] = layers.ldensity.copy()
         self.layerBC_output[step] = layers.lBC / layers.lheight * 1e6
+        self.layerOC_output[step] = layers.lOC / layers.lheight * 1e6
         self.layerdust_output[step] = layers.ldust / layers.lheight * 1e3
         self.layergrainsize_output[step] = layers.lgrainsize.copy()
         self.layerrefreeze_output[step] = layers.cumrefreeze.copy()
@@ -1205,6 +1228,7 @@ class Output():
                 ds['LWin'].values = self.LWin_output
                 ds['LWout'].values = self.LWout_output
                 ds['SWin_sky'].values = self.SWin_sky_output
+                print(self.SWin_sky_output)
                 ds['SWin_terr'].values = self.SWin_terr_output
                 ds['rain'].values = self.rain_output
                 ds['ground'].values = self.ground_output
@@ -1212,6 +1236,7 @@ class Output():
                 ds['latent'].values = self.latent_output
                 ds['meltenergy'].values = self.meltenergy_output
                 ds['albedo'].values = self.albedo_output
+                ds['vis_albedo'].values = self.vis_albedo_output
                 ds['surftemp'].values = self.surftemp_output
             if 'MB' in eb_prms.store_vars:
                 ds['melt'].values = self.melt_output
@@ -1230,6 +1255,7 @@ class Output():
                 layerheight_output = pd.DataFrame.from_dict(self.layerheight_output,orient='index')
                 layerwater_output = pd.DataFrame.from_dict(self.layerwater_output,orient='index')
                 layerBC_output = pd.DataFrame.from_dict(self.layerBC_output,orient='index')
+                layerOC_output = pd.DataFrame.from_dict(self.layerOC_output,orient='index')
                 layerdust_output = pd.DataFrame.from_dict(self.layerdust_output,orient='index')
                 layergrainsize_output = pd.DataFrame.from_dict(self.layergrainsize_output,orient='index')
                 layerrefreeze_output = pd.DataFrame.from_dict(self.layerrefreeze_output,orient='index')
@@ -1243,6 +1269,7 @@ class Output():
                         layerheight_output[str(i)] = nans
                         layerwater_output[str(i)] = nans
                         layerBC_output[str(i)] = nans
+                        layerOC_output[str(i)] = nans
                         layerdust_output[str(i)] = nans
                         layergrainsize_output[str(i)] = nans
                         layerrefreeze_output[str(i)] = nans
@@ -1256,6 +1283,7 @@ class Output():
                 ds['layerdensity'].values = layerdensity_output
                 ds['layerwater'].values = layerwater_output
                 ds['layerBC'].values = layerBC_output
+                ds['layerOC'].values = layerOC_output
                 ds['layerdust'].values = layerdust_output
                 ds['layergrainsize'].values = layergrainsize_output
                 ds['layerrefreeze'].values = layerrefreeze_output

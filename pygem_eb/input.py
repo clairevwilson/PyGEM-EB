@@ -128,7 +128,7 @@ surftemp_guess =  -10               # guess for surface temperature of first tim
 initial_snow = True                 # initialize with or without snow
 
 # OUTPUT
-store_vars = ['MB','EB','temp','layers']  # Variables to store of the possible set: ['MB','EB','Temp','Layers']
+store_vars = ['MB','EB','climate','layers']  # Variables to store of the possible set: ['MB','EB','climate','layers']
 store_bands = False     # Store spectral albedo .csv
 store_climate = False   # Store climate dataset .nc
 
@@ -170,22 +170,21 @@ wind_factor = 1             # Wind factor [-]
 kp = 3                      # Precipitation factor [-]
 precgrad = 0.0001           # Precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # Temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
-dep_factor = 1              # Multiplicative factor to adjust MERRA-2 deposition
 albedo_ice = 0.47           # Ice albedo [-] 
 snow_threshold_low = 0.2    # Lower threshold for linear snow-rain scaling [C]
 snow_threshold_high = 2.2   # Upper threshold for linear snow-rain scaling [C]
 # <<<<<< Slope/aspect >>>>>
-slope = 0
-aspect = 0
-lat = 63.3
-lon = -142.2
+slope = 0                   # Point slope (degrees)
+aspect = 0                  # Point aspect (degrees; 0 = North)
+lat = 63.3                  # Point latitude
+lon = -142.2                # Point longitude
 # <<<<<< Discretization >>>>>
 dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
 layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
 max_nlayers = 80            # Maximum number of vertical layers allowed (defines output file size)
 max_dz = 2                  # Max layer height
 # <<<<<< Boundary conditions >>>>>
-temp_temp = -0.5            # temperature of temperate ice [C]
+temp_temp = 0               # temperature of temperate ice [C]
 temp_depth = 20             # depth of temperate ice [m]
 # <<<<<< Physical properties of snow, ice, water and air >>>>>
 density_ice = 900           # Density of ice [kg m-3]
@@ -227,7 +226,7 @@ albedo_ground = 0.2         # Albedo of ground [-]
 # <<<<<< SNICAR things >>>>>
 albedo_TOD = [14]           # List of time(s) of day to calculate albedo [hr] 
 diffuse_cloud_limit = 0.6   # Threshold to consider cloudy vs clear-sky in SNICAR [-]
-include_LWC_SNICAR = True   # Include liquid water in SNICAR?
+include_LWC_SNICAR = False  # Include liquid water in SNICAR?
 grainshape_SNICAR = 0       # 0: sphere, 1: spheroid, 2: hexagonal plate, 3: koch snowflake, 4: hexagonal prisms
 # <<<<<< Constants for switch runs >>>>>
 albedo_deg_rate = 15        # Rate of exponential decay of albedo
@@ -236,12 +235,15 @@ albedo_fresh_snow = 0.85    # Albedo of fresh snow [-] (Moelg et al. 2012, TC)
 albedo_firn = 0.5           # Albedo of firn [-]
 # <<<<<< BC and dust >>>>>
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
-ksp_BC = 0.5                # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
-ksp_dust = 0.2              # Meltwater scavenging efficiency of dust (0.015 from CLM5)
+ksp_BC = 0.8                # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
+ksp_OC = 0.8                # Meltwater scavenging efficiency of OC (0.1-0.2 from CLM5)
+ksp_dust = 0.01             # Meltwater scavenging efficiency of dust (0.015 from CLM5)
 BC_freshsnow = 0            # Concentration of BC in fresh snow for initialization [kg m-3]
+OC_freshsnow = 0            # Concentration of OC in fresh snow for initialization [kg m-3]
 dust_freshsnow = 0          # Concentration of dust in fresh snow for initilization [kg m-3] 
 # <<<<<< MERRA-2: LAP binning >>>>>
 ratio_BC2_BCtot = 2.08      # Ratio to transform BC bin 2 deposition to total BC
+ratio_OC2_OCtot = 1.54      # Ratio to transform OC bin 2 deposition to total OC
 ratio_DU3_DUtot = 3         # Ratio to transform dust bin 3 deposition to total dust
 ratio_DU_bin1 = 0.0751      # Ratio to transform total dust to SNICAR Bin 1 (0.05-0.5um)
 ratio_DU_bin2 = 0.20535     # " SNICAR Bin 2 (0.5-1.25um)
