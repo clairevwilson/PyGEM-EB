@@ -482,6 +482,8 @@ def plot_2024_mass_balance(ds,plot_ax=False,label='Model',color='default'):
 
     # Retrieve the dates
     start = df_mb_dict[list(df_mb_dict.keys())[0]].index[0]
+    if start < ds.time.values[0]:
+        start = pd.to_datetime(ds.time.values[0])
     end = pd.to_datetime(ds.time.values[-1])
 
     # Get the summer mass balance

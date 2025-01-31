@@ -512,8 +512,10 @@ class energyBalance():
         CI = rad_glob / rad_pot
 
         # Empirical relationship
-        diffuse_fraction = np.exp(-np.exp(P1-(P2-P3*CI)))*(1-P4)+P4
-        diffuse_fraction = max(diffuse_fraction, P4)
+        if CI > 50:
+            diffuse_fraction = P4
+        else:
+            diffuse_fraction = np.exp(-np.exp(P1-(P2-P3*CI)))*(1-P4)+P4
         return diffuse_fraction
 
  

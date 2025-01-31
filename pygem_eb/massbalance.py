@@ -1228,7 +1228,6 @@ class Output():
                 ds['LWin'].values = self.LWin_output
                 ds['LWout'].values = self.LWout_output
                 ds['SWin_sky'].values = self.SWin_sky_output
-                print(self.SWin_sky_output)
                 ds['SWin_terr'].values = self.SWin_terr_output
                 ds['rain'].values = self.rain_output
                 ds['ground'].values = self.ground_output
