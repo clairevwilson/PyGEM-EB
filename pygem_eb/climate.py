@@ -246,10 +246,14 @@ class Climate():
         return
     
     def check_ds(self):
-        # Add MERRA-2 temperature bias
+        # Correct MERRA-2 temperature bias
         temp_filled = True if not self.args.use_AWS else 'temp' in self.need_vars
         if eb_prms.temp_bias_adjust and temp_filled:
             self.adjust_temp_bias()
+        # Correct MERRA-2 wind bias
+        wind_filled = True if not self.args.use_AWS else 'wind' in self.need_vars
+        if eb_prms.wind_bias_adjust and wind_filled:
+            self.adjust_wind_bias()
 
         # Adjust elevation dependence
         self.adjust_to_elevation()
@@ -356,6 +360,20 @@ class Climate():
         old_T = self.cds['temp'].values
         new_T = eb_prms.temp_bias_slope * old_T + eb_prms.temp_bias_intercept
         self.cds['temp'].values = new_T 
+        return
+    
+    def adjust_wind_bias(self):
+        """
+        Updated wind speed according to preprocessed bias adjustments
+        """
+        WIND_BINS = eb_prms.wind_bins
+        WIND_BIAS = eb_prms.wind_bias
+        u = self.cds['wind'].values
+        scale = np.ones_like(self.cds['wind'].values)
+        for i in range(1,len(WIND_BINS)):
+            index = np.where((u >= WIND_BINS[i-1]) & (u < WIND_BINS[i]))[0]
+            scale[index] = WIND_BIAS[i-1]
+        self.cds['wind'].values *= scale
         return
 
     def getVaporPressure(self,tempC):

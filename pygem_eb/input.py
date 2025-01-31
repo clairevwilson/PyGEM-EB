@@ -89,7 +89,8 @@ output_name = f'{glac_name}_{model_run_date}_'
 
 # ========== CLIMATE AND TIME INPUTS ========== 
 reanalysis = 'MERRA2' # 'MERRA2' (or 'ERA5-hourly' -- BROKEN)
-temp_bias_adjust = True   # adjust MERRA-2 temperatures according to bias?
+temp_bias_adjust = True   # adjust MERRA-2 temperatures by preprocessed bias?
+wind_bias_adjust = True   # adjust MERRA-2 wind speed by preprocessed bias?
 MERRA2_filetag = False    # False or string to follow 'MERRA2_VAR_' in MERRA2 filename
 AWS_fp = '../climate_data/AWS/'
 AWS_fn = AWS_fp+glac_props[glac_no[0]]['AWS_fn']
@@ -251,9 +252,11 @@ ratio_DU_bin2 = 0.20535     # " SNICAR Bin 2 (0.5-1.25um)
 ratio_DU_bin3 = 0.481675    # " SNICAR Bin 3 (1.25-2.5um)
 ratio_DU_bin4 = 0.203775    # " SNICAR Bin 4 (2.5-5um)
 ratio_DU_bin5 = 0.034       # " SNICAR Bin 5 (5-50um)
-# <<<<<< MERRA-2: temperature bias >>>>>
+# <<<<<< MERRA-2: bias corrections >>>>>
 temp_bias_slope = 0.57596   # Slope of MERRA-2 --> ON-ICE AWS
 temp_bias_intercept = 1.799 # Intercept of MERRA-2 --> ON-ICE AWS
+wind_bins = [0, 0.5, 1, 2, 3, 20]
+wind_bias = [7.660,3.075, 1.538, 1.152, 1.056]
 # <<<<<< End-of-summer >>>>>
 end_summer_doy = 228        # Day of year to starting checking for end of summer (snow -> firn)
 new_snow_threshold = 0.05   # Threshold for new snow to consider the start of winter (m w.e.)
