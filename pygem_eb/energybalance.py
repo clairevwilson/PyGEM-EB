@@ -195,17 +195,27 @@ class energyBalance():
             SWin_sky = self.SWin_ds/self.dt
             SWin_terrain = SWin_sky*(1-SKY_VIEW)*surface.albedo_surr
 
-            # correct for slope
-            SWin_sky *= slope_correction
+            # split sky into direct and diffuse
+            f_diff = self.diffuse_fraction(SWin_sky, SUN_ZEN)
+            SWin_direct = SWin_sky * (1-f_diff)
+            SWin_diffuse = SWin_sky * f_diff
+
+            # correct direct radiation for slope
+            SWin_direct *= slope_correction
 
             # correct for shade
             time_str = str(self.time).replace(str(self.time.year),'2024')
             time_2024 = pd.to_datetime(time_str)
             self.shade = bool(surface.shading_df.loc[time_2024,'shaded'])
-            SWin = SWin_terrain if self.shade else SWin_terrain + SWin_sky
+
+            # determine overall SWin flux
+            if self.shade:
+                SWin = SWin_terrain + SWin_diffuse
+            else:
+                SWin = SWin_terrain + SWin_diffuse + SWin_direct * slope_correction
 
             # store sky and terrain portions
-            self.SWin_sky = 0 if self.shade else SWin_sky
+            self.SWin_sky = SWin_diffuse if self.shade else SWin_sky
             self.SWin_terr = SWin_terrain
 
         # get reflected radiation
@@ -456,7 +466,7 @@ class energyBalance():
         Parameters
         ----------
         T : float
-            Temperature in C
+            Temperature [C]
         """
         if method in ['ARM']:
             P = 0.61094*np.exp(17.625*T/(T+243.04)) # kPa
@@ -468,6 +478,44 @@ class energyBalance():
             else: # over ice
                 P = 0.6112*np.exp(22.46*(T-273.15)/(T-0.55))
         return P*1000
+
+    def diffuse_fraction(self,rad_glob,solar_zenith):
+        """
+        Determines the fraction shortwave radiation that is diffuse 
+        using an empirical formulation from the clearness index, 
+        which is the ratio of horizontal global radiation to 
+        potential (extraterrestrial) radiation.
+
+        Based on Wohlfahrt (2016) Appendix C (10.1016/j.agrformet.2016.05.012)
+
+        This approach uses data calibrated at Neustift station (Austria).
+
+        Parameters
+        ----------
+        rad_glob : float
+            Horizontal global (all-sky) radiation [W m-2]
+        solar_zenith : float
+            Solar zenith angle [rad]
+        """
+        # CONSTANTS
+        SOLAR_CONSTANT = 1367
+        P1 = 0.1001
+        P2 = 4.7930
+        P3 = 9.4758
+        P4 = 0.2465
+
+        # Calculate potential (extraterrestrial) shortwave radiation
+        doy = self.time.day_of_year
+        rad_pot = SOLAR_CONSTANT*(1+0.033*np.cos(2*np.pi*doy/366))*np.cos(solar_zenith)
+
+        # Clearness index
+        CI = rad_glob / rad_pot
+
+        # Empirical relationship
+        diffuse_fraction = np.exp(-np.exp(P1-(P2-P3*CI)))*(1-P4)+P4
+        diffuse_fraction = max(diffuse_fraction, P4)
+        return diffuse_fraction
+
  
     def stable_PhiM(self,z,L):
         zeta = z/L

@@ -110,7 +110,7 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2023-04-20 00:00:00') 
+    startdate = pd.to_datetime('2024-04-20 00:00:00') 
     enddate = pd.to_datetime('2024-08-20 00:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
@@ -130,7 +130,7 @@ initial_snow = True                 # initialize with or without snow
 # OUTPUT
 store_vars = ['MB','EB','climate','layers']  # Variables to store of the possible set: ['MB','EB','climate','layers']
 store_bands = False     # Store spectral albedo .csv
-store_climate = False   # Store climate dataset .nc
+store_climate = True    # Store climate dataset .nc
 
 # TIMESTEP
 dt = 3600                   # Model timestep [s]
@@ -139,9 +139,10 @@ dt_heateq = 3600/5          # Time resolution of heat eq [s], should be integer 
 
 # METHODS
 method_turbulent = 'BulkRichardson'     # 'MO-similarity' or 'BulkRichardson' 
+method_diffuse = 'Wohlfahrt'            # 'Wohlfahrt', 'none'
 method_heateq = 'Crank-Nicholson'       # 'Crank-Nicholson'
 method_densification = 'Boone'          # 'Boone', 'HerronLangway', 'Kojima'
-method_cooling = 'iterative'            # 'minimize' (slow) or 'iterative' (fast)
+method_cooling = 'iterative'            # 'minimize','iterative' (fast)
 method_ground = 'MolgHardy'             # 'MolgHardy'
 method_conductivity = 'VanDusen'        # 'Sauter', 'Douville','Jansson','OstinAndersson','VanDusen'
 
@@ -231,7 +232,7 @@ grainshape_SNICAR = 0       # 0: sphere, 1: spheroid, 2: hexagonal plate, 3: koc
 # <<<<<< Constants for switch runs >>>>>
 albedo_deg_rate = 15        # Rate of exponential decay of albedo
 average_grainsize = 1000    # Grainsize to treat as constant if switch_melt is 0 [um]
-albedo_fresh_snow = 0.85    # Albedo of fresh snow [-] (Moelg et al. 2012, TC)
+albedo_fresh_snow = 0.85    # Albedo of fresh snow for exponential method [-] (Moelg et al. 2012, TC)
 albedo_firn = 0.5           # Albedo of firn [-]
 # <<<<<< BC and dust >>>>>
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1

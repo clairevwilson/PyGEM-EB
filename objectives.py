@@ -212,6 +212,9 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
     if color == 'default' and plot_var == 'mb':
         cwinter = 'turquoise'
         csummer = 'orange'
+    elif color != 'default':
+        cwinter = color
+        csummer = color
     elif plot_var == 'bw':
         cwinter = color
     elif plot_var == 'bs':
@@ -456,7 +459,7 @@ def cumulative_mass_balance(ds,method='MAE',out_mbs=False):
     else:
         return error
         
-def plot_2024_mass_balance(ds,plot_ax=False,label='Model'):
+def plot_2024_mass_balance(ds,plot_ax=False,label='Model',color='default'):
     # Determine the site
     site = ds.attrs['site']
 
@@ -513,7 +516,9 @@ def plot_2024_mass_balance(ds,plot_ax=False,label='Model'):
         ax = plot_ax
     
     # Plot model
-    ax.plot(ds.time.values,ds.values,label=label,color=plt.cm.Dark2(0))
+    if color == 'default':
+        color = plt.cm.Dark2(0)
+    ax.plot(ds.time.values,ds.values,label=label,color=color)
     
     # Plot gnssir
     if 'GNSS_IR' in df_mb_dict:

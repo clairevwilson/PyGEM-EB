@@ -274,7 +274,7 @@ class Layers():
         layers_to_add : pd.Dataframe
             Contains temperature 'T', water mass 'w', solid mass 'm', 
             height 'h', type 't', mass of new snow 'new',
-            grain size 'g', and impurities 'BC' and 'dust'
+            grain size 'g', and impurities 'BC','OC' and 'dust'
         """
         self.nlayers += len(layers_to_add.loc['T'].values)
         self.ltemp = np.append(layers_to_add.loc['T'].values,self.ltemp).astype(float)

@@ -46,6 +46,7 @@ varprops = {'surftemp':{'label':'Temperature','type':'Temperature','units':'C'},
            'layerdensity':{'label':'Density','type':'Layers','units':'kg m$^{-3}$'},
            'layerwater':{'label':'Water content','type':'Layers','units':'kg m$^{-2}$'},
            'layerBC':{'label':'Black carbon','type':'Layers','units':'ppb'},
+           'layerOC':{'label':'Organic carbon','type':'Layers','units':'ppb'},
            'layerdust':{'label':'Dust','type':'Layers','units':'ppm'},
            'layergrainsize':{'label':'Grain size','type':'Layers','units':'um'},
            'layerheight':{'label':'Layer height','type':'Layers','units':'m'},
@@ -1131,8 +1132,10 @@ def visualize_layers(ds,dates,vars,force_layers=False,
     for i,var in enumerate(vars):
         if var in ['layerBC']:
             bounds = [-5,30]
-        if var in ['layerdust']:
-            bounds = [-5,30]
+        elif var in ['layerOC']:
+            bounds = [-5,100]
+        elif var in ['layerdust']:
+            bounds = [0,2]
         elif var in ['layerdensity']:
             bounds = [50,800] if plot_firn else [0,500]
         elif var in ['layerwater']:
@@ -1176,9 +1179,9 @@ def visualize_layers(ds,dates,vars,force_layers=False,
             #     height = np.log(height)
 
             bottom = 0
-            ctypes = {'layerBC':'Greys','layerdust':'Oranges','layertemp':'plasma',
-                'layerdensity':'Greens','layerwater':'Blues','layergrainsize':'Purples',
-                'layerrefreeze':'Reds'}
+            ctypes = {'layerBC':'Greys','layerOC':'Oranges','layerdust':'Reds',
+                      'layertemp':'plasma','layerdensity':'Greens','layerwater':'Blues',
+                      'layergrainsize':'PuRd','layerrefreeze':'Purples'}
             ctype = ctypes[var]
             if np.sum(height) < 0.05 and first and not last and step.month<9:
                 last = step
@@ -1196,7 +1199,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
             # if np.abs(step.day_of_year-244) < 6:
             #     ax.axvline(step,lw=0.7,color='red')
         # Add colorbar
-        units = {'layerBC':'ppb','layerdust':'ppm','layertemp':'$^{\circ}$C',
+        units = {'layerBC':'ppb','layerdust':'ppm','layerOC':'ppb','layertemp':'$^{\circ}$C',
                 'layerdensity':'kg m$^{-3}$','layerwater':'%','layergrainsize':'um',
                 'layerrefreeze':'kg m-2'}
         if colorbar:
