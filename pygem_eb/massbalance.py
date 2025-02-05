@@ -951,6 +951,7 @@ class massBalance():
 
         # Reset cumulative refreeze
         self.layers.cumrefreeze *= 0
+        print('Converted firn on ',self.time)
         self.firn_converted = True
         return
 
@@ -1355,6 +1356,7 @@ class Output():
                                  run_start=str(args.startdate),
                                  run_end=str(args.enddate),
                                  elevation=elev,
+                                 site=str(args.site),
                                  model_run_date=str(pd.Timestamp.today()),
                                  switch_melt=str(args.switch_melt),
                                  switch_snow=str(args.switch_snow),

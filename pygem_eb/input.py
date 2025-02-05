@@ -20,7 +20,7 @@ mb_threshold = 0.1       # Threshold to consider not conserving mass (kg m-2 = m
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/gulkana2024.csv'}, 
+                            'AWS_fn':'Preprocessed/gulkana2024_windonly.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -109,8 +109,8 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2024-04-20 00:00:00') 
-    enddate = pd.to_datetime('2024-08-20 00:00:00')
+    startdate = pd.to_datetime('2000-04-20 00:00:00') 
+    enddate = pd.to_datetime('2010-08-20 00:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
@@ -129,7 +129,7 @@ initial_snow = True                 # initialize with or without snow
 # OUTPUT
 store_vars = ['MB','EB','climate','layers']  # Variables to store of the possible set: ['MB','EB','climate','layers']
 store_bands = False     # Store spectral albedo .csv
-store_climate = False   # Store climate dataset .nc
+store_climate = False  # Store climate dataset .nc
 
 # TIMESTEP
 dt = 3600                   # Model timestep [s]
@@ -179,8 +179,8 @@ aspect = 0                  # Point aspect (degrees; 0 = North)
 lat = 63.3                  # Point latitude
 lon = -142.2                # Point longitude
 # <<<<<< Discretization >>>>>
-dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
-layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
+dz_toplayer = 0.03          # Thickness of the uppermost layer [m]
+layer_growth = 0.5          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
 max_nlayers = 80            # Maximum number of vertical layers allowed (defines output file size)
 max_dz = 2                  # Max layer height
 # <<<<<< Boundary conditions >>>>>
@@ -255,8 +255,11 @@ temp_bias_adjust = True     # Adjust MERRA-2 temperatures?
 temp_bias_slope = 0.57596   # Slope of MERRA-2 --> ON-ICE AWS
 temp_bias_intercept = 1.799 # Intercept of MERRA-2 --> ON-ICE AWS
 wind_bias_adjust = True     # Adjust MERRA-2 wind speed?
-wind_bins = [0, 0.5, 1, 2, 3, 20]                   # Wind speed bins (m s-1)
-wind_bias = [7.660,3.075, 1.538, 1.152, 1.056]      # Multiplier for each bin (-)
+wind_bins = [0, 0.5, 1, 2, 20]                   # Wind speed bins (m s-1)
+wind_bias = [7.660,3.075, 1.538, 1.115]          # Multiplier for each bin (-)
+SWin_bias_adjust = True     # Adjust MERRA-2 incoming shortwave?
+SWin_bins = [0, 0.5e6, 1e6, 1.5e6, 2e6, 4e6]     # Incoming shortwave bins (J m-2)
+SWin_bias = [0.8208,1.0659,1.1175,1.1514,1.0966] # Multiplier for each bin (-)
 # <<<<<< End-of-summer >>>>>
 end_summer_doy = 228        # Day of year to starting checking for end of summer (snow -> firn)
 new_snow_threshold = 0.05   # Threshold for new snow to consider the start of winter (m w.e.)

@@ -246,14 +246,19 @@ class Climate():
         return
     
     def check_ds(self):
-        # Correct MERRA-2 temperature bias
-        temp_filled = True if not self.args.use_AWS else 'temp' in self.need_vars
-        if eb_prms.temp_bias_adjust and temp_filled:
-            self.adjust_temp_bias()
-        # Correct MERRA-2 wind bias
-        wind_filled = True if not self.args.use_AWS else 'wind' in self.need_vars
-        if eb_prms.wind_bias_adjust and wind_filled:
-            self.adjust_wind_bias()
+        if eb_prms.reanalysis == 'MERRA2':
+            # Correct MERRA-2 temperature bias
+            temp_filled = True if not self.args.use_AWS else 'temp' in self.need_vars
+            if eb_prms.temp_bias_adjust and temp_filled:
+                self.adjust_temp_bias()
+            # Correct MERRA-2 wind biases
+            wind_from_MERRA = True if not self.args.use_AWS else 'wind' in self.need_vars
+            if eb_prms.wind_bias_adjust and wind_from_MERRA:
+                self.adjust_binned_bias('wind')
+            # Correct MERRA-2 SWin bias
+            SWin_from_MERRA = True if not self.args.use_AWS else 'SWin' in self.need_vars
+            if eb_prms.SWin_bias_adjust and SWin_from_MERRA:
+                self.adjust_binned_bias('SWin')
 
         # Adjust elevation dependence
         self.adjust_to_elevation()
@@ -362,18 +367,26 @@ class Climate():
         self.cds['temp'].values = new_T 
         return
     
-    def adjust_wind_bias(self):
+    def adjust_binned_bias(self,var):
         """
         Updated wind speed according to preprocessed bias adjustments
         """
-        WIND_BINS = eb_prms.wind_bins
-        WIND_BIAS = eb_prms.wind_bias
-        u = self.cds['wind'].values
-        scale = np.ones_like(self.cds['wind'].values)
-        for i in range(1,len(WIND_BINS)):
-            index = np.where((u >= WIND_BINS[i-1]) & (u < WIND_BINS[i]))[0]
-            scale[index] = WIND_BIAS[i-1]
-        self.cds['wind'].values *= scale
+        if var == 'wind':
+            BINS = eb_prms.wind_bins
+            BIAS = eb_prms.wind_bias
+            df = pd.read_csv('data/quantile_mapping_wind.csv')
+            u = self.cds[var].values
+            adj = np.interp(u, df['sorted'], df['mapping'])
+            self.cds[var].values = adj
+        elif var == 'SWin':
+            BINS = eb_prms.SWin_bins
+            BIAS = eb_prms.SWin_bias
+            values = self.cds[var].values
+            scale = np.ones_like(self.cds[var].values)
+            for i in range(1,len(BINS)):
+                index = np.where((values >= BINS[i-1]) & (values < BINS[i]))[0]
+                scale[index] = BIAS[i-1]
+            self.cds[var].values *= scale
         return
 
     def getVaporPressure(self,tempC):
