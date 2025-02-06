@@ -83,6 +83,8 @@ initial_grains_fp = 'data/sample_initial_grains.csv'
 initial_LAP_fp = 'data/sample_initial_laps.csv' # f'/../Data/Nagorski/May_Mend-2_BC.csv'
 # Shading
 shading_fp = f'shading/out/{glac_name}{site}_shade.csv'
+# Bias adjustment 
+bias_fp = 'data/METHOD_VAR.csv'
 # Output filepaths
 albedo_out_fp = '../Output/EB/albedo.csv'
 output_name = f'{glac_name}_{model_run_date}_'
@@ -92,11 +94,17 @@ reanalysis = 'MERRA2' # 'MERRA2' (or 'ERA5-hourly' -- ***BROKEN)
 MERRA2_filetag = False    # False or string to follow 'MERRA2_VAR_' in MERRA2 filename
 AWS_fp = '../climate_data/AWS/'
 AWS_fn = AWS_fp+glac_props[glac_no[0]]['AWS_fn']
-glac_name = glac_props[glac_no[0]]['name']
-wind_ref_height = 10 if reanalysis in ['ERA5-hourly'] else 2
 if use_AWS:
     assert os.path.exists(AWS_fn), 'Check AWS filepath or glac_no in input.py'
+wind_ref_height = 10 if reanalysis in ['ERA5-hourly'] else 2
 
+# MERRA-2 BIAS ADJUSTMENT
+bias_vars = {'wind':'quantile','SWin':'binned'}      # Vars to correct and corresponding methods
+temp_bias_adjust = True         # Adjust MERRA-2 temperatures?
+temp_bias_slope = 0.57596       # Slope of MERRA-2 --> ON-ICE AWS
+temp_bias_intercept = 1.799     # Intercept of MERRA-2 --> ON-ICE AWS
+
+# DATES
 dates_from_data = False
 if dates_from_data:
     cdf = pd.read_csv(AWS_fn,index_col=0)
@@ -109,8 +117,8 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2000-04-20 00:00:00') 
-    enddate = pd.to_datetime('2010-08-20 00:00:00')
+    startdate = pd.to_datetime('2024-04-20 00:00:00') 
+    enddate = pd.to_datetime('2024-08-20 00:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
@@ -129,7 +137,7 @@ initial_snow = True                 # initialize with or without snow
 # OUTPUT
 store_vars = ['MB','EB','climate','layers']  # Variables to store of the possible set: ['MB','EB','climate','layers']
 store_bands = False     # Store spectral albedo .csv
-store_climate = False  # Store climate dataset .nc
+store_climate = False   # Store climate dataset .nc
 
 # TIMESTEP
 dt = 3600                   # Model timestep [s]
@@ -250,16 +258,6 @@ ratio_DU_bin2 = 0.20535     # " SNICAR Bin 2 (0.5-1.25um)
 ratio_DU_bin3 = 0.481675    # " SNICAR Bin 3 (1.25-2.5um)
 ratio_DU_bin4 = 0.203775    # " SNICAR Bin 4 (2.5-5um)
 ratio_DU_bin5 = 0.034       # " SNICAR Bin 5 (5-50um)
-# <<<<<< MERRA-2: bias corrections >>>>>
-temp_bias_adjust = True     # Adjust MERRA-2 temperatures?
-temp_bias_slope = 0.57596   # Slope of MERRA-2 --> ON-ICE AWS
-temp_bias_intercept = 1.799 # Intercept of MERRA-2 --> ON-ICE AWS
-wind_bias_adjust = True     # Adjust MERRA-2 wind speed?
-wind_bins = [0, 0.5, 1, 2, 20]                   # Wind speed bins (m s-1)
-wind_bias = [7.660,3.075, 1.538, 1.115]          # Multiplier for each bin (-)
-SWin_bias_adjust = True     # Adjust MERRA-2 incoming shortwave?
-SWin_bins = [0, 0.5e6, 1e6, 1.5e6, 2e6, 4e6]     # Incoming shortwave bins (J m-2)
-SWin_bias = [0.8208,1.0659,1.1175,1.1514,1.0966] # Multiplier for each bin (-)
 # <<<<<< End-of-summer >>>>>
 end_summer_doy = 228        # Day of year to starting checking for end of summer (snow -> firn)
 new_snow_threshold = 0.05   # Threshold for new snow to consider the start of winter (m w.e.)

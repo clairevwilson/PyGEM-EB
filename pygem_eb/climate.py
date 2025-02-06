@@ -246,23 +246,6 @@ class Climate():
         return
     
     def check_ds(self):
-        if eb_prms.reanalysis == 'MERRA2':
-            # Correct MERRA-2 temperature bias
-            temp_filled = True if not self.args.use_AWS else 'temp' in self.need_vars
-            if eb_prms.temp_bias_adjust and temp_filled:
-                self.adjust_temp_bias()
-            # Correct MERRA-2 wind biases
-            wind_from_MERRA = True if not self.args.use_AWS else 'wind' in self.need_vars
-            if eb_prms.wind_bias_adjust and wind_from_MERRA:
-                self.adjust_binned_bias('wind')
-            # Correct MERRA-2 SWin bias
-            SWin_from_MERRA = True if not self.args.use_AWS else 'SWin' in self.need_vars
-            if eb_prms.SWin_bias_adjust and SWin_from_MERRA:
-                self.adjust_binned_bias('SWin')
-
-        # Adjust elevation dependence
-        self.adjust_to_elevation()
-
         # Calculate wind speed and direction from u and v components
         # *** Add function which sends to WindMapper or uses a lookup table
         uwind = self.cds['uwind'].values
@@ -271,6 +254,22 @@ class Climate():
         winddir = np.arctan2(-uwind,-vwind) * 180 / np.pi
         self.cds['wind'].values = wind
         self.cds['winddir'].values = winddir
+
+        if eb_prms.reanalysis == 'MERRA2':
+            # Correct MERRA-2 temperature bias
+            temp_filled = True if not self.args.use_AWS else 'temp' in self.need_vars
+            if eb_prms.temp_bias_adjust and temp_filled:
+                self.adjust_temp_bias()
+            # Correct other MERRA-2 variables
+            for var in eb_prms.bias_vars:
+                from_MERRA = True if not self.args.use_AWS else var in self.need_vars
+                if from_MERRA and eb_prms.bias_vars[var] == 'binned':
+                    self.bias_adjust_binned(var)
+                elif from_MERRA and eb_prms.bias_vars[var] == 'quantile':
+                    self.bias_adjust_quantile(var)
+
+        # Adjust elevation dependence
+        self.adjust_to_elevation()
         
         # Adjust MERRA-2 deposition by reduction coefficient
         if eb_prms.reanalysis == 'MERRA2':
@@ -291,8 +290,8 @@ class Climate():
 
         # Store the dataset as a netCDF
         if eb_prms.store_climate:
-            out_fp = eb_prms.output_filepath + self.args.out + 'climate'
-            self.cds.to_netcdf(out_fp+'_'+self.args.site +'.nc')
+            out_fp = eb_prms.output_filepath + self.args.out + self.args.site + '_climate'
+            self.cds.to_netcdf(out_fp+'.nc')
             print('Climate dataset saved to',out_fp+'.nc')
         return
     
@@ -367,26 +366,30 @@ class Climate():
         self.cds['temp'].values = new_T 
         return
     
-    def adjust_binned_bias(self,var):
+    def bias_adjust_binned(self,var):
         """
-        Updated wind speed according to preprocessed bias adjustments
+        Updated variables according to preprocessed bias adjustments
         """
-        if var == 'wind':
-            BINS = eb_prms.wind_bins
-            BIAS = eb_prms.wind_bias
-            df = pd.read_csv('data/quantile_mapping_wind.csv')
-            u = self.cds[var].values
-            adj = np.interp(u, df['sorted'], df['mapping'])
-            self.cds[var].values = adj
-        elif var == 'SWin':
-            BINS = eb_prms.SWin_bins
-            BIAS = eb_prms.SWin_bias
-            values = self.cds[var].values
-            scale = np.ones_like(self.cds[var].values)
-            for i in range(1,len(BINS)):
-                index = np.where((values >= BINS[i-1]) & (values < BINS[i]))[0]
-                scale[index] = BIAS[i-1]
-            self.cds[var].values *= scale
+        bias_fp = eb_prms.bias_fp.replace('METHOD','binned').replace('VAR',var)
+        bias_df = pd.read_csv(bias_fp)
+        bins = np.append(np.zeros(1), bias_df['bins'])
+        values = self.cds[var].values
+        scale = np.ones_like(self.cds[var].values)
+        for i in range(1,len(bins)):
+            index = np.where((values >= bins[i-1]) & (values < bins[i]))[0]
+            scale[index] = bias_df['factor'][i-1]
+        self.cds[var].values = values * scale
+        return
+    
+    def bias_adjust_quantile(self,var):
+        """
+        Updated variables according to preprocessed quantile mapping
+        """
+        values = self.cds[var].values
+        bias_fp = eb_prms.bias_fp.replace('METHOD','quantile_mapping').replace('VAR',var)
+        bias_df = pd.read_csv(bias_fp)
+        adjusted = np.interp(values, bias_df['sorted'], bias_df['mapping'])
+        self.cds[var].values = adjusted
         return
 
     def getVaporPressure(self,tempC):

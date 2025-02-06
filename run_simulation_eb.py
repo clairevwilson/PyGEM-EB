@@ -9,7 +9,6 @@ from multiprocessing import Pool
 # Internal libraries
 import pygem_eb.input as eb_prms
 import pygem_eb.massbalance as mb
-import pygem.pygem_modelsetup as modelsetup
 import pygem_eb.climate as climutils
 # import shading.shading as shading
 
@@ -52,7 +51,7 @@ def get_args(parse=True):
                         help='store the model output?')
     parser.add_argument('-out',action='store',type=str,default=eb_prms.output_name,
                         help='Output file name EXCLUDING extension (.nc)')
-    parser.add_argument('--new_file', action='store_true',
+    parser.add_argument('-new_file', action='store_true',
                         default=eb_prms.new_file, help='')
     parser.add_argument('-debug', action='store_true', 
                         default=eb_prms.debug, help='')
@@ -124,7 +123,6 @@ def check_inputs(dem_fp,args):
         print('running bin search...')
     
     return
-
 
 def initialize_model(glac_no,args):
     """

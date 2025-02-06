@@ -924,36 +924,37 @@ class massBalance():
         T_LOW = eb_prms.snow_threshold_low
         T_HIGH = eb_prms.snow_threshold_high
 
-        # Define rain vs snow scaling 
-        rain_scale = np.linspace(1,0,20)
-        temp_scale = np.linspace(T_LOW,T_HIGH,20)
+        # Only merge firn if there is snow and firn below that snow
+        if len(self.layers.snow_idx) > 0 and len(self.layers.firn_idx) > 0:
+            # Define rain vs snow scaling 
+            rain_scale = np.linspace(1,0,20)
+            temp_scale = np.linspace(T_LOW,T_HIGH,20)
 
-        # Index the temperature and precipitation of the upcoming period
-        end_time = min(self.time_list[-1],self.time+pd.Timedelta(days=NDAYS))
-        check_dates = pd.date_range(self.time,end_time,freq='h')
-        check_temp = self.climate.cds.sel(time=check_dates)['temp'].values
-        check_tp = self.climate.cds.sel(time=check_dates)['tp'].values
+            # Index the temperature and precipitation of the upcoming period
+            end_time = min(self.time_list[-1],self.time+pd.Timedelta(days=NDAYS))
+            check_dates = pd.date_range(self.time,end_time,freq='h')
+            check_temp = self.climate.cds.sel(time=check_dates)['temp'].values
+            check_tp = self.climate.cds.sel(time=check_dates)['tp'].values
 
-        # Create array to mask tp to snow amounts
-        mask = np.interp(check_temp,temp_scale,rain_scale)
-        upcoming_snow = np.sum(check_tp*mask)
-        if upcoming_snow < SNOW_THRESHOLD:
-            # Not getting new snow, so we are not at the end of summer yet
-            return
+            # Create array to mask tp to snow amounts
+            mask = np.interp(check_temp,temp_scale,rain_scale)
+            upcoming_snow = np.sum(check_tp*mask)
+            if upcoming_snow < SNOW_THRESHOLD:
+                # Not getting new snow, so we are not at the end of summer yet
+                return
         
-        # We're getting new snow, so today is the end of summer: merge snow to firn
-        if len(self.layers.snow_idx) > 0:
-            # Merge all snow layers into firn
+            # We're getting new snow, so today is the end of summer: merge snow to firn
             merge_count = max(0,len(self.layers.snow_idx) - 1)
             for _ in range(merge_count):
                 self.layers.merge_layers(0)
                 self.layers.ltype[0] = 'firn'
+            if self.args.debug:
+                print('Converted firn on ',self.time)
+            self.firn_converted = True
 
-        # Reset cumulative refreeze
-        self.layers.cumrefreeze *= 0
-        print('Converted firn on ',self.time)
-        self.firn_converted = True
-        return
+            # Reset cumulative refreeze
+            self.layers.cumrefreeze *= 0
+            return
 
     def current_state(self,time,airtemp):
         """Prints some useful information to keep track of a model run"""
