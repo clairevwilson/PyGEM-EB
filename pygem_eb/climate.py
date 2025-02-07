@@ -7,7 +7,7 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import threading
-import sys
+import os,sys
 import pygem_eb.input as eb_prms
 
 class Climate():
@@ -263,12 +263,13 @@ class Climate():
             # Correct other MERRA-2 variables
             for var in eb_prms.bias_vars:
                 from_MERRA = True if not self.args.use_AWS else var in self.need_vars
-                if from_MERRA and eb_prms.bias_vars[var] == 'binned':
-                    self.bias_adjust_binned(var)
-                elif from_MERRA and eb_prms.bias_vars[var] == 'quantile':
+                if from_MERRA:
                     self.bias_adjust_quantile(var)
+                    #  and eb_prms.bias_vars[var] == 'binned':
+                    #     self.bias_adjust_binned(var)
+                    # elif from_MERRA and eb_prms.bias_vars[var] == 'quantile':
 
-        # Adjust elevation dependence
+        # Adjust elevation dependent variables
         self.adjust_to_elevation()
         
         # Adjust MERRA-2 deposition by reduction coefficient
@@ -370,14 +371,22 @@ class Climate():
         """
         Updated variables according to preprocessed bias adjustments
         """
+        # Open .csv with binned correction factors
         bias_fp = eb_prms.bias_fp.replace('METHOD','binned').replace('VAR',var)
+        assert os.path.exists(bias_fp), f'Binned data does not exist for {var}'
         bias_df = pd.read_csv(bias_fp)
+
+        # Define bins and values
         bins = np.append(np.zeros(1), bias_df['bins'])
         values = self.cds[var].values
         scale = np.ones_like(self.cds[var].values)
+
+        # Loop through bins and assign scale factor
         for i in range(1,len(bins)):
             index = np.where((values >= bins[i-1]) & (values < bins[i]))[0]
             scale[index] = bias_df['factor'][i-1]
+
+        # Update values with scale factor
         self.cds[var].values = values * scale
         return
     
@@ -385,10 +394,16 @@ class Climate():
         """
         Updated variables according to preprocessed quantile mapping
         """
-        values = self.cds[var].values
+        # Open .csv with quantile mapping
         bias_fp = eb_prms.bias_fp.replace('METHOD','quantile_mapping').replace('VAR',var)
+        assert os.path.exists(bias_fp), f'Binned data does not exist for {var}'
         bias_df = pd.read_csv(bias_fp)
+        
+        # Interpolate values according to quantile mapping
+        values = self.cds[var].values
         adjusted = np.interp(values, bias_df['sorted'], bias_df['mapping'])
+
+        # Update values
         self.cds[var].values = adjusted
         return
 

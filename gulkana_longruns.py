@@ -11,11 +11,11 @@ import pygem_eb.input as eb_prms
 
 # User info
 use_AWS = False
-sites = ['A','AU','B','D'] # Sites to run in parallel
+sites = ['A','AU','B','D'] # Sites to run in parallel 
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
 params_fn = False # '../Output/params/11_26_best.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
-n_runs_ahead = 0    # Step if you're going to run this script more than once
+n_runs_ahead = 5    # Step if you're going to run this script more than once
 
 # Read command line args
 args = sim.get_args()

@@ -919,7 +919,7 @@ class massBalance():
     
     def end_of_summer(self):
         # CONSTANTS
-        NDAYS = eb_prms.new_snow_timing
+        NDAYS = eb_prms.new_snow_days
         SNOW_THRESHOLD = eb_prms.new_snow_threshold
         T_LOW = eb_prms.snow_threshold_low
         T_HIGH = eb_prms.snow_threshold_high

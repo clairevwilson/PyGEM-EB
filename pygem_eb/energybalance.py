@@ -336,10 +336,8 @@ class energyBalance():
         z0t = z0/100    # Roughness length for heat
         z0q = z0/10     # Roughness length for moisture
 
-        # # SLOPE (not currently using)
-        # if eb_prms.glac_no == ['01.00570']:
-        #     slope = eb_prms.slope
-        #     cos_slope = np.cos(np.radians(slope))
+        # SLOPE
+        SLOPE = self.args.slope * np.pi/180
 
         # ADJUST WIND SPEED
         z = 2 # reference height in m
@@ -375,8 +373,8 @@ class energyBalance():
                 csQ = KARMAN*np.sqrt(cD) / (np.log(z/z0q) - self.PhiT(z,L) - self.PhiT(z0,L))
                 
                 # calculate fluxes
-                Qs = density_air*CP_AIR*csT*wind_2m*(self.tempC - surftemp)
-                Ql = density_air*Lv*csQ*wind_2m*(qz-q0)
+                Qs = density_air*CP_AIR*csT*wind_2m*(self.tempC - surftemp)*np.cos(SLOPE)
+                Ql = density_air*Lv*csQ*wind_2m*(qz-q0)*np.cos(SLOPE)
 
                 # recalculate L
                 if np.abs(Qs) < 1e-5:
@@ -408,8 +406,8 @@ class energyBalance():
                 psi = 0
             
             # calculate fluxes
-            Qs = density_air*CP_AIR*csT*psi*wind_2m*(self.tempC - surftemp)
-            Ql = density_air*Lv*csQ*psi*wind_2m*(qz-q0)
+            Qs = density_air*CP_AIR*csT*psi*wind_2m*(self.tempC - surftemp)*np.cos(SLOPE)
+            Ql = density_air*Lv*csQ*psi*wind_2m*(qz-q0)*np.cos(SLOPE)
         else:
             assert 1==0, 'Choose turbulent method from MO-similarity or BulkRichardson'
         
@@ -448,7 +446,7 @@ class energyBalance():
         ROUGHNESS_FRESH_SNOW = eb_prms.roughness_fresh_snow
         ROUGHNESS_AGED_SNOW = eb_prms.roughness_aged_snow
         ROUGHNESS_FIRN = eb_prms.roughness_firn
-        ROUGHNESS_ICE = eb_prms.roughness_ice
+        ROUGHNESS_ICE = self.args.roughness_ice
         AGING_RATE = eb_prms.roughness_aging_rate
 
         if layertype[0] in ['snow']:

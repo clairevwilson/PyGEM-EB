@@ -10,7 +10,7 @@ from multiprocessing import Pool
 import pygem_eb.input as eb_prms
 import pygem_eb.massbalance as mb
 import pygem_eb.climate as climutils
-# import shading.shading as shading
+# from shading.shading import Shading
 
 # Start timer
 start_time = time.time()
@@ -77,6 +77,8 @@ def get_args(parse=True):
                         help='Multiplicative precipitation factor')
     parser.add_argument('-Boone_c5',default=eb_prms.Boone_c5,action='store',type=float,
                         help='Parameter for Boone densification scheme')
+    parser.add_argument('-roughness_ice',default=eb_prms.roughness_ice,action='store',type=float,
+                        help='Surface roughness of ice')
     
     # PARALLELIZATION
     parser.add_argument('-n','--n_simultaneous_processes',default=1,type=int,
@@ -100,7 +102,18 @@ def get_args(parse=True):
         return parser
     
 def check_inputs(dem_fp,args):
-    # model = shading.Shading()
+    """
+    *** UNUSED FOR GULKANA RUNS***
+    Checks that the glacier point has all required inputs.
+    If any are missing, the shading model is run to create 
+    the site_constants file containing:
+    - Elevation                     From DEM
+    - Slope/aspect                  Calc from DEM in Shading
+    - Sky-view factor               Calc from DEM in Shading
+    - Initial snow, firn and ice depth      (Figure out from the elev. distribution of the glacier?***)
+    and the '_shade.csv' file containing shaded hours.
+    """
+    # model = Shading()
 
     name = eb_prms.glac_name
     if len(args.site) > 0:
@@ -201,7 +214,7 @@ def initialize_model(glac_no,args):
     # Check the dataset is ready to go
     climate.check_ds()
 
-    # Check shading
+    # Check inputs are all there
     # check_inputs(eb_prms.dem_fp,args,climate)
 
     # Print out model start line
@@ -209,7 +222,7 @@ def initialize_model(glac_no,args):
     end = pd.to_datetime(args.enddate)
     n_months = np.round((end-start)/pd.Timedelta(days=30))
     start_fmtd = start.month_name()+', '+str(start.year)
-    print(f'Running {eb_prms.glac_name} Glacier at {args.elev} m a.s.l. for {n_months} months starting in {start_fmtd}')
+    print(f'Running {args.glac_no[0]} at {args.elev} m a.s.l. for {n_months} months starting in {start_fmtd}')
 
     return climate
 

@@ -20,7 +20,7 @@ mb_threshold = 0.1       # Threshold to consider not conserving mass (kg m-2 = m
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/gulkana2024_windonly.csv'}, 
+                            'AWS_fn':'Preprocessed/gulkana2024.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -99,10 +99,10 @@ if use_AWS:
 wind_ref_height = 10 if reanalysis in ['ERA5-hourly'] else 2
 
 # MERRA-2 BIAS ADJUSTMENT
-bias_vars = {'wind':'quantile','SWin':'binned'}      # Vars to correct and corresponding methods
-temp_bias_adjust = True         # Adjust MERRA-2 temperatures?
-temp_bias_slope = 0.57596       # Slope of MERRA-2 --> ON-ICE AWS
-temp_bias_intercept = 1.799     # Intercept of MERRA-2 --> ON-ICE AWS
+bias_vars = ['wind','SWin']         # Vars to correct by quantile mapping
+temp_bias_adjust = True             # Adjust MERRA-2 temperatures?
+temp_bias_slope = 0.57596           # Slope of MERRA-2 --> ON-ICE AWS
+temp_bias_intercept = 1.799         # Intercept of MERRA-2 --> ON-ICE AWS
 
 # DATES
 dates_from_data = False
@@ -151,7 +151,7 @@ method_heateq = 'Crank-Nicholson'       # 'Crank-Nicholson'
 method_densification = 'Boone'          # 'Boone', 'HerronLangway', 'Kojima'
 method_cooling = 'iterative'            # 'minimize','iterative' (fast)
 method_ground = 'MolgHardy'             # 'MolgHardy'
-method_conductivity = 'VanDusen'        # 'Sauter', 'Douville','Jansson','OstinAndersson','VanDusen'
+method_conductivity = 'Douville'        # 'Sauter', 'Douville','Jansson','OstinAndersson','VanDusen'
 
 # CONSTANT SWITCHES
 constant_snowfall_density = False       # False or density in kg m-3
@@ -261,7 +261,7 @@ ratio_DU_bin5 = 0.034       # " SNICAR Bin 5 (5-50um)
 # <<<<<< End-of-summer >>>>>
 end_summer_doy = 228        # Day of year to starting checking for end of summer (snow -> firn)
 new_snow_threshold = 0.05   # Threshold for new snow to consider the start of winter (m w.e.)
-new_snow_timing = 10        # Number of days to check for start of winter
+new_snow_days = 10          # Number of days to sum snow over and compare against threshold
 
 # ========== OTHER PYGEM INPUTS ========== 
 rgi_regionsO1 = [1]
