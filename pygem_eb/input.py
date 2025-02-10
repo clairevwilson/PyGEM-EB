@@ -99,8 +99,8 @@ if use_AWS:
 wind_ref_height = 10 if reanalysis in ['ERA5-hourly'] else 2
 
 # MERRA-2 BIAS ADJUSTMENT
-bias_vars = ['wind','SWin']         # Vars to correct by quantile mapping
-temp_bias_adjust = True             # Adjust MERRA-2 temperatures?
+bias_vars = ['wind','SWin','temp','rh']         # Vars to correct by quantile mapping
+temp_bias_adjust = False             # Adjust MERRA-2 temperature linearly?
 temp_bias_slope = 0.57596           # Slope of MERRA-2 --> ON-ICE AWS
 temp_bias_intercept = 1.799         # Intercept of MERRA-2 --> ON-ICE AWS
 

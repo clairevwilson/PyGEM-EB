@@ -326,7 +326,7 @@ def snowpits(ds,method='MAE'):
     return error_dict
 
 # ========== 3. CUMULATIVE MASS BALANCE ==========
-def cumulative_mass_balance(ds,method='MAE',out_mbs=False):
+def cumulative_mass_balance(ds,method='MAE',out=None):
     """
     Compares cumulative mass balance measurements from
     a stake to a model output. 
@@ -360,7 +360,7 @@ def cumulative_mass_balance(ds,method='MAE',out_mbs=False):
         df_mb_daily = df_mb_dict['GNSS_IR']
 
     # Get the summer mass balance
-    if out_mbs:
+    if out== 'mbs':
         # Load USGS seasonal MB
         if site not in ['ABB','BD']:
             year = pd.to_datetime(ds.time.values[0]).year
@@ -461,8 +461,10 @@ def cumulative_mass_balance(ds,method='MAE',out_mbs=False):
         print('No data available to compare')
         return
 
-    if out_mbs:
+    if out == 'mbs':
         return mbs_modeled,mbs_measured
+    elif out == 'diff':
+        return ds.time.values[idx_data], np.array(model - data)
     else:
         return error
         
@@ -527,7 +529,10 @@ def plot_2024_mass_balance(ds,plot_ax=False,label='Model',color='default'):
     # Plot model
     if color == 'default':
         color = plt.cm.Dark2(0)
-    ax.plot(ds.time.values,ds.values,label=label,color=color)
+    if label is None:
+        ax.plot(ds.time.values,ds.values,color=color)
+    else:
+        ax.plot(ds.time.values,ds.values,color=color,label=label)
     
     # Plot gnssir
     if 'GNSS_IR' in df_mb_dict:

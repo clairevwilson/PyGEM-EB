@@ -396,7 +396,7 @@ class Climate():
         """
         # Open .csv with quantile mapping
         bias_fp = eb_prms.bias_fp.replace('METHOD','quantile_mapping').replace('VAR',var)
-        assert os.path.exists(bias_fp), f'Binned data does not exist for {var}'
+        assert os.path.exists(bias_fp), f'Quantile mapping file does not exist for {var}'
         bias_df = pd.read_csv(bias_fp)
         
         # Interpolate values according to quantile mapping

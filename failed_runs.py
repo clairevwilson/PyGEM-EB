@@ -101,7 +101,7 @@ for site in sites:
 # Loop through the failed runs
 for param in failed:
     # Unpack the parameters 
-    site, kw, c5, kp, out = param
+    site, c5, kp, out = param
 
     # Get args for the current run
     args_run = copy.deepcopy(site_dict[site]['args'])
@@ -109,7 +109,6 @@ for param in failed:
 
     # Set parameters
     args_run.k_snow = 'VanDusen'
-    args_run.kw = kw
     args_run.site = site
     args_run.Boone_c5 = c5
     args_run.kp = kp
@@ -118,7 +117,7 @@ for param in failed:
     args_run.out = out
 
     # Specify attributes for output file
-    store_attrs = {'kw':kw,'c5':c5,'kp':kp,'site':site}
+    store_attrs = {'c5':c5,'kp':kp,'site':site}
     # print(store_attrs)
     # assert 1==0
 

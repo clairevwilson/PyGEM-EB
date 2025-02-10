@@ -18,9 +18,8 @@ from objectives import *
 repeat_run = False  # True if restarting an already begun run
 run_type = '2024'   # 'long' or '2024'
 # Define sets of parameters
-params = {'kw':[1,1.5,2,2.5,3], # 
-          'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028], # 
-          'kp':[2.4,2.6,2.8,3,3.2]} # 
+params = {'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
+          'kp':[1,1.5,2,2.5,3,3.5]} # 
 
 # Read command line args
 args = sim.get_args()
@@ -96,40 +95,38 @@ if run_type == 'long':
 climate = sim.initialize_model(args.glac_no[0],args)
 
 # Loop through parameters
-for kw in params['kw']:
-    for kp in params['kp']:
-        for c5 in params['Boone_c5']:
-            # Get args for the current run
-            args_run = copy.deepcopy(args)
-            climate_run = copy.deepcopy(climate)
+for kp in params['kp']:
+    for c5 in params['Boone_c5']:
+        # Get args for the current run
+        args_run = copy.deepcopy(args)
+        climate_run = copy.deepcopy(climate)
 
-            # Set parameters
-            args_run.kw = kw
-            args_run.Boone_c5 = c5
-            args_run.kp = kp
+        # Set parameters
+        args_run.Boone_c5 = c5
+        args_run.kp = kp
 
-            # Set identifying output filename
-            args_run.out = out_fp + f'grid_{date}_set{set_no}_run{run_no}_'
-            all_runs.append((args.site, kw, c5, kp, args_run.out))
+        # Set identifying output filename
+        args_run.out = out_fp + f'grid_{date}_set{set_no}_run{run_no}_'
+        all_runs.append((args.site, c5, kp, args_run.out))
 
-            # Specify attributes for output file
-            store_attrs = {'kw':kw,'c5':c5,'kp':kp,'site':args.site}
+        # Specify attributes for output file
+        store_attrs = {'c5':c5,'kp':kp,'site':args.site}
 
-            # Set task ID for SNICAR input file
-            args_run.task_id = set_no
-            args_run.run_id = run_no
+        # Set task ID for SNICAR input file
+        args_run.task_id = set_no
+        args_run.run_id = run_no
 
-            # Store model inputs
-            packed_vars[set_no].append((args_run,climate_run,store_attrs))
+        # Store model inputs
+        packed_vars[set_no].append((args_run,climate_run,store_attrs))
 
-            # Check if moving to the next set of runs
-            n_runs_set = n_runs_per_process + (1 if set_no < n_process_with_extra else 0)
-            if run_no == n_runs_set - 1:
-                set_no += 1
-                run_no = -1
+        # Check if moving to the next set of runs
+        n_runs_set = n_runs_per_process + (1 if set_no < n_process_with_extra else 0)
+        if run_no == n_runs_set - 1:
+            set_no += 1
+            run_no = -1
 
-            # Advance counter
-            run_no += 1
+        # Advance counter
+        run_no += 1
 
 def run_model_parallel(list_inputs):
     global outdict
@@ -172,8 +169,10 @@ def run_model_parallel(list_inputs):
                 ds = dataset.load()
                 if run_type == 'long':
                     # seasonal mass balance
-                    winter_MAE,summer_MAE,annual_MAE = seasonal_mass_balance(ds,method='MAE')
-                    winter_ME,summer_ME,annual_ME = seasonal_mass_balance(ds,method='ME')
+                    error_dict = seasonal_mass_balance(ds,method=['MAE','ME'])
+                    winter_MAE, winter_ME = error_dict['winter']
+                    summer_MAE, summer_ME = error_dict['summer']
+                    annual_MAE, annual_ME = error_dict['annual']
                     seasonal_MAE = np.mean([winter_MAE, summer_MAE])
                     seasonal_ME = np.mean([winter_ME, summer_ME])
                     results = {'winter_MAE':winter_MAE,'summer_MAE':summer_MAE,
