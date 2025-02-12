@@ -139,7 +139,7 @@ def seasonal_mass_balance(ds,method='MAE'):
         for mm in method:
             out_dict['winter'].append(objective(winter_model,winter_data,mm))
             out_dict['summer'].append(objective(summer_model,summer_data,mm))
-            out_dict['annual'].append(objective(annual_model,annual_data,method))
+            out_dict['annual'].append(objective(annual_model,annual_data,mm))
         return out_dict
 
 def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='default'):

@@ -15,11 +15,11 @@ import pygem_eb.massbalance as mb
 from objectives import *
 
 # OPTIONS
-repeat_run = False  # True if restarting an already begun run
+repeat_run = False   # True if restarting an already begun run
 run_type = '2024'   # 'long' or '2024'
 # Define sets of parameters
 params = {'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
-          'kp':[1,1.5,2,2.5,3,3.5]} # 
+          'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5]} # 
 
 # Read command line args
 args = sim.get_args()
@@ -44,9 +44,11 @@ if 'trace' in eb_prms.machine:
     eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
 
 if repeat_run:
-    date = '01_22'
+    date = '02_11'
     n_today = '0'
     out_fp = f'{date}_{args.site}_{n_today}/'
+    if not os.path.exists(eb_prms.output_filepath + out_fp):
+        os.mkdir(eb_prms.output_filepath + out_fp)
 else:
     date = str(pd.Timestamp.today()).replace('-','_')[5:10]
     n_today = 0
@@ -211,7 +213,7 @@ with Pool(n_processes) as processes_pool:
     
 missing = []
 for run in all_runs:
-    fn = run[4]
+    fn = run[-1]
     if not os.path.exists(eb_prms.output_filepath + fn + '0.pkl'):
         missing.append(run)
 n_missing = len(missing)
