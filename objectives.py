@@ -46,7 +46,7 @@ def objective(model,data,method):
         return np.mean(model - data)
     
 # ========== 1. SEASONAL MASS BALANCE ==========
-def seasonal_mass_balance(ds,method='MAE'):
+def seasonal_mass_balance(ds,method='MAE',out=None):
     """
     Compares seasonal mass balance measurements from
     USGS stake surveys to a model output.
@@ -129,7 +129,16 @@ def seasonal_mass_balance(ds,method='MAE'):
     assert annual_model.shape == annual_data.shape    
 
     # Assess error
-    if isinstance(method, str):
+    if out == 'data':
+        out_dict = {}
+        for var in mb_dict:
+            out_dict[var+'_model'] = mb_dict[var]
+        out_dict['bw_data'] = winter_data
+        out_dict['bs_data'] = summer_data
+        out_dict['ba_data'] = annual_data
+        out_dict['years'] = years[1:]
+        return out_dict
+    elif isinstance(method, str):
         winter_error = objective(winter_model,winter_data,method) 
         summer_error = objective(summer_model,summer_data,method) 
         annual_error = objective(annual_model,annual_data,method)
