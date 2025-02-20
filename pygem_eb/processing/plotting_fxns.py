@@ -68,7 +68,7 @@ def getds(file):
     return ds,start,end
 
 def simple_plot(ds,time,vars,res='d',t='',cumMB=True,
-                skinny=True,save_fig=False,new_y=['None']):
+                skinny=True,save_fig=False,new_y=['None'],date_form=None):
     """
     Returns a simple timeseries plot of the variables as lumped in the input.
 
@@ -135,7 +135,11 @@ def simple_plot(ds,time,vars,res='d',t='',cumMB=True,
                 axis.set_ylabel(varprops[var]['label'])
         axis.tick_params(length=5)
         axis.legend(bbox_to_anchor=(1.01,1),loc='upper left')
-    date_form = mpl.dates.DateFormatter('%d %b')
+    print(date_form)
+    if date_form is None:
+        date_form = mpl.dates.DateFormatter('%d %b')
+    elif type(date_form) == str:
+        date_form = mpl.dates.DateFormatter(date_form)
     axis.xaxis.set_major_formatter(date_form)
     fig.suptitle(t)
     axis.set_xlim(start,end)

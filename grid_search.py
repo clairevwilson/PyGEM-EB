@@ -190,7 +190,7 @@ def run_model_parallel(list_inputs):
 
                 elif run_type == '2024':
                     MAE = cumulative_mass_balance(ds,method='MAE')
-                    ME = cumulative_mass_balance(ds,method='MAE')
+                    ME = cumulative_mass_balance(ds,method='ME')
                     results = {'MAE':MAE,'ME':ME}
 
                 # Store the attributes in the results dict

@@ -93,13 +93,12 @@ def seasonal_mass_balance(ds,method='MAE',out=None):
             annual_dates += pd.Timedelta(minutes=30)
 
         # Sum model mass balance
-        if year == years[-1]:
-            years = years[:-1]
-            break
-        else:
-            wds = ds.sel(time=winter_dates).sum()
-            sds = ds.sel(time=summer_dates).sum()
-            ads = ds.sel(time=annual_dates).sum()
+        if summer_dates[-1] not in ds.time.values:
+            summer_dates = pd.date_range(summer_dates[0], ds.time.values[-1],freq='h')
+            annual_dates = pd.date_range(annual_dates[0], ds.time.values[-1],freq='h')
+        wds = ds.sel(time=winter_dates).sum()
+        sds = ds.sel(time=summer_dates).sum()
+        ads = ds.sel(time=annual_dates).sum()
         winter_mb = wds.accum + wds.refreeze - wds.melt
         internal_acc = ds.sel(time=summer_dates[-2]).cumrefreeze.values
         summer_mb = sds.accum + sds.refreeze - sds.melt - internal_acc
@@ -129,20 +128,13 @@ def seasonal_mass_balance(ds,method='MAE',out=None):
     assert annual_model.shape == annual_data.shape    
 
     # Assess error
-    if out == 'data':
-        out_dict = {}
-        for var in mb_dict:
-            out_dict[var+'_model'] = mb_dict[var]
-        out_dict['bw_data'] = winter_data
-        out_dict['bs_data'] = summer_data
-        out_dict['ba_data'] = annual_data
-        out_dict['years'] = years[1:]
-        return out_dict
-    elif isinstance(method, str):
+    if isinstance(method, str) and out is None:
         winter_error = objective(winter_model,winter_data,method) 
         summer_error = objective(summer_model,summer_data,method) 
         annual_error = objective(annual_model,annual_data,method)
         return winter_error, summer_error, annual_error
+    elif out == 'data':
+        return years[1:],winter_model,winter_data,summer_model,summer_data,annual_model,annual_data
     else:
         out_dict = {'winter':[],'summer':[],'annual':[]}
         for mm in method:
@@ -380,9 +372,14 @@ def cumulative_mass_balance(ds,method='MAE',out=None):
             mbsa = df_mb.loc[df_mb['Year'] == year,'summer_accumulation'].values[0]
             mbs_measured = mba - mbw + mbsa
 
+            spring_date = df_mb.loc[df_mb['Year'] == year,'spring_date'].values[0]
+            fall_date = df_mb.loc[df_mb['Year'] == year,'fall_date'].values[0]
+            if fall_date not in ds.time.values:
+                fall_date = ds.time.values[-1]
+            if spring_date not in ds.time.values:
+                spring_date = ds.time.values[0]
+
             # Retrieve modeled summer MB
-            spring_date = str(year)+'-04-20 00:00'
-            fall_date = str(year)+'-08-20 00:00'
             melt_dates = pd.date_range(spring_date,fall_date,freq='h')
             ds_summer = ds.sel(time=melt_dates)
             mbs_ds = ds_summer.accum + ds_summer.refreeze - ds_summer.melt
@@ -472,8 +469,8 @@ def cumulative_mass_balance(ds,method='MAE',out=None):
 
     if out == 'mbs':
         return mbs_modeled,mbs_measured
-    elif out == 'diff':
-        return ds.time.values[idx_data], np.array(model - data)
+    elif out == 'data':
+        return ds.time.values[idx_data], model, data
     else:
         return error
         
