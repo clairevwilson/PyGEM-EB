@@ -1,0 +1,1247 @@
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import itertools
+import socket
+import copy
+import os,sys
+import pickle
+
+# Get the base filepath
+machine = socket.gethostname()
+if 'trace' in machine:
+    base_fp = '/trace/group/rounce/cvwilson/Output/'
+    pygem_fp = '/trace/home/cvwilson/research/PyGEM-EB/'
+elif os.path.exists('/mnt/d/'):
+    base_fp = '/mnt/d/grid_search/'
+    pygem_fp = '/home/claire/research/PyGEM-EB/'
+else:
+    base_fp = '/home/claire/research/Output/EB/'
+    pygem_fp = '/home/claire/research/PyGEM-EB/'
+sys.path.append(pygem_fp)
+from objectives import *
+from pygem_eb.processing.plotting_fxns import *
+import pygem_eb.processing.gridsearch_processing as gsproc
+
+# Create some dictionaries with useful information
+labels = {'kp':'Precipitation factor','kw':'Wind factor','c5':'Densification c$_5$'}      # Labels for the different parameters we varied
+methodlabels = {'MAE':'MAE','ME':'Bias','RMSE':'RMSE','MdAE':'mAE'}                                          # Labels for the different error methods
+errorlabels = {'seasonal':'Seasonal mass balance (m w.e.)',                                     # Labels for the different error metrics with units
+               'winter':'Winter mass balance (m w.e.)', 
+               'summer':'Summer mass balance (m w.e.)', 
+               'annual':'Annual mass balance (m w.e.)',
+               'snowdepth':'End-of-winter snow depth (m)',
+               'snowmass':'End-of-winter snow mass (m w.e.)',
+               'snowdensity':'End-of-winter snow density (kg m-3)',
+               '2024':'2024 surface height change (m)',
+               'weighted':'Weighted error (-)'} 
+shorterrorlabels = {'2024':'2024 surface height','snowdensity':'Snow density','snowdepth':'Snow depth','snowmass':'Snow mass',
+                    'seasonal':'Seasonal MB','winter':'Winter MB','summer':'Summer MB','annual':'Annual MB'}
+units = {'2024':'m','snowdensity':'kg m$^{-3}$','snowdepth':'m','winter':'m w.e.','summer':'m w.e.','annual':'m w.e.'}
+param_labels = {'kp':'Precipitation factor','c5':'Densification parameter'}
+medians = {'kp':'2.6','c5':'0.024'}                                              # Median value of each of the parameters
+sitedict = {'2024':['AB','ABB','B','BD','D','T'],'long':['A','AU','B','D']}            # Dictionary of sites in the 2024 and long run
+all_sites = sitedict['long']+sitedict['2024']+['mean']                                 # List all sites
+run_info = {'long':{'date':'02_11', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16)
+            '2024':{'date':'02_12', 'idx':'0'}}                     # (12_06)
+params = {'c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
+          'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5]} # 
+for key in params:                                                  # Convert params to strings for processing
+    for v,value in enumerate(params[key]):
+        params[key][v] = str(value)
+
+# Load diverging cmaps
+diverging_cmaps = []
+for i in range(5):
+    with open(pygem_fp + f'data/cmaps/custom_divergent_cmap_{i}.pkl','rb') as f:
+        diverging_cmaps.append(pickle.load(f))
+
+def plot_any(c5,kp,site,result_dict,plot_type='seasonal'):
+    if '2024' in plot_type:
+        date = run_info['2024']['date']
+        idx = run_info['2024']['idx']
+        setno = result_dict[c5][kp][site]['2024_set_no']
+        runno = result_dict[c5][kp][site]['2024_run_no']
+    else:
+        date = run_info['long']['date']
+        idx = run_info['long']['idx']
+        setno = result_dict[c5][kp][site]['set_no']
+        runno = result_dict[c5][kp][site]['run_no']
+    ds,_,_ = getds(f'/trace/group/rounce/cvwilson/Output/{date}_{site}_{idx}/grid_{date}_set{setno}_run{runno}_0.nc')
+    if plot_type == 'seasonal':
+        plot_seasonal_mass_balance(ds)
+    elif plot_type == 'annual':
+        plot_seasonal_mass_balance(ds, plot_var='ba')
+    else:
+        plot_2024_mass_balance(ds)
+    plt.show()
+
+def pareto_sweep(points):
+    """
+    Returns the indices of the pareto front points in the passed array
+    """
+    # Sort points by x-coordinate, then by y-coordinate
+    sorted_indices = np.argsort(points[:, 0])
+    sorted_points = points[sorted_indices]
+    
+    pareto_indices = []
+    current_min_y = np.inf
+
+    for i, point in enumerate(sorted_points):
+        if point[1] < current_min_y: # F
+            pareto_indices.append(sorted_indices[i])  # Store the original index
+            current_min_y = point[1]
+
+    return np.array(pareto_indices)
+
+def get_pareto_fronts(plot_errors, result_dict, plot=True,
+                      colored_param='kp', subset='calib', site='mean',
+                      savefig=False):
+    """
+    Takes all combinations of error metrics and finds the optimal solutions
+    for each pair of metrics
+    """
+    n_comb = len(list(itertools.combinations(plot_errors,2)))
+    
+    if plot:
+        # Create the plot axes
+        fig = plt.figure(figsize=(7,6))
+        n_rows = n_comb // 2
+        n_rows = n_rows + 1 if n_comb % 2 != 0 else n_rows
+        gs = mpl.gridspec.GridSpec(n_rows, 3, width_ratios=[1, 1, 0.05], wspace=0.5, hspace=0.5)
+        axes = [fig.add_subplot(gs[i // 2, i % 2]) for i in range(n_comb)]
+
+        # Style
+        if colored_param == 'kp':
+            vmin,vmax = (1,3.5)
+        elif colored_param == 'c5':
+            vmin,vmax = (0.018,0.028)
+        norm = mpl.colors.Normalize(vmin=vmin,vmax=vmax)
+        cmap = mpl.colormaps.get_cmap('viridis_r')
+
+    # Find the pareto fronts
+    all_pareto_fronts = []
+    for i, (error_x, error_y) in enumerate(itertools.combinations(plot_errors,2)):
+        list_x = []
+        list_y = []
+        list_params = {'c5':[],'kp':[]}
+        if subset:
+            error_x_use = error_x + '_MAE_' + subset
+            error_y_use = error_y + '_MAE_' + subset
+        else:
+            error_x_use = error_x + '_MAE'
+            error_y_use = error_y + '_MAE'
+        for c5 in params['c5']:
+            for kp in params['kp']:
+                error_x_point = result_dict[c5][kp][site][error_x_use]
+                error_y_point = result_dict[c5][kp][site][error_y_use]  
+
+                # Add to lists
+                list_params['c5'].append(float(c5))
+                list_params['kp'].append(float(kp))
+                list_x.append(error_x_point)
+                list_y.append(error_y_point)
+
+        # Plot
+        if plot:
+            ax = axes[i]
+            ax.scatter(list_x,list_y,color=cmap(norm(list_params[colored_param]))) 
+            ax.set_xlabel(shorterrorlabels[error_x],fontsize=10,labelpad=0)
+            ax.set_ylabel(shorterrorlabels[error_y],fontsize=10)  
+            ax.tick_params(length=5)    
+        
+        # Non=dominated
+        idx_non_dom = pareto_sweep(np.array([list_x,list_y]).T)
+        fronts = []
+        for i in idx_non_dom:
+            c5 = str(list_params['c5'][i])
+            kp = str(list_params['kp'][i]).replace('.0','')
+            fronts.append((str(c5),str(kp)))
+            if plot:
+                ax.scatter(list_x[i],list_y[i],marker='*',color='red',s=12)
+        all_pareto_fronts.append(fronts)
+        # print(error_x, error_y, fronts)
+
+    if plot:
+        # Add colorbar
+        sm = mpl.cm.ScalarMappable(cmap=cmap,norm=norm)
+        sm.set_array([])
+        cbar_ax = fig.add_subplot(gs[:, 2])
+        cbar = fig.colorbar(sm, orientation='vertical',cax=cbar_ax)
+        cbar.set_label(param_labels[colored_param],rotation=270,labelpad=15,fontsize=12)
+        fig.suptitle(methodlabels['MAE'],y=0.94)
+        if savefig:
+            plt.savefig(base_fp+f'pareto_front_scatter_{subset}MAE_{site}.png',dpi=180,bbox_inches='tight')
+        plt.show()
+    else:
+        return all_pareto_fronts
+    
+def plot_pareto_PMF(error_list, pareto_fronts, result_dict,
+                    metric='MAE', plot_type='PMF', site='mean',
+                    savefig=False):
+    # Define dictionary to store all pareto error
+    error_dict = {}
+    for error in error_list:
+        error_dict[error] = []
+    
+    # Store c5 and kp of pareto fronts
+    params_list = {'c5':[],'kp':[]}
+    for (c5,kp) in pareto_fronts:
+        c5 = str(c5)
+        kp = str(kp).replace('.0','')
+        params_list['c5'].append(c5)
+        params_list['kp'].append(kp)
+        for error in error_dict:
+            error_dict[error].append(result_dict[c5][kp][site][error+'_'+metric])
+    
+    # Create axes
+    n_plots = len(error_list)
+    n_rows = n_plots // 2
+    n_rows = n_rows + 1 if n_plots % 2 != 0 else n_rows
+    fig,axes = plt.subplots(n_rows,2,figsize=(5,n_rows*1.5),gridspec_kw={'hspace':0.6})
+    axes = axes.flatten()
+    for i,ax in enumerate(axes):
+        errors = error_dict[list(error_dict.keys())[i]]
+        if plot_type == 'CDF':
+            sorted_list = np.sort(errors)
+            cdf = np.arange(1, len(sorted_list)+1) / len(sorted_list)
+            ax.plot(sorted_list, cdf)
+        elif plot_type == 'PMF':
+            ax.hist(errors, bins=10)
+        elif plot_type == 'PDF':
+            ax.hist(errors, bins=10,density=True)
+        if metric == 'ME':
+            ax.axvline(0,linewidth=0.5,color='black')
+        ax.set_title(shorterrorlabels[list(error_dict.keys())[i]]+' '+plot_type)
+        ax.tick_params(length=5)
+    name = 'bias' if metric == 'ME' else metric
+    fig.suptitle(f'{plot_type} of simulation {name} of Pareto front parameter sets',y=1.03)
+    fig.supylabel('Count',x=0.06)
+    if savefig:
+        plt.savefig(base_fp+f'pareto_{metric}_{plot_type}_{site}.png',dpi=180,bbox_inches='tight')
+    plt.show()
+
+def plot_pareto_params(pareto_fronts, savefig=False):
+    """Plots the locations of Pareto fronts in parameter space"""
+    fig,ax = plt.subplots(gridspec_kw={'hspace':0.6},figsize=(6,3))
+    kp_float = np.array(params['kp'], dtype=float)
+    c5_float = np.array(params['c5'], dtype=float)
+    x,y = np.meshgrid(kp_float, c5_float)
+    ax.scatter(x.flatten(),y.flatten(),color='gray',s=3)
+
+    dkp = 0.033
+    dc5 = 0.00033
+    for (c5,kp) in pareto_fronts: #[pareto_fronts[0]]:
+        c5 = float(c5)
+        kp = float(kp)
+        # ax.scatter(kp+dkp, c5+dc5, s=50, marker='s', facecolors='blue',edgecolors='black')
+        # ax.scatter(kp-dkp, c5+dc5, s=50, marker='s', facecolors='blue',edgecolors='black')
+        # ax.scatter(kp+dkp, c5-dc5, s=50, marker='s', facecolors='blue',edgecolors='black')
+        # ax.scatter(kp-dkp, c5-dc5, s=50, marker='s', facecolors='blue',edgecolors='black')
+        ax.scatter(kp,c5,color='red',s=50)
+    ax.set_xlabel('Precipitation factor $k_p$')
+    ax.set_ylabel('Densification parameter $c_5$')
+    ax.tick_params(length=5)
+    ax.set_xlim(kp_float[0] - 0.15, kp_float[-1] + 0.15)
+    ax.set_ylim(c5_float[0] - 0.001, c5_float[-1] + 0.001)
+    fig.suptitle('Pareto front parameter combinations')
+    if savefig:
+        plt.savefig(base_fp+f'pareto_params.png',dpi=180,bbox_inches='tight')
+    plt.show()
+    # Plotting PMF of pareto params:
+    # for i,ax in enumerate(axes):
+    #     param = list(params_list.keys())[i]
+    #     errors = np.array(params_list[param],dtype=float)
+    #     if plot_type == 'CDF':
+    #         sorted_list = np.sort(errors)
+    #         cdf = np.arange(1, len(sorted_list)+1) / len(sorted_list)
+    #         ax.plot(sorted_list, cdf)
+    #     elif plot_type == 'PMF':
+    #         ax.hist(errors, bins=10)
+    #     elif plot_type == 'PDF':
+    #         ax.hist(errors, bins=10,density=True)
+    #     ax.set_title(f'${param[0]}_{param[1]}$')
+    #     ax.tick_params(length=5)
+    # fig.suptitle(f'{plot_type} of Pareto front parameters',y=1.03)
+    # fig.supylabel('Count')
+    # plt.savefig(base_fp+f'pareto_parameter_{plot_type}.png',dpi=180,bbox_inches='tight')
+
+def plot_pareto_heatmap(pareto_fronts, result_dict, error_names,
+                        savefig=False, metric='MAE', subset='calib', site='mean'):
+    n_plots = len(error_names)
+    n_rows = n_plots // 2
+    n_rows = n_rows + 1 if n_plots % 2 != 0 else n_rows
+    fig,axes = plt.subplots(n_rows, 2, figsize=(6,n_rows*2),
+                             sharex=True, sharey=True, gridspec_kw={'hspace':0.3})
+    axes = axes.flatten()
+    
+    for ax in axes:
+        ax.set_xticks([1.125,2.125,3.125])
+        ax.set_xticklabels(['1','2','3'])
+        ax.set_yticks([0.019,0.023,0.027,0.031])
+        ax.set_yticklabels(['0.018','0.022','0.026','0.03'])
+        ax.set_xticks([1.375,1.625,1.875,2.375,2.625,2.875,3.375,3.625], minor=True)
+        ax.set_yticks([0.021,0.025,0.029],minor=True)
+        ax.tick_params(which='major',length=5)
+        ax.tick_params(which='minor',length=2)
+
+    if 'AE' in metric:
+        cmaps = ['Greens','Purples','Blues','Reds','Oranges','Greys']
+    else:
+        cmaps = diverging_cmaps
+    cmap_max = {'summer': 0.9, 'winter': 0.3, 'snowdensity':200, 'snowdepth':1,'snowmass':0.6}
+    all_c5 = [float(c) for c in params['c5']]
+    all_kp = [float(k) for k in params['kp']]
+    for e,error in enumerate(error_names):
+        ax = axes[e]
+        error += '_' + metric
+        if subset is not None:
+            error += '_' + subset
+        errors = np.empty((len(all_c5),len(all_kp)))
+        max_value = 0
+        min_value = np.inf
+        for c,c5 in enumerate(all_c5):
+            for k,kp in enumerate(all_kp):
+                error_value = result_dict[str(c5)][str(kp).replace('.0','')][site][error]
+                errors[c,k] = error_value
+                # if (str(c5),str(kp).replace('.0','')) in pareto_fronts:
+                #     if error_value > max_value:
+                #         max_value = error_value
+                #     if error_value < min_value:
+                #         min_value = error_value
+
+        min_value = np.min(errors)
+        if 'AE' in metric:
+            max_value = cmap_max[error.split('_')[0]]
+        else:
+            cmap_max_me = {'summer': 1, 'winter': 0.2, 'snowdensity':200, 'snowdepth':1.5,'snowmass':0.6}
+            max_value = cmap_max_me[error.split('_')[0]]
+            greater = max(np.abs(max_value), np.abs(min_value))
+            max_value, min_value = (greater, -greater)
+        kp_grid = all_kp + [3.75]
+        c5_grid = all_c5 + [0.032]
+        c = ax.pcolormesh(kp_grid, c5_grid, errors, cmap=cmaps[e], 
+                          vmin=min_value, vmax=max_value)
+        cbar = plt.colorbar(c, ax=ax)
+        cbar.ax.tick_params(length=5)
+
+        vertices = [((float(x2)),float(x1)) for x1,x2 in pareto_fronts]
+        for kp, c5 in vertices:
+            rect = mpl.patches.Rectangle((kp, c5), all_kp[1] - all_kp[0], all_c5[1] - all_c5[0], linewidth=2, edgecolor='k', facecolor='none')
+            ax.add_patch(rect)
+
+        ax.set_title(errorlabels[error.split('_')[0]])
+    fig.suptitle(f'Heatmap of {methodlabels[metric]} for Pareto front solutions')
+    fig.supylabel(param_labels['c5'], x=-0.01)
+    fig.supxlabel(param_labels['kp'])
+
+    if savefig:
+        plt.savefig(base_fp+f'pareto_params_heatmap_{metric}.png',dpi=180,bbox_inches='tight')
+    plt.show()
+
+def plot_difference_by_param(best, result_dict, site='B', plot_vars=['2024','annual'],
+                             include_best=False, savefig=False):
+    if type(site) == str:
+        site_dict = {'long':site,'2024':site}
+    elif type(site) == dict:
+        site_dict = site
+
+    # Create fig and axes
+    n_rows = len(plot_vars)+1
+    height_ratios = [1]*n_rows
+    height_ratios[-1] = 0.1
+    fig, axes = plt.subplots(n_rows,3,figsize=(8,n_rows*1.5),
+                             gridspec_kw={'wspace':0.28, 'hspace':0.4}, 
+                             height_ratios=height_ratios)
+    cmaps = [mpl.colormaps.get_cmap('viridis_r'),mpl.colormaps.get_cmap('magma_r')]
+    both_vars = [params['c5'],params['kp'][::2]]
+
+    # Top row is for colorbar; left column is empty
+    axes[n_rows-1,0].axis('off')
+    for j,param in enumerate(['c5','kp']):
+        param_list = params[param][::2] if param == 'kp' else params[param]
+        min,max = (np.min(np.array(param_list,dtype=float)),np.max(np.array(param_list,dtype=float)))
+        cmap = cmaps[j]
+        norm =  mpl.colors.Normalize(vmin=min,vmax=max)
+        title = '$'+param[0]+'_'+param[1]+'$'
+        value = '0.032' if param == 'c5' else '4'
+        diff = 0.002 if param == 'c5' else 0.5
+        param_arr = np.array(param_list).astype(float)
+        boundaries = np.append(np.array([param_arr[0] - diff]), param_arr)
+        ticks = np.append(param_arr, value).astype(str)
+        ticks[1::2] = ''
+        if j == 1:
+            ticks[-1] = ''
+        cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+                    cax=axes[n_rows-1,j+1],
+                    orientation='horizontal',
+                    boundaries=boundaries,ticks=boundaries,
+                    spacing='proportional')
+        cb.ax.set_xticklabels(['        '+t for t in ticks])
+        cb.ax.set_ylabel(title)
+
+    # ===== 2024 panels =====
+    if '2024' in plot_vars:
+        row_2024 = plot_vars.index('2024') + 1
+        site_2024 = site_dict['2024']
+        axes[row_2024,0].set_ylabel('2024 surface height\nchange (m)',fontsize=11)
+
+        # Data filepath
+        fp_gnssir = f'../MB_data/Stakes/gulkana{site}24_GNSSIR.csv'
+
+        # Load GNSSIR daily MB
+        df_mb_dict = {}
+        if os.path.exists(fp_gnssir):
+            df_mb_daily = pd.read_csv(fp_gnssir)
+            df_mb_daily.index = pd.to_datetime(df_mb_daily['Date'])
+            df_mb_daily['CMB'] -= df_mb_daily['CMB'].iloc[0]
+            df_mb_dict['GNSS_IR'] = df_mb_daily.sort_index()
+
+        if 'GNSS_IR' in df_mb_dict:
+            df_mb_daily = df_mb_dict['GNSS_IR']
+            axes[row_2024,0].plot(df_mb_daily.index,df_mb_daily['CMB'],label='GNSS-IR',linestyle='--',color='black')
+            # error bounds
+            lower = df_mb_daily['CMB'] - df_mb_daily['sigma']
+            upper = df_mb_daily['CMB'] + df_mb_daily['sigma']
+            axes[row_2024,0].fill_between(df_mb_daily.index,lower,upper,alpha=0.2,color='black')
+
+        for j in range(2):
+            ax = axes[row_2024,j+1]
+            param_list = both_vars[j]
+            min,max = (np.min(np.array(param_list,dtype=float)),np.max(np.array(param_list,dtype=float)))
+            cmap = cmaps[j]
+            norm =  mpl.colors.Normalize(vmin=min,vmax=max)
+            for value in param_list:
+                if j == 0:
+                    c5 = value
+                    kp = best[1]
+                elif j == 1:
+                    c5 = best[0]
+                    kp = value
+                ds = gsproc.get_any(c5,kp,site_2024,result_dict,'2024')
+                time,model,data = cumulative_mass_balance(ds,out='data')
+                diff = model - data
+                ax.plot(time,diff,color=cmap(norm(float(value))),label=value)
+            ax.axhline(0,color='k',linewidth=0.5)
+            ax.set_ylabel('')
+
+        # Best 2024 run
+        if include_best:
+            c5,kp = best
+            ds = gsproc.get_any(c5,kp,site_2024,result_dict,'2024')
+            time,model,data = cumulative_mass_balance(ds,out='data')
+            axes[row_2024,0].plot(time, model, color='red',label= 'Best 2024 parameters')
+            axes[row_2024,1].axhline(0,color='k',linewidth=0.5)
+
+        for ax in axes[row_2024,:]:
+            ax.set_xticks(pd.date_range('2024-04-20','2024-08-20',freq='MS'))
+            ax.xaxis.set_major_formatter(mpl.dates.DateFormatter('%b-%d'))
+            ax.set_xlim(pd.to_datetime('2024-04-20'),pd.to_datetime('2024-08-09'))
+
+    # ===== Seasonal panels =====
+    if 'winter' in plot_vars or 'summer' in plot_vars or 'annual' in plot_vars:
+        site_long = site_dict['long']
+        dummy = gsproc.get_any('0.018','2',site_long,result_dict)
+        years,_,winter_data,_,summer_data,_,annual_data = seasonal_mass_balance(dummy, out='data')
+        if 'winter' in plot_vars:
+            row_winter = plot_vars.index('winter')
+            axes[row_winter,0].plot(years, winter_data, label='USGS',linestyle='--',color='black')
+            axes[row_winter,0].set_ylabel('Winter mass\nbalance (m w.e.)',fontsize=11)
+            for ax in axes[row_winter]:
+                ax.set_xlim(2001,2024)
+                ax.set_xticks([2005,2015])
+            for ax in axes[row_winter,1:]:
+                ax.axhline(0,color='k',linewidth=0.5)
+        if 'summer' in plot_vars:
+            row_summer = plot_vars.index('summer')
+            axes[row_summer,0].plot(years, summer_data, label='USGS',linestyle='--',color='black')
+            axes[row_summer,0].set_ylabel('Summer mass\nbalance (m w.e.)',fontsize=11)
+            for ax in axes[row_summer]:
+                ax.set_xlim(2001,2024)
+                ax.set_xticks([2005,2015])
+            for ax in axes[row_summer,1:]:
+                ax.axhline(0,color='k',linewidth=0.5)
+        if 'annual' in plot_vars:
+            row_annual = plot_vars.index('annual')
+            axes[row_annual,0].plot(years, annual_data, label='USGS',linestyle='--',color='black')
+            axes[row_annual,0].set_ylabel('Annual mass\nbalance (m w.e.)',fontsize=11)
+            for ax in axes[row_annual]:
+                ax.set_xlim(2001,2024)
+                ax.set_xticks([2005,2015])
+            for ax in axes[row_annual,1:]:
+                ax.axhline(0,color='k',linewidth=0.5)
+
+        for j in range(2):
+            param_list = both_vars[j]
+            cmap = cmaps[j]
+            norm =  mpl.colors.Normalize(vmin=0,vmax=len(param_list))
+            for i,value in enumerate(param_list):
+                if j == 0:
+                    c5 = value
+                    kp = best[1]
+                elif j == 1:
+                    c5 = best[0]
+                    kp = value
+                ds = gsproc.get_any(c5,kp,site_long,result_dict)
+                time,wmodel,wdata,smodel,sdata,amodel,adata = seasonal_mass_balance(ds,out='data')
+                if 'winter' in plot_vars:
+                    diff = wmodel - wdata
+                    axes[row_winter,j+1].plot(time,diff,color=cmap(norm(i)))
+                    axes[row_winter,j+1].set_ylim(-1.5,1.5)
+                if 'summer' in plot_vars:
+                    diff = smodel - sdata
+                    axes[row_summer,j+1].plot(time,diff,color=cmap(norm(i)))
+                    axes[row_summer,j+1].set_ylim(-2.5,2.5)
+                if 'annual' in plot_vars:
+                    diff = amodel - adata
+                    axes[row_annual,j+1].plot(time,diff,color=cmap(norm(i)))
+                    axes[row_annual,j+1].set_ylim(-1.5,1.5)
+
+        # Best annual run
+        if include_best:
+            c5,kp = best
+            ds = gsproc.get_any(c5,kp,site_long,result_dict)
+            years,_,_,_,_,annual_model,annual_data = seasonal_mass_balance(ds,out='data')
+            axes[row_annual,0].plot(years, annual_model, color='red', label= 'Best annual MB parameters')
+
+    # ===== Snowpit panels =====
+    if 'snowdensity' in plot_vars or 'snowdepth' in plot_vars:
+        site_long = site_dict['long']
+        dummy = gsproc.get_any('0.018','2',site_long,result_dict)
+        years,data = snowpits(dummy,out='data')
+        if 'snowdensity' in plot_vars:
+            row_density = plot_vars.index('snowdensity')
+            axes[row_density,0].plot(years, data['snowdensity_meas'], label='USGS',linestyle='--',color='black')
+            axes[row_density,0].set_ylabel('End-of-winter snow\ndensity (kg m$^{-3}$)',fontsize=11)
+            for ax in axes[row_density]:
+                ax.set_xlim(2001,2024)
+                ax.set_xticks([2005,2015])
+            for ax in axes[row_density,1:]:
+                ax.axhline(0,color='k',linewidth=0.5)
+        if 'snowdepth' in plot_vars:
+            row_depth = plot_vars.index('snowdepth')
+            axes[row_depth,0].plot(years, data['snowdepth_meas'], label='USGS',linestyle='--',color='black')
+            axes[row_depth,0].set_ylabel('End-of-winter snow\ndepth (m)',fontsize=11)
+            for ax in axes[row_depth]:
+                ax.set_xlim(2001,2024)
+                ax.set_xticks([2005,2015])
+            for ax in axes[row_depth,1:]:
+                ax.axhline(0,color='k',linewidth=0.5)
+        for j in range(2):
+            param_list = both_vars[j]
+            cmap = cmaps[j]
+            norm =  mpl.colors.Normalize(vmin=0,vmax=len(param_list))
+            for i,value in enumerate(param_list):
+                if j == 0:
+                    c5 = value
+                    kp = best[1]
+                elif j == 1:
+                    c5 = best[0]
+                    kp = value
+                ds = gsproc.get_any(c5,kp,site_long,result_dict)
+                years,data = snowpits(ds,out='data')
+                if 'snowdepth' in plot_vars:
+                    diff = data['snowdepth_mod'] - data['snowdepth_meas']
+                    axes[row_depth,j+1].plot(years,diff,color=cmap(norm(i)))
+                    axes[row_depth,j+1].set_ylim(-2.75,2.75)
+                if 'snowdensity' in plot_vars:
+                    diff = data['snowdensity_mod'] - data['snowdensity_meas']
+                    axes[row_density,j+1].plot(years,diff,color=cmap(norm(i)))
+                    axes[row_density,j+1].set_ylim(-275,275)
+        
+    axes[0,1].text(0.95,0.95, f'$c_5$ varies; $k_p={best[1]}$',transform=axes[0,1].transAxes,va='top',ha='right')
+    axes[0,2].text(0.95,0.95, f'$k_p$ varies; $c_5={best[0]}$',transform=axes[0,2].transAxes,va='top',ha='right')
+    for ax in axes.flatten():
+        ax.tick_params(length=5)
+    axes[0,0].set_title('Data',fontsize=12)
+    fig.text(0.67,0.9,'Modeled $-$ Measured by parameter',ha='center',va='center',fontsize=12)
+    if savefig:
+        plt.savefig(base_fp+f'all_tradeoffs.png',dpi=180,bbox_inches='tight')
+    plt.show()
+
+def plot_tradeoffs_2024(result_dict, best, site='B', savefig=False):
+    fig, axes = plt.subplots(1,2)
+    c5_best = best[0]
+    kp_best = best[1]
+    norm = mpl.colors.Normalize(vmin=0,vmax=len(params['c5'])-1)
+    cmap = mpl.colormaps.get_cmap('viridis_r')
+    for j,ax in enumerate(axes):
+        list_plots = []
+        if j == 0:
+            param_list = params['c5']
+        elif j == 1:
+            param_list = params['kp'][::2]
+        for i,value in enumerate(param_list):
+            if j == 0:
+                c5 = value
+                kp = kp_best
+            elif j == 1:
+                c5 = c5_best
+                kp = value
+            date = run_info['2024']['date']
+            idx = run_info['2024']['idx']
+            best_setno = result_dict[c5][kp][site]['set_no']
+            best_runno = result_dict[c5][kp][site]['run_no']
+            ds,_,_ = getds(base_fp + f'{date}_{site}_{idx}/grid_{date}_set{best_setno}_run{best_runno}_0.nc')
+            ax = plot_2024_mass_balance(ds,plot_ax=ax,label=c5,color=cmap(norm(i)))
+            plot_empty, = ax.plot(np.nan,np.nan,color=cmap(norm(i)),label=value)
+            list_plots.append(plot_empty)
+        ax.get_legend().remove()
+        title = '$c_5$' if j == 0 else '$k_p$'
+        ax.legend(handles=list_plots,fontsize=10,title=title)
+    ax.set_ylabel('')
+    if savefig:
+        plt.savefig(base_fp + f'tradeoffs_snowpits_site{site}.png',dpi=220,bbox_inches='tight')
+    plt.show()
+
+def plot_tradeoffs_annual(result_dict, best, site='B', savefig=False):
+    fig, all_axes = plt.subplots(2,2,width_ratios=[1,0.2],figsize=(6,8))
+    all_axes = all_axes.flatten()
+    axes = [all_axes[0],all_axes[2]]
+    site = 'B'
+
+    params_order = ['c5','kp']
+    for j,ax in enumerate(axes):
+        leg_ax = all_axes[j+1]
+        list_plots = []
+        param = params_order[j]
+        if param != 'c5':
+            param_list = params[param][::2]
+        else:
+            param_list = params['c5']
+        norm = mpl.colors.Normalize(vmin=0,vmax=len(param_list)-1)
+        cmap = mpl.colormaps.get_cmap('viridis_r')
+        for i,value in enumerate(param_list):
+            c5 = best[0]
+            kp = best[1]
+            if param == 'c5':
+                c5 = value
+            elif param == 'kp':
+                kp = value
+            date = run_info['long']['date']
+            idx = run_info['long']['idx']
+            best_setno = result_dict[c5][kp][site]['set_no']
+            best_runno = result_dict[c5][kp][site]['run_no']
+            ds,_,_ = getds(base_fp + f'{date}_{site}_{idx}/grid_{date}_set{best_setno}_run{best_runno}_0.nc')
+            ax = plot_seasonal_mass_balance(ds,plot_ax=ax,label=c5,color=cmap(norm(i)))
+            plot_empty, = ax.plot(np.nan,np.nan,color=cmap(norm(i)),label=value)
+            list_plots.append(plot_empty)
+        ax.get_legend().remove()
+        title = '$'+param[0]+'_'+param[1]+'$'
+        k = 1 if j == 0 else 3
+        all_axes[k].axis('off')
+        all_axes[k].legend(handles=list_plots,fontsize=10,title=title) #,bbox_to_anchor=(0.9,0.5))
+        ax.set_ylabel('')
+    fig.supylabel('Seasonal mass balance (m w.e.)')
+    if savefig:
+        plt.savefig(base_fp + f'tradeoffs_annual_site{site}.png',dpi=220,bbox_inches='tight')
+    plt.show()
+
+def plot_tradeoffs_snowpits(result_dict, best, site='B', years=range(2014,2019),
+                            savefig=False):
+    fig,axes = plt.subplots(2,6,figsize=(6,4.5),sharex=True,sharey=True,gridspec_kw={'hspace':0.12,'wspace':0.15},width_ratios=[1,1,1,1,1,1.2])
+    with open('../MB_data/pits.pkl', 'rb') as file:
+        site_profiles = pickle.load(file)
+    profiles = site_profiles[site]
+    params_order = ['c5','kp']
+    for j in range(2):
+        list_plots = []
+        param = params_order[j]
+        param_list = params[param] if param == 'c5' else params[param][::2]
+
+        # Create colormap
+        norm = mpl.colors.Normalize(vmin=0,vmax=len(param_list)-1)
+        cmap = mpl.colormaps.get_cmap('viridis_r')
+
+        # Create legend
+        leg_ax = axes[j,5]
+        list_plots = []
+
+        for i,value in enumerate(param_list):
+            # Grab color for the value
+            color = cmap(norm(i))
+
+            # Load in the datasets for the site
+            c5 = best[0]
+            kp = best[1]
+            if j == 0:
+                c5 = value
+            else:
+                kp = value
+            date = run_info['long']['date']
+            idx = run_info['long']['idx']
+            best_setno = result_dict[c5][kp][site]['set_no']
+            best_runno = result_dict[c5][kp][site]['run_no']
+            ds,_,_ = getds(base_fp + f'{date}_{site}_{idx}/grid_{date}_set{best_setno}_run{best_runno}_0.nc')
+
+            # Dummy plot for legend
+            plot, = leg_ax.plot(np.nan,np.nan,color=color,label=value)
+            list_plots.append(plot)
+            
+            # Loop through years (subplots)
+            for y,year in enumerate(years):
+                ax = axes[j,y]
+
+                # Some years don't have data: skip
+                if year in profiles['sbd']:
+                    # Load data
+                    sbd = profiles['sbd'][year]
+                    dens_meas = profiles['density'][year]
+
+                    # Load dataset on the date the snowpit was taken
+                    sample_date = profiles['date'][year]
+                    dsyear = ds.sel(time=pd.to_datetime(f'{year}-{sample_date}'))
+
+                    # Calculate layer density and determine snow indices
+                    ldz = dsyear.layerheight.values
+                    depth_mod = np.array([np.sum(ldz[:i+1])-(ldz[i]/2) for i in range(len(ldz))])
+                    dens_mod = dsyear['layerdensity'].values
+                    snow_idx = np.where(depth_mod < dsyear.snowdepth.values)[0]
+
+                    # Interpolate modeled density to the snowpit depths
+                    dens_interp = np.interp(sbd,depth_mod,dens_mod)
+                    diff = dens_interp - dens_meas
+
+                    # Plot the difference
+                    ax.plot(diff,profiles['sbd'][year],color=color)
+
+                    # Add year to the axis
+                    ax.text(-560,3.7,str(year),fontsize=10)
+
+                    # Find the snow depth
+                    snowdepth_mod = dsyear.snowdepth.values
+                    snowdepth_pit = sbd[~np.isnan(sbd)][-1]
+                    
+                    # Plot a bar of the snow depth
+                    bar_width = 40
+                    ax.bar(600-(i+1)*bar_width,snowdepth_mod,width=bar_width,color=color,align='edge')
+                    if i == 0:
+                        ax.axhline(snowdepth_pit,color='black',linestyle='--')
+
+        title = '$'+param[0]+'_'+param[1]+'$'
+        leg_ax.axis('off')
+        leg_ax.legend(handles=list_plots,fontsize=10,title=title,bbox_to_anchor=(1.1,1.1))
+
+    # Format axes
+    axes = axes.flatten()
+    for a,ax in enumerate(axes):
+        if a % 6 != 5:
+            ax.invert_yaxis()
+            ax.set_ylim(4,0)
+            ax.set_yticks([0,1,3])
+            ax.tick_params(length=5,labelsize=10)
+            ax.set_xlim(-600,600)
+            ax.set_xticks([-350,0,350])
+            if a % 5 != 0:
+                ax.tick_params('y',length=0)
+            ax.axvline(0,linewidth=0.5,color='black')
+    fig.supxlabel('Difference in modeled density (kg m$^{-3}$)',fontsize=12,y=-0.01)
+    fig.supylabel('Depth below surface (m)',fontsize=12,x=0.05)
+    fig.suptitle(f'Gulkana {site} end-of-winter snow density comparison',fontsize=13,y=0.93)
+    if savefig:
+        plt.savefig(base_fp + f'tradeoffs_snowpits_site{site}.png',dpi=220,bbox_inches='tight')
+    plt.show()
+
+def plot_tradeoffs(result_dict, error_names, site='mean',
+                   metric='MAE', subset='calib', savefig=False):
+    n_plots = len(error_names)
+    n_rows = n_plots // 2
+    n_rows = n_rows + 1 if n_plots % 2 != 0 else n_rows
+    fig,axes = plt.subplots(n_rows, 2, figsize=(6,n_rows*2), sharex=True, layout='constrained')
+
+    # Make colorbar
+    param_list = params['c5']
+    cbar_ax = fig.add_axes([1.05, 0.12, 0.02, 0.8])
+    cmap = mpl.colormaps.get_cmap('viridis_r')
+    norm =  mpl.colors.Normalize(vmin=0.018,vmax=0.03)
+    param_arr = np.array(param_list).astype(float)
+    boundaries = np.append(np.array([param_arr[0] - 0.002]), param_arr)
+    ticks = boundaries.astype(str)
+    ticks[0] = ''
+    ticks = [f'\n\n{t}' for t in ticks]
+    cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+                cax=cbar_ax,
+                orientation='vertical',
+                boundaries=boundaries,ticks=boundaries,
+                spacing='proportional')
+    cb.ax.set_yticklabels(ticks)
+    cb.ax.set_title('$c_5$')
+    
+    axes = axes.flatten()
+    for e,error_name in enumerate(error_names):
+        ax = axes[e]
+        # Parse run info
+        error_name += '_' + metric
+        if subset is not None:
+            error_name += '_' + subset
+
+        errors = np.empty([len(params['kp']),len(params['c5'])])
+
+        norm = mpl.colors.Normalize(vmin=0,vmax=len(params['c5'])-1)
+        cmap = mpl.colormaps.get_cmap('viridis_r')
+        for zz,c5 in enumerate(params['c5']):
+            for xx,kp in enumerate(params['kp']):
+                if error_name in result_dict[c5][kp][site]:
+                    errors[xx,zz] = result_dict[c5][kp][site][error_name]
+                else:
+                    errors[xx,zz] = np.nan
+            ax.plot(np.array(params['kp']).astype(float),errors[:,zz],color=cmap(norm(zz)),label=str(c5),marker='o',linewidth=0.7)
+            if metric == 'ME':
+                ax.axhline(0,color='k',linewidth=0.5)
+        if '2024' in error_name:
+            ax.legend(title=labels['Boone_c5'],fontsize=12,bbox_to_anchor=(1.5,0.5))
+        error_label = errorlabels[error_name.split('_')[0]]
+        title = f'{error_label} {methodlabels[metric]}'
+        if site not in ['mean','median']:
+            title += f' at site {site}'
+        ax.set_title(title)
+        ax.tick_params(length=5,labelsize=11)
+    if e < len(axes) - 1:
+        axes[-1].axis('off')
+    fig.supxlabel(labels['kp'])
+    if savefig:
+        if subset is not None:
+            metric += '_' + subset
+        plt.savefig(base_fp + f'tradeoffs_{metric}_site{site}.png',bbox_inches='tight')
+    plt.show()
+
+def plot_best_seasonal(best, result_dict, savefig=False):
+    fig, axes = plt.subplots(2,figsize=(6,5),gridspec_kw={'hspace':0.1},sharex=True)
+    list_plots = []
+    sites = ['A','AU','B','D']
+    colors = np.flip(['#F0E442','#E69F00','#009E73','#0072B2']) #
+    date = run_info['long']['date']
+    idx = run_info['long']['idx']
+    best_setno = result_dict[best[0]][best[1]]['B']['set_no']
+    best_runno = result_dict[best[0]][best[1]]['B']['run_no']
+
+    for ss,site in enumerate(sites):   
+        ds,s,e = getds(base_fp + f'{date}_{site}_{idx}/grid_{date}_set{best_setno}_run{best_runno}_0.nc')
+
+        color = colors[ss]
+        axes[0] = plot_seasonal_mass_balance(ds,plot_ax=axes[0],plot_var='bw',color=color)
+        axes[1] = plot_seasonal_mass_balance(ds,plot_ax=axes[1],plot_var='bs',color=color)
+        dummy_site, = axes[1].plot(np.nan,np.nan,color=color)
+        list_plots.append(dummy_site)
+    dummy_model, = axes[1].plot(np.nan,np.nan,color='gray')
+    dummy_meas, = axes[1].plot(np.nan,np.nan,color='gray',linestyle='--')
+    list_plots.append(dummy_model)
+    list_plots.append(dummy_meas)
+    axes[0].set_ylabel('Winter',fontsize=12)
+    axes[1].set_ylabel('Summer',fontsize=12)
+    axes[0].set_ylim(-0.5,2.5)
+    axes[1].set_ylim(-7,1)
+    axes[1].set_yticks([0,-2,-4,-6])
+    for i in range(2):
+        axes[i].get_legend().remove()
+    labels = ['Site '+sss for sss in sites]+['Modeled','Measured']
+    fig.legend(list_plots,labels,bbox_to_anchor=(1.12,0.8),fontsize=10)
+    fig.suptitle('Seasonal mass balance (m w.e.)',fontsize=12,y=0.96)
+    if savefig:
+        plt.savefig(base_fp + f'best_seasonal_mb.png',bbox_inches='tight')
+    plt.show()
+
+def plot_best_2024(best, result_dict, savefig=False):
+    elev = {'AB':1542,'ABB':1608,'B':1682,'BD':1742,'D':1843,'T':1877}
+    ylim = (-5,1)
+    fig,axes = plt.subplots(1,6,figsize=(8,4),sharey=True,sharex=True,gridspec_kw={'wspace':0.2})
+    date = run_info['2024']['date']
+    idx = run_info['2024']['idx']
+    best_setno = result_dict['0.03'][best[1]]['B']['2024_set_no']
+    best_runno = result_dict['0.03'][best[1]]['B']['2024_run_no']
+    for i,site in enumerate(sitedict['2024']):
+        ds,s,e = getds(base_fp + f'{date}_{site}_{idx}/grid_{date}_set{best_setno}_run{best_runno}_0.nc')
+
+        axes[i] = plot_2024_mass_balance(ds,plot_ax=axes[i])
+        axes[i].set_title(f'Site {site}',fontsize=12,y=1.05)
+        axes[i].text(pd.to_datetime('2024-04-20'),1.15,str(elev[site])+' m a.s.l.',fontsize=10)
+        axes[i].set_ylabel('')
+        # direction = '' if error < 0 else '+'
+        # text = f'{direction}{error:.3f} m'
+        # axes[i].text(enddate-pd.Timedelta(days=80),0.9,text,fontsize=10)
+        
+        axes[i].get_legend().remove()
+        axes[i].set_xlim(s,e)
+        axes[i].set_xticks(pd.date_range(s,e,freq='2MS'))
+        axes[i].tick_params(labelsize=10,direction='inout',length=8)
+        axes[i].minorticks_on()
+        axes[i].tick_params(which='minor', direction='in', length=4)
+        axes[i].set_xticklabels(['May 1','Jul 1'])
+        axes[i].xaxis.set_minor_locator(mpl.dates.MonthLocator(interval=1))
+        twinax = axes[i].twinx()
+        if site not in ['ABB','BD']:
+            mbmod,mbmeas = cumulative_mass_balance(ds,out='mbs')
+            mod = twinax.scatter(e,mbmod,color='red',marker='x',s=100)
+            meas = twinax.scatter(e,mbmeas,color='red',marker='o',facecolors='none',s=100)
+            meas.set_clip_on(False)
+            mod.set_clip_on(False)
+        twinax.set_ylim(ylim)
+        twinax.yaxis.set_ticks_position('right')
+        for s,spine in enumerate(twinax.spines.values()):
+            if s == 1:
+                spine.set_edgecolor('red')
+        if site=='T':
+            twinax.tick_params(labelright=True,labelsize=10,direction='inout',length=8,labelcolor='red',colors='red')
+            twinax.set_ylabel('Summer mass balance (m w.e.)',fontsize=12,color='red')
+        else:
+            twinax.set_yticklabels([])
+    for ax in axes:
+        ax.set_xlim(pd.to_datetime('2024-04-20'),pd.to_datetime('2024-08-20'))
+        ax.set_ylim((ylim))
+    axes[0].set_ylabel('Surface height change (m)',fontsize=12)
+    l1, = axes[-1].plot(np.nan,np.nan,color=plt.cm.Dark2(0))
+    l2, = axes[-1].plot(np.nan,np.nan,color='black',linestyle='--')
+    l3, = axes[-1].plot(np.nan,np.nan,color='gray',linestyle=':')
+    leg = fig.legend([l1,l2,l3,mod,meas],['Model','GNSS-IR','Banded Stake','Model','Stake survey'],ncols=2,fontsize=10,bbox_to_anchor=(0.7,0.05))
+    leg.get_frame().set_facecolor('white')
+    leg.get_frame().set_alpha(1)
+    if savefig:
+        plt.savefig(base_fp + f'best_2024_mb.png',bbox_inches='tight')
+    plt.show()
+
+def plot_best_snowpits(best, result_dict, years=range(2014,2019), 
+                        plot_diff=True, savefig=False):
+    with open('../MB_data/pits.pkl', 'rb') as file:
+        site_profiles = pickle.load(file)
+    colors = np.flip(['#F0E442','#E69F00','#009E73','#0072B2']) # 
+    fig,axes = plt.subplots(1,6,figsize=(8,3),sharex=True,sharey=True,
+                            gridspec_kw={'hspace':0.12,'wspace':0.15}, width_ratios=[1,1,1,1,1,2])
+    axes = axes.flatten()
+    date = run_info['long']['date']
+    idx = run_info['long']['idx']
+    best_setno = result_dict[best[0]][best[1]]['B']['set_no']
+    best_runno = result_dict[best[0]][best[1]]['B']['run_no']
+
+    for ss,site in enumerate(sitedict['long']):   
+        ds,_,_ = getds(base_fp + f'{date}_{site}_{idx}/grid_{date}_set{best_setno}_run{best_runno}_0.nc')
+        color = colors[ss]
+
+        # Load data for the site
+        profiles = site_profiles[site]
+
+        # Loop through years
+        for y,year in enumerate(years):
+            ax = axes[y]
+
+            # Some years don't have data: skip
+            if year in profiles['sbd']:
+                # Load data
+                sbd = profiles['sbd'][year]
+                dens_meas = profiles['density'][year]
+
+                # Load dataset on the date the snowpit was taken
+                sample_date = profiles['date'][year]
+                dsyear = ds.sel(time=pd.to_datetime(f'{year}-{sample_date}'))
+
+                # Add year to the axis
+                coords = [-240,4.9] if plot_diff else [50,4.9]
+                ax.text(coords[0],coords[1],str(year),fontsize=10)
+
+                # Calculate layer density and determine snow indices
+                ldz = dsyear.layerheight.values
+                depth_mod = np.array([np.sum(ldz[:i+1])-(ldz[i]/2) for i in range(len(ldz))])
+                dens_mod = dsyear['layerdensity'].values
+                snow_idx = np.where(depth_mod < dsyear.snowdepth.values)[0]
+
+                if plot_diff:
+                    # Interpolate modeled density to the snowpit depths
+                    dens_interp = np.interp(sbd,depth_mod,dens_mod)
+                    diff = dens_interp - dens_meas
+
+                    # Plot the difference
+                    ax.plot(diff,profiles['sbd'][year],color=color)
+                else:
+                    # Plot the profiles
+                    ax.plot(dens_meas,sbd,color=color,linestyle='--')
+                    ax.plot(dens_mod[snow_idx],depth_mod[snow_idx],color=color)
+
+                # Find the snow depth
+                snowdepth_mod = depth_mod[snow_idx[-1]]
+                snowdepth_pit = sbd[~np.isnan(sbd)][-1]
+
+                # Plot a horizontal line for the snow depth
+                # ax.axhline(snowdepth_mod,color=color)
+                ax.axhline(snowdepth_pit,color=color,linestyle='--')            
+
+                if plot_diff:
+                    # Plot a bar of the snow depth
+                    bar_width = 40
+                    ax.bar(300-(ss+1)*bar_width,snowdepth_mod,width=bar_width,color=color,align='edge')
+                    ax.axhline(snowdepth_pit,color=color,linestyle='--')
+
+        # Dummy variable for legend
+        axes[5].plot(np.nan,np.nan,label=f'Site {site}',color=color)
+
+    # Dummy variables for legend
+    if plot_diff:
+        axes[5].plot(np.nan,np.nan,label='Difference\nfrom measured\ndensity',color='grey')
+        axes[5].plot(np.nan,np.nan,color='black',linestyle='--',label='Measured\nsnow depth')
+        axes[5].bar(np.nan,np.nan,color='gray',label='Modeled\nsnow depth')
+    else:
+        axes[5].plot(np.nan,np.nan,label='Modeled',color='grey')
+        axes[5].plot(np.nan,np.nan,label='Measured',color='gray',linestyle='--')
+
+    # Format axes
+    for a,ax in enumerate(axes[:-1]):
+        ax.invert_yaxis()
+        ax.set_ylim(5,0)
+        ax.set_yticks([0,2,4])
+        ax.tick_params(length=5,labelsize=10)
+        if plot_diff:
+            ax.axvline(0,color='k',linewidth=0.5)
+            ax.set_xlim(-300,300)
+            ax.set_xticks([-200,0,200])
+            fig.supxlabel('Difference in density (kg m$^{-3}$)\n(Modeled $-$ Measured)',fontsize=12,y=-0.12)
+        else:
+            ax.set_xlim(0,600)
+            ax.set_xticks([0,250,500])
+            fig.supxlabel('Density (kg m$^{-3}$)',fontsize=12,y=0.04)
+        if a % 5 != 0:
+            ax.tick_params('y',length=0)
+        ax.axvline(0,linewidth=0.5,color='black')
+    fig.supylabel('Depth below surface (m)',fontsize=12,x=0.05)
+    axes[5].axis('off')
+    axes[5].legend()
+    fig.suptitle(f'Gulkana end-of-winter snow density comparison',fontsize=13,y=1)
+    if savefig:
+        plt.savefig(base_fp+'best_density_pits.png',dpi=180,bbox_inches='tight')
+    plt.show()
+
+def plot_best_snowmass(best, result_dict, years=range(2015,2020), sites=['AU','B','D'],
+                       savefig=False):
+    with open('../MB_data/pits.pkl', 'rb') as file:
+        site_profiles = pickle.load(file)
+    fig,ax = plt.subplots(figsize=(6,3))
+    colors = np.flip(['#F0E442','#E69F00','#009E73','#0072B2']) # 
+    for ss,site in enumerate(sites):
+        color = colors[ss+1]
+        prof = site_profiles[site]
+        snowmass_meas_list = []
+        snowmass_mod_list = []
+        date = run_info['long']['date']
+        idx = run_info['long']['idx']
+        best_setno = result_dict[best[0]][best[1]]['B']['set_no']
+        best_runno = result_dict[best[0]][best[1]]['B']['run_no']
+
+        ds,_,_ = getds(base_fp + f'{date}_{site}_{idx}/grid_{date}_set{best_setno}_run{best_runno}_0.nc')
+
+        for year in years:
+            year = int(year)
+            if year in prof['sbd']:
+                sample_heights = np.append(np.array([prof['sbd'][year][0]]),np.diff(np.array(prof['sbd'][year])))
+                snowmass_meas = np.sum(prof['density'][year] * sample_heights) / 1000
+                snowmass_meas_list.append(snowmass_meas)
+            else:
+                snowmass_meas_list.append(np.nan)
+            
+            # Load dataset on the date the snowpit was taken
+            if year in prof['date']:
+                sample_date = prof['date'][year]
+            else:
+                sample_date = '04-20'
+            dsyear = ds.sel(time=pd.to_datetime(f'{year}-{sample_date}'))
+
+            # Calculate layer density and determine snow indices
+            ldz = dsyear.layerheight.values
+            depth_mod = np.array([np.sum(ldz[:i+1])-(ldz[i]/2) for i in range(len(ldz))])
+            snow_idx = np.where(depth_mod < dsyear.snowdepth.values)[0]
+
+            snowmass_mod = np.sum(dsyear.layerheight.values[snow_idx] * dsyear.layerdensity.values[snow_idx]) / 1000
+            snowmass_mod_list.append(snowmass_mod)
+        ax.plot(years,snowmass_mod_list,color=color)
+        ax.plot(years,snowmass_meas_list,color=color,linestyle='--')
+    ax.tick_params(length=5,labelsize=10)
+    ax.set_xlim(years[0],years[-1])
+    ax.set_xticks(np.array(years,dtype=int))
+    ax.set_ylabel('Mass of snow (m w.e.)')
+    ax.set_title('Spring field date mass of snow (integrated snow pits)')
+    if savefig:
+        plt.savefig(base_fp+'best_snow_mass.png',dpi=180,bbox_inches='tight')
+    plt.show()
+
+def plot_best_albedo(best, result_dict, albedo_type='albedo', savefig=False):
+    df = pd.read_csv('/trace/home/cvwilson/research/climate_data/AWS/Preprocessed/gulkana2024_bothalbedo.csv',index_col=0)
+    df.index = pd.to_datetime(df.index) # - pd.Timedelta(hours=8)
+    date = run_info['2024']['date']
+    idx = run_info['2024']['idx']
+    best_setno = result_dict[best[0]][best[1]]['B']['2024_set_no']
+    best_runno = result_dict[best[0]][best[1]]['B']['2024_run_no']
+    bds,s,e = getds(base_fp + f'{date}_B_{idx}/grid_{date}_set{best_setno}_run{best_runno}_0.nc')
+    bds = bds.resample(time='d').mean()
+    daily_albedo = []
+    ice_albedo = []
+    dates = pd.date_range('2024-04-20','2024-08-20',freq='d')
+    dates_ice = np.concatenate([pd.date_range('2024-07-20','2024-08-10'),pd.date_range('2024-08-18','2024-08-22')])
+    for date in dates:
+        start = pd.to_datetime(str(date.date())+' 12:00')
+        end = pd.to_datetime(str(date.date())+' 16:00')
+        # print(df.loc[start:end,'albedo'].values)
+        daily_albedo.append(np.mean(df.loc[start:end,albedo_type.replace('_','')]))
+        if date in dates_ice:
+            ice_albedo.append(np.mean(df.loc[start:end,albedo_type.replace('_','')]))
+    y = np.arange(0,1.1,0.1)
+    fig,ax = plt.subplots(figsize=(6.5,3))
+    ax.fill_betweenx(y,[pd.to_datetime('2024-08-10')],[pd.to_datetime('2024-07-20')],color='grey',alpha=0.3,label='Ice exposed (time lapse camera)')
+    ax.fill_betweenx(y,[pd.to_datetime('2024-08-18')],[pd.to_datetime('2024-08-22')],color='grey',alpha=0.3)
+    if albedo_type == 'albedo':
+        ax.scatter(pd.to_datetime('2024-06-19'),0.7123,marker='x',color='black',label='FieldSpec sample')
+    else:
+        ax.scatter(pd.to_datetime('2024-06-19'),0.7588,marker='x',color='black',label='FieldSpec sample')
+    measured_label = 'Measured albedo' if albedo_type == 'albedo' else 'Measured visible albedo'
+    modeled_label = 'Modeled albedo' if albedo_type == 'albedo' else 'Modeled visible albedo'
+    ax.plot(dates,daily_albedo,label=measured_label,color='black',linestyle='--')
+    ax.plot(bds.time,bds[albedo_type],label=modeled_label,color=plt.cm.Dark2(0))
+
+    ax.set_xlim(dates[0],dates[-1])
+    ax.set_ylim(0,1)
+    ax.tick_params(which='major',labelsize=12,length=8,direction='inout')
+    ax.minorticks_on()
+    ax.tick_params(axis='x',which='minor',bottom=False)
+    ax.tick_params(axis='y',which='minor',length=3,direction='in')
+    ax.legend(fontsize=10)
+    ylabel = 'Broadband albedo' if albedo_type == 'albedo' else 'Visible (400-750nm) albedo'
+    ax.set_ylabel(ylabel,fontsize=13)
+    ax.set_xticks(pd.date_range('2024-04-20',e,freq='MS'))
+    ax.xaxis.set_major_formatter(mpl.dates.DateFormatter('%b %d'))
+    ax.set_xticklabels(['May 1','Jun 1','Jul 1','Aug 1'])
+    # ax.set_title(f'Mean ice albedo: {np.mean(ice_albedo):.3f}',fontsize=12)
+    # fig.suptitle('Daily albedo (mean of 12:00 - 16:00) at Gulkana B, summer 2024',fontsize=13,y=1.03)
+    if savefig:
+        plt.savefig(base_fp+'best_albedo.png',dpi=150,bbox_inches='tight')
+    plt.show()
+
+def plot_best_by_site(error_list, result_dict):
+    fig, axes = plt.subplots(1, len(error_list), figsize=(8,4), gridspec_kw={'hspace':0.5, 'wspace':0.5})
+    axes = axes.flatten()
+    bars = []
+    for site in ['A','AU','B','D','mean']: # sitedict['long']):
+        best_by = gsproc.get_best(error_list[:-1], result_dict, site=site, prints=False)
+        c5,kp = best_by[-1]
+        bars.append([])
+
+        for error in error_list:
+            bars[-1].append(result_dict[c5][kp]['mean'][error+'_MAE'])
+    bars = np.array(bars).T
+    colors = np.flip(['gray','#F0E442','#E69F00','#009E73','#0072B2']) #
+    for a, ax in enumerate(axes):
+        ax.bar(range(5), bars[a], color=colors)
+        ax.set_xticks(range(5))
+        ax.set_xticklabels(['A','AU','B','D','mean'], rotation=45)
+        ax.set_title(error_list[a]+'_'+units[error_list[a]])
+        ax.tick_params(axis='y', length=5)
+    fig.suptitle('MAE for each error metric calibrating on one site')
+    plt.show()
+
+def plot_heatmap_by_site(error_names, result_dict, metric='MAE', subset='calib', savefig=False):
+    sites_all = ['A','AU','B','D','mean']
+    weights = np.ones(len(error_names))*1/len(error_names)
+    error_names.append('weighted')
+    n_plots = len(error_names)
+    n_rows = n_plots // 2
+    n_rows = n_rows + 1 if n_plots % 2 != 0 else n_rows
+    fig = plt.figure(figsize=(8,n_rows*1.5)) # , gridspec_kw={'hspace':0.5, 'wspace':0.5}
+    ax1 = fig.add_subplot(4, 3, (1,4))
+    ax2 = fig.add_subplot(4, 3, (2,5),sharex=ax1, sharey=ax1)
+    ax3 = fig.add_subplot(4, 3, (7,10),sharex=ax1, sharey=ax1)
+    ax4 = fig.add_subplot(4, 3, (8,11),sharex=ax1, sharey=ax1)
+    ax5 = fig.add_subplot(4, 3, (6,9))
+    axes = [ax1,ax2,ax3,ax4,ax5]
+    for ax in axes:
+        ax.set_xticks(np.arange(0.5,5.5))
+        ax.set_yticks(np.arange(0.5,5.5))
+        ax.set_xticklabels(sites_all)
+        ax.set_yticklabels(sites_all)
+        ax.tick_params(length=5)
+
+    if 'AE' in metric:
+        cmaps = ['Greens','Purples','Blues','Reds','Greys','Oranges']
+    else:
+        cmaps = diverging_cmaps
+
+    for e,error in enumerate(error_names):
+        ax = axes[e]
+        error += '_' + metric
+        if subset is not None:
+            error += '_' + subset
+        errors = np.empty((5,5))
+        for s1,site1 in enumerate(sites_all): # sitedict['long']):
+            best_by = gsproc.get_best(error_names[:-1], result_dict, site=site1, prints=False)
+            c5,kp = best_by[-1]
+            c5 = str(c5)
+            kp = str(kp).replace('.0','')
+            
+            for s2,site2 in enumerate(sites_all):
+                if 'weighted' not in error:
+                    error_value = result_dict[c5][kp][site2][error]
+                else:
+                    errors_to_weight = []
+                    for each in error_names[:-1]:
+                        each += '_'+metric
+                        if subset:
+                            each += '_'+subset
+                        errors_to_weight.append(result_dict[c5][kp][site2][each+'_norm'])
+                    error_value = np.sum(errors_to_weight * np.array(weights))
+                errors[s2,s1] = error_value
+
+            max_value = np.max(errors)
+            min_value = np.min(errors)
+            if metric == 'ME':
+                greater = max(np.abs(max_value), np.abs(min_value))
+                max_value, min_value = (greater, -greater)
+        grid = np.arange(6)
+        c = ax.pcolormesh(grid, grid, errors, cmap=cmaps[e], 
+                        vmin=min_value, vmax=max_value)
+        cbar = plt.colorbar(c, ax=ax)
+        cbar.ax.tick_params(length=5)
+        axtitle = errorlabels[error.split('_')[0]]
+        # if 'snow' in axtitle:
+        #     axtitle = axtitle.replace('snow','\nsnow')
+        # if 'balance' in axtitle:
+        #     axtitle = axtitle.replace('balance','\nbalance')
+        ax.set_title(axtitle,fontsize=10)
+        if e in [0,1]:
+            ax.tick_params(labelbottom=False)
+        if e in [1,3,4]:
+            ax.tick_params(labelleft=False)
+    
+    for i in range(5):
+        rect = mpl.patches.Rectangle((i,i), 1, 1, linewidth=1.5, edgecolor='k',linestyle='--', facecolor='none')
+        ax.add_patch(rect)
+    fig.supxlabel('Site used for calibration',y=-0.01)
+    fig.supylabel('Site MAE',x=0.03)
+    fig.suptitle(f'{methodlabels[metric]} for each error metric calibrating on one site')
+    plt.subplots_adjust(hspace=0.6, wspace=0.2)
+    if savefig:
+        plt.savefig(base_fp+f'calibration_by_site_heatmap.png',dpi=180,bbox_inches='tight')
+    plt.show()
+
+def compare_calib_valid(error_names, result_dict, site='mean', metric='MAE', pareto_fronts=False):
+    n_plots = len(error_names)
+    n_rows = n_plots // 2
+    n_rows = n_rows + 1 if n_plots % 2 != 0 else n_rows
+    fig,axes = plt.subplots(n_rows, 2, figsize=(6,n_rows*2),gridspec_kw={'hspace':0.5})
+    axes = axes.flatten()
+    for e, error in enumerate(error_names):
+        error += '_'+metric+'_'
+        all_calib = []
+        all_valid = []
+        if pareto_fronts:
+            all_combos = pareto_fronts
+        else:
+            all_combos = itertools.product(params['c5'],params['kp'])
+        for c5,kp in all_combos:
+            all_calib.append(result_dict[c5][kp][site][error+'calib'])
+            all_valid.append(result_dict[c5][kp][site][error+'valid'])
+        ax = axes[e]
+        _,bins = np.histogram(np.append(all_calib, all_valid))
+        ax.hist(all_calib, bins=bins, histtype='step', label='calibration')
+        ax.hist(all_valid, bins=bins, histtype='step', label='validation')
+        ax.set_title(errorlabels[error.split('_')[0]])
+        ax.tick_params(length=5)
+    axes[0].legend()
+    title = 'Comparison of calibration and validation\nerror distribution '
+    if pareto_fronts:
+        title += 'for Pareto fronts'
+    fig.suptitle(title, y=1.03)
+    plt.show()

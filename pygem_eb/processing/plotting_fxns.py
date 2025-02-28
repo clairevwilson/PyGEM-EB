@@ -135,7 +135,6 @@ def simple_plot(ds,time,vars,res='d',t='',cumMB=True,
                 axis.set_ylabel(varprops[var]['label'])
         axis.tick_params(length=5)
         axis.legend(bbox_to_anchor=(1.01,1),loc='upper left')
-    print(date_form)
     if date_form is None:
         date_form = mpl.dates.DateFormatter('%d %b')
     elif type(date_form) == str:
@@ -1114,7 +1113,6 @@ def visualize_layers(ds,dates,vars,force_layers=False,
     """
     # plt.style.use('bmh')
     # mpl.style.use('seaborn-v0_8-whitegrid')
-
     diff = dates[1] - dates[0]
 
     # Custom color function based on concentrations

@@ -215,11 +215,13 @@ class Surface():
         ALBEDO_FIRN = eb_prms.albedo_firn
         ALBEDO_FRESH_SNOW = eb_prms.albedo_fresh_snow
         DEG_RATE = eb_prms.albedo_deg_rate
+        SNOW_LIM = eb_prms.snicar_snow_limit
         
         # Update surface type
         self.stype = layers.ltype[0]
+        snowdepth = np.sum(layers.lheight[layers.snow_idx])
 
-        if self.stype == 'snow':
+        if self.stype == 'snow' and snowdepth > SNOW_LIM:
             if args.switch_melt == 0:
                 if args.switch_LAPs == 0:
                     # SURFACE TYPE ONLY

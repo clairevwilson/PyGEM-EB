@@ -14,7 +14,7 @@ All functions use the following notation for the arguments:
     ds : xarray.Dataset
         Output dataset from PyGEM-EB
     method : str, default 'MAE'
-        Choose between 'RMSE','MAE','ME','MSE'
+        Choose between 'RMSE','MAE','MdAE','ME','MSE'
     plot : Bool, default False
         Plot the result
 
@@ -42,6 +42,8 @@ def objective(model,data,method):
         return np.sqrt(np.mean(np.square(model - data)))
     elif method == 'MAE':
         return np.mean(np.abs(model - data))
+    elif method == 'MdAE':
+        return np.median(np.abs(model - data))
     elif method == 'ME':
         return np.mean(model - data)
     
@@ -64,6 +66,10 @@ def seasonal_mass_balance(ds,method='MAE',out=None):
 
     # Get overlapping years
     years_model = np.unique(pd.to_datetime(ds.time.values).year)
+    if pd.to_datetime(f'{years_model[-1]}-08-01') not in ds.time.values:
+        years_model = years_model[:-1]
+    if site == 'AU':
+        years_model = years_model[1:]
     years_measure = np.unique(df_mb.index)
     years = np.sort(list(set(years_model) & set(years_measure)))
 
@@ -165,6 +171,8 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
     years_model = np.unique(pd.to_datetime(ds.time.values).year)
     years_measure = np.unique(df_mb.index)
     years = np.sort(list(set(years_model) & set(years_measure)))
+    if site == 'A':
+        years = years[:-1]
 
     # Retrieve the model data
     mb_dict = {'bw':[],'bs':[],'ba':[]}
@@ -189,13 +197,12 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
             annual_dates += pd.Timedelta(minutes=30)
 
         # Sum model mass balance
-        if year == years[-1]:
-            years = years[:-1]
-            break
-        else:
-            wds = ds.sel(time=winter_dates).sum()
-            sds = ds.sel(time=summer_dates).sum()
-            ads = ds.sel(time=annual_dates).sum()
+        if summer_dates[-1] not in ds.time.values:
+            summer_dates = pd.date_range(summer_dates[0], ds.time.values[-1],freq='h')
+            annual_dates = pd.date_range(annual_dates[0], ds.time.values[-1],freq='h')
+        wds = ds.sel(time=winter_dates).sum()
+        sds = ds.sel(time=summer_dates).sum()
+        ads = ds.sel(time=annual_dates).sum()
         winter_mb = wds.accum + wds.refreeze - wds.melt
         internal_acc = ds.sel(time=summer_dates[-2]).cumrefreeze.values
         summer_mb = sds.accum + sds.refreeze - sds.melt - internal_acc
@@ -261,9 +268,12 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
         return fig,ax
 
 # ========== 3. END-OF-WINTER SNOWPACK ==========
-def snowpits(ds,method='MAE'):
+def snowpits(ds,method='MAE',out=None):
     all_years = np.arange(2000,2025)
     years_model = np.unique(pd.to_datetime(ds.time.values).year)
+    year_0 = pd.to_datetime(ds.time.values[0]).year
+    if pd.to_datetime(f'{year_0}-04-01') not in ds.time.values:
+        years_model = years_model[1:]
     years = np.sort(list(set(years_model) & set(all_years)))
 
     # Open the mass balance
@@ -280,6 +290,8 @@ def snowpits(ds,method='MAE'):
         error_dict[var+method] = {}
 
     # Loop through years
+    years_nodata = []
+    data = {'snowdepth_mod':[],'snowdepth_meas':[],'snowdensity_mod':[],'snowdensity_meas':[]}
     for year in years:
         # Some years don't have data: skip
         if year in profiles['sbd']:
@@ -309,6 +321,12 @@ def snowpits(ds,method='MAE'):
             sample_heights = np.append(np.array([profiles['sbd'][year][0]]),np.diff(np.array(profiles['sbd'][year])))
             snowmass_meas = np.sum(profiles['density'][year] * sample_heights) / 1000
 
+            # Store in timeseries
+            data['snowdensity_meas'].append(np.mean(dens_meas))
+            data['snowdensity_mod'].append(np.mean(dens_interp))
+            data['snowdepth_meas'].append(snowdepth_pit)
+            data['snowdepth_mod'].append(snowdepth_mod)
+
             # Calculate error from mass and density 
             density_error = objective(dens_interp, dens_meas, method) # kg/m3
             mass_error = objective(snowmass_mod, snowmass_meas, method) # m w.e.
@@ -318,13 +336,21 @@ def snowpits(ds,method='MAE'):
             error_dict['snowmass_'+method][str(year)] = mass_error
             error_dict['snowdepth_'+method][str(year)] = depth_error
             error_dict['snowdensity_'+method][str(year)] = density_error
+        else:
+            years_nodata.append(year)
 
     # Aggregate to time mean
     for var in error_dict:
         data_arr = list(error_dict[var].values())
         error_dict[var]['mean'] = np.mean(data_arr)
 
-    return error_dict
+    if out == 'data':
+        years_return = np.setdiff1d(np.array(years), np.array(years_nodata))
+        for item in data:
+            data[item] = np.array(data[item])
+        return years_return, data
+    else:
+        return error_dict
 
 # ========== 3. CUMULATIVE MASS BALANCE ==========
 def cumulative_mass_balance(ds,method='MAE',out=None):
