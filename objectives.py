@@ -37,15 +37,15 @@ USGS_fp = '../MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
 # Objective function
 def objective(model,data,method):
     if method == 'MSE':
-        return np.mean(np.square(model - data))
+        return np.nanmean(np.square(model - data))
     elif method == 'RMSE':
-        return np.sqrt(np.mean(np.square(model - data)))
+        return np.sqrt(np.nanmean(np.square(model - data)))
     elif method == 'MAE':
-        return np.mean(np.abs(model - data))
+        return np.nanmean(np.abs(model - data))
     elif method == 'MdAE':
-        return np.median(np.abs(model - data))
+        return np.nanmedian(np.abs(model - data))
     elif method == 'ME':
-        return np.mean(model - data)
+        return np.nanmean(model - data)
     
 # ========== 1. SEASONAL MASS BALANCE ==========
 def seasonal_mass_balance(ds,method='MAE',out=None):
@@ -68,8 +68,8 @@ def seasonal_mass_balance(ds,method='MAE',out=None):
     years_model = np.unique(pd.to_datetime(ds.time.values).year)
     if pd.to_datetime(f'{years_model[-1]}-08-01') not in ds.time.values:
         years_model = years_model[:-1]
-    if site == 'AU':
-        years_model = years_model[1:]
+    # if site == 'AU':
+    #     years_model = years_model[1:]
     years_measure = np.unique(df_mb.index)
     years = np.sort(list(set(years_model) & set(years_measure)))
 
@@ -286,11 +286,13 @@ def snowpits(ds,method='MAE',out=None):
 
     # Storage to determine error
     error_dict = {}
+    if type(method) == str:
+        method = [method]
     for var in ['snowmass_','snowdepth_','snowdensity_']:
-        error_dict[var+method] = {}
+        for m in method:
+            error_dict[var+m] = {}
 
     # Loop through years
-    years_nodata = []
     data = {'snowdepth_mod':[],'snowdepth_meas':[],'snowdensity_mod':[],'snowdensity_meas':[]}
     for year in years:
         # Some years don't have data: skip
@@ -303,41 +305,50 @@ def snowpits(ds,method='MAE',out=None):
             sample_date = profiles['date'][year]
             dsyear = ds.sel(time=pd.to_datetime(f'{year}-{sample_date}'))
 
-            # Calculate layer density and determine snow indices
+            # Calculate layer density
             ldz = dsyear.layerheight.values
             depth_mod = np.array([np.sum(ldz[:i+1])-(ldz[i]/2) for i in range(len(ldz))])
             dens_mod = dsyear['layerdensity'].values
-            snow_idx = np.where(depth_mod < dsyear.snowdepth.values)[0]
+
+            # Find the snow depth
+            snowdepth_mod = dsyear.snowdepth.values
+            snowdepth_pit = sbd[~np.isnan(sbd)][-1]
+
+            # Only consider modeled density up to the minimum snow depth
+            min_depth = min(snowdepth_mod, snowdepth_pit)
+            dens_meas = dens_meas[sbd <= min_depth]
+            sbd = sbd[sbd <= min_depth]
 
             # Interpolate modeled density to the snowpit depths
             dens_interp = np.interp(sbd,depth_mod,dens_mod)
 
-            # Find the snow depth
-            snowdepth_mod = depth_mod[snow_idx[-1]]
-            snowdepth_pit = sbd[~np.isnan(sbd)][-1]
-
             # Calculate mass of snow
+            snow_idx = np.where(depth_mod < dsyear.snowdepth.values)[0]
             snowmass_mod = np.sum(dsyear.layerheight.values[snow_idx] * dsyear.layerdensity.values[snow_idx]) / 1000
             sample_heights = np.append(np.array([profiles['sbd'][year][0]]),np.diff(np.array(profiles['sbd'][year])))
             snowmass_meas = np.sum(profiles['density'][year] * sample_heights) / 1000
 
             # Store in timeseries
-            data['snowdensity_meas'].append(np.mean(dens_meas))
-            data['snowdensity_mod'].append(np.mean(dens_interp))
+            data['snowdensity_meas'].append(np.array(dens_meas))
+            data['snowdensity_mod'].append(np.array(dens_interp))
             data['snowdepth_meas'].append(snowdepth_pit)
             data['snowdepth_mod'].append(snowdepth_mod)
 
             # Calculate error from mass and density 
-            density_error = objective(dens_interp, dens_meas, method) # kg/m3
-            mass_error = objective(snowmass_mod, snowmass_meas, method) # m w.e.
-            depth_error = objective(snowdepth_mod, snowdepth_pit, method) # m
+            for m in method:
+                density_error = objective(dens_interp, dens_meas, m) # kg/m3
+                mass_error = objective(snowmass_mod, snowmass_meas, m) # m w.e.
+                depth_error = objective(snowdepth_mod, snowdepth_pit, m) # m
 
-            # Store
-            error_dict['snowmass_'+method][str(year)] = mass_error
-            error_dict['snowdepth_'+method][str(year)] = depth_error
-            error_dict['snowdensity_'+method][str(year)] = density_error
+                # Store
+                error_dict['snowmass_'+m][str(year)] = mass_error
+                error_dict['snowdepth_'+m][str(year)] = depth_error
+                error_dict['snowdensity_'+m][str(year)] = density_error
         else:
-            years_nodata.append(year)
+            data['snowdensity_meas'].append(np.array(np.nan))
+            data['snowdensity_mod'].append(np.array(np.nan))
+            data['snowdepth_meas'].append(np.nan)
+            data['snowdepth_mod'].append(np.nan)
 
     # Aggregate to time mean
     for var in error_dict:
@@ -345,10 +356,14 @@ def snowpits(ds,method='MAE',out=None):
         error_dict[var]['mean'] = np.mean(data_arr)
 
     if out == 'data':
-        years_return = np.setdiff1d(np.array(years), np.array(years_nodata))
         for item in data:
-            data[item] = np.array(data[item])
-        return years_return, data
+            data[item] = data[item]
+        return years, data
+    elif out == 'mean_error':
+        dict_out = {}
+        for var in error_dict:
+            dict_out[var] = error_dict[var]['mean']
+        return dict_out
     else:
         return error_dict
 
@@ -716,6 +731,33 @@ def snow_temperature(ds,method='RMSE',plot=False,plot_heights=[0.5]):
         plt.show()
 
     return error
+
+# ========== 4. ALBEDO ==========
+def daily_albedo(bds,method='MAE',out=None):
+    df = pd.read_csv('/trace/home/cvwilson/research/climate_data/AWS/Preprocessed/gulkana2024_bothalbedo.csv',index_col=0)
+    df.index = pd.to_datetime(df.index) # - pd.Timedelta(hours=8)
+    
+    # Sample dataset to daily
+    bds = bds.resample(time='d').mean()
+
+    # Store albedo values
+    daily_albedo = []
+
+    # Manually specify summer dates and ice dates
+    dates = pd.date_range('2024-04-20','2024-08-20',freq='d')
+    for date in dates:
+        start = pd.to_datetime(str(date.date())+' 12:00')
+        end = pd.to_datetime(str(date.date())+' 16:00')
+        # print(df.loc[start:end,'albedo'].values)
+        daily_albedo.append(np.mean(df.loc[start:end,'albedo']))
+    
+    model = bds['albedo'].sel(time=dates).values
+    data = np.array(daily_albedo)
+    
+    if out == 'data':
+        return dates, model, data
+    else:
+        return objective(model, data, method)
 
 def grid_plot(params_dict,summer_result,winter_result):
     """

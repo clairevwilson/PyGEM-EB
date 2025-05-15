@@ -154,6 +154,9 @@ class massBalance():
             # Advance timestep
             pass
 
+        # print('Final concentration in ppb:', layers.lBC[:3] / layers.lheight[:3] * 1e6)
+        # print('height in cm',layers.lheight[:3]*100)
+
         # Completed run: store data
         if self.args.store_data:
             self.output.store_data()

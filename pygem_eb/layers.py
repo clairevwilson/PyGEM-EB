@@ -687,6 +687,7 @@ class Layers():
             self.lgrainsize[idx] = grainsize
             self.lgrainsize[self.firn_idx] = FIRN_GRAINSIZE 
             self.lgrainsize[self.ice_idx] = ICE_GRAINSIZE
+
         elif len(self.firn_idx) > 0: # no snow, but there is firn
             self.lgrainsize[self.firn_idx] = FIRN_GRAINSIZE
             self.lgrainsize[self.ice_idx] = ICE_GRAINSIZE

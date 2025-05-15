@@ -48,9 +48,23 @@ class Surface():
             bands = np.arange(0,480).astype(str)
             self.albedo_df = pd.DataFrame(np.zeros((0,480)),columns=bands)
 
+        # Update the underlying ice spectrum
+        clean_ice = pd.read_csv(eb_prms.clean_ice_fp,names=[''])
+        # Albedo of the base spectrum is in the filename
+        albedo_string = eb_prms.clean_ice_fp.split('bba')[-1].split('.')[0]
+        bba = int(albedo_string) / (10 ** len(albedo_string))
+        # Scale the new spectrum by the ice albedo
+        ice_point_spectrum = clean_ice * args.a_ice / bba
+        # Name file for ice spectrum
+        clean_ice_fn = eb_prms.clean_ice_fp.split('/')[-1]
+        self.ice_spectrum_fp = eb_prms.clean_ice_fp.replace(clean_ice_fn,f'gulkana{args.site}_ice_spectrum_{args.task_id}.csv')
+        # Store new spectrum
+        df_spectrum = pd.DataFrame(ice_point_spectrum)
+        df_spectrum.to_csv(self.ice_spectrum_fp, index=False, header=False)
+
         # Parallel runs need separate input files to access
         if args.task_id != -1:
-            self.snicar_fn = os.getcwd() + f'/biosnicar-py/biosnicar/inputs_{args.task_id}.yaml'
+            self.snicar_fn = os.getcwd() + f'/biosnicar-py/biosnicar/inputs_{args.task_id}{args.site}.yaml'
             if not os.path.exists(self.snicar_fn):
                 self.reset_SNICAR(self.snicar_fn)
             try:
@@ -221,11 +235,12 @@ class Surface():
         self.stype = layers.ltype[0]
         snowdepth = np.sum(layers.lheight[layers.snow_idx])
 
-        if self.stype == 'snow' and snowdepth > SNOW_LIM:
+        if self.stype == 'snow':
             if args.switch_melt == 0:
                 if args.switch_LAPs == 0:
                     # SURFACE TYPE ONLY
                     self.albedo = self.albedo_dict[self.stype]
+                    self.bba = self.albedo
                 elif args.switch_LAPs == 1:
                     # LAPs ON, GRAIN SIZE OFF
                     albedo,sw = self.run_SNICAR(layers,time,override_grainsize=True)
@@ -236,6 +251,7 @@ class Surface():
                 age = self.days_since_snowfall
                 albedo_aging = (ALBEDO_FRESH_SNOW - ALBEDO_FIRN)*(np.exp(-age/DEG_RATE))
                 self.albedo = max(ALBEDO_FIRN + albedo_aging,ALBEDO_FIRN)
+                self.bba = self.albedo
             elif args.switch_melt == 2:
                 if args.switch_LAPs == 0:
                     # LAPs OFF, GRAIN SIZE ON
@@ -380,6 +396,9 @@ class Surface():
         list_doc['ICE']['SHP'][0] = eb_prms.grainshape_SNICAR
         for var in ice_variables:
             list_doc['ICE'][var] = [list_doc['ICE'][var][0]] * nlayers
+
+        # Filepath for ice albedo
+        list_doc['PATHS']['SFC'] = self.ice_spectrum_fp.split('biosnicar-py/')[-1]
 
         # Solar zenith angle
         lat = self.climate.lat

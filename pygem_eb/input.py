@@ -76,6 +76,7 @@ glac_no_str = str(glac_no[0]).replace('.','_')
 grainsize_fp = 'data/grainsize/drygrainsize(SSAin=##).nc'
 # SNICAR inputs
 snicar_input_fp = 'biosnicar-py/biosnicar/inputs.yaml'
+clean_ice_fp = 'biosnicar-py/Data/OP_data/480band/r_sfc/gulkana_cleanice_avg_bba3732.csv'
 # Initial conditions
 initial_temp_fp = 'data/sample_initial_temp.csv'
 initial_density_fp = 'data/sample_initial_density.csv'
@@ -99,7 +100,7 @@ if use_AWS:
 wind_ref_height = 10 if reanalysis in ['ERA5-hourly'] else 2
 
 # MERRA-2 BIAS ADJUSTMENT
-bias_vars = [] # ['wind','SWin','temp','rh']         # Vars to correct by quantile mapping
+bias_vars = ['wind','SWin','temp','rh']         # Vars to correct by quantile mapping
 temp_bias_adjust = False             # Adjust MERRA-2 temperature linearly?
 temp_bias_slope = 0.57596           # Slope of MERRA-2 --> ON-ICE AWS
 temp_bias_intercept = 1.799         # Intercept of MERRA-2 --> ON-ICE AWS
@@ -175,7 +176,7 @@ grainsize_ds = xr.open_dataset(grainsize_fp.replace('##',str(initSSA)))
 # <<<<<< Climate downscaling >>>>>
 sky_view = 0.936            # Sky-view factor [-]
 wind_factor = 1             # Wind factor [-]
-kp = 3                      # Precipitation factor [-]
+kp = 2                      # Precipitation factor [-]
 precgrad = 0.0001           # Precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # Temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 albedo_ice = 0.47           # Ice albedo [-] 
@@ -193,7 +194,7 @@ max_nlayers = 80            # Maximum number of vertical layers allowed (defines
 max_dz = 2                  # Max layer height
 # <<<<<< Boundary conditions >>>>>
 temp_temp = 0               # temperature of temperate ice [C]
-temp_depth = 20             # depth of temperate ice [m]
+temp_depth = 10             # depth of temperate ice [m]
 # <<<<<< Physical properties of snow, ice, water and air >>>>>
 density_ice = 900           # Density of ice [kg m-3]
 density_water = 1000        # Density of water [kg m-3]
@@ -222,7 +223,7 @@ pressure_std = 101325       # Standard pressure [Pa]
 temp_std = 293.15           # Standard temperature [K]
 density_std = 1.225         # Air density at sea level [kg m-3]
 # <<<<<< Model parameterizations >>>>>
-Boone_c5 = 0.018            # Densification parameter [m3 kg-1]
+Boone_c5 = 0.022            # Densification parameter [m3 kg-1]
 roughness_fresh_snow = 0.24 # Surface roughness length for fresh snow [mm] (Moelg et al. 2012, TC)
 roughness_aged_snow = 10    # Surface roughness length for aged snow [mm]
 roughness_firn = 4          # Surface roughness length for firn [mm] (Moelg et al. 2012, TC)
@@ -234,9 +235,9 @@ albedo_ground = 0.2         # Albedo of ground [-]
 # <<<<<< SNICAR things >>>>>
 albedo_TOD = [14]           # List of time(s) of day to calculate albedo [hr] 
 diffuse_cloud_limit = 0.6   # Threshold to consider cloudy vs clear-sky in SNICAR [-]
-include_LWC_SNICAR = False  # Include liquid water in SNICAR?
+include_LWC_SNICAR = False  # Include liquid water in SNICAR? (slush)
 grainshape_SNICAR = 0       # 0: sphere, 1: spheroid, 2: hexagonal plate, 3: koch snowflake, 4: hexagonal prisms
-snicar_snow_limit = 0.002   # Cutoff for snow depth to run SNICAR
+snicar_snow_limit = 0.003   # Cutoff for snow depth to run SNICAR
 # <<<<<< Constants for switch runs >>>>>
 albedo_deg_rate = 15        # Rate of exponential decay of albedo
 average_grainsize = 1000    # Grainsize to treat as constant if switch_melt is 0 [um]
@@ -244,12 +245,13 @@ albedo_fresh_snow = 0.85    # Albedo of fresh snow for exponential method [-] (M
 albedo_firn = 0.5           # Albedo of firn [-]
 # <<<<<< BC and dust >>>>>
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
-ksp_BC = 0.8                # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
-ksp_OC = 0.8                # Meltwater scavenging efficiency of OC (0.1-0.2 from CLM5)
+ksp_BC = 0.9               # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
+ksp_OC = 0.9               # Meltwater scavenging efficiency of OC (0.1-0.2 from CLM5)
 ksp_dust = 0.01             # Meltwater scavenging efficiency of dust (0.015 from CLM5)
 BC_freshsnow = 0            # Concentration of BC in fresh snow for initialization [kg m-3]
 OC_freshsnow = 0            # Concentration of OC in fresh snow for initialization [kg m-3]
 dust_freshsnow = 0          # Concentration of dust in fresh snow for initilization [kg m-3]
+adjust_deposition = False   # Adjust deposition according to preprocessed 
 # <<<<<< MERRA-2: LAP binning >>>>>
 ratio_BC2_BCtot = 2.08      # Ratio to transform BC bin 2 deposition to total BC
 ratio_OC2_OCtot = 1.54      # Ratio to transform OC bin 2 deposition to total OC

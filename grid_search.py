@@ -15,14 +15,17 @@ import pygem_eb.massbalance as mb
 from objectives import *
 
 # OPTIONS
-repeat_run = False   # True if restarting an already begun run
-run_type = '2024'   # 'long' or '2024'
+repeat_run = True   # True if restarting an already begun run
 # Define sets of parameters
-params = {'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
-          'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5]} # 
+# params = {'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
+#           'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5]} # 
+params = {'Boone_c5':[0.018,0.02,0.022,0.023,0.024,0.025,0.026,0.027,0.028,0.03], # 
+          'kp':[2.875]} # 120 runs 1,1.25,1.5,1.75,2,2.25,2.375,2.5,2.625,2.75,2.875,3
 
 # Read command line args
-args = sim.get_args()
+parser = sim.get_args(parse=False)
+parser.add_argument('-run_type', default='long')
+args = parser.parse_args()
 n_processes = args.n_simultaneous_processes
 
 # Determine number of runs for each process
@@ -44,8 +47,8 @@ if 'trace' in eb_prms.machine:
     eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
 
 if repeat_run:
-    date = '02_11'
-    n_today = '0'
+    date = '03_05' if args.run_type == 'long' else '03_06'
+    n_today = '1'
     out_fp = f'{date}_{args.site}_{n_today}/'
     if not os.path.exists(eb_prms.output_filepath + out_fp):
         os.mkdir(eb_prms.output_filepath + out_fp)
@@ -60,7 +63,7 @@ else:
 
 # Force some args
 args.store_data = True              # Ensures output is stored
-if run_type == '2024': # Short AWS run
+if args.run_type == '2024': # Short AWS run
     args.use_AWS = True
     eb_prms.AWS_fn = '../climate_data/AWS/Preprocessed/gulkana2024.csv'
     eb_prms.store_vars = ['MB','EB','layers','climate']
@@ -87,7 +90,7 @@ all_runs = []
 missing_fn = eb_prms.output_filepath + out_fp + 'missing.txt'
 
 # Special dates for low sites
-if run_type == 'long':
+if args.run_type == 'long':
     if args.site == 'A':
         args.enddate = pd.to_datetime('2015-05-20 00:00:00')
     elif args.site == 'AU':
@@ -165,42 +168,42 @@ def run_model_parallel(list_inputs):
                 os.remove(eb_prms.output_filepath + args.out + '0.nc')
 
         # If succeeded, process and save only the stats
-        out_fn = eb_prms.output_filepath + args.out
-        if os.path.exists(out_fn + '0.nc') and not os.path.exists(out_fn + '0.pkl'):
-            with xr.open_dataset(out_fn + '0.nc') as dataset:
-                ds = dataset.load()
-                if run_type == 'long':
-                    # seasonal mass balance
-                    error_dict = seasonal_mass_balance(ds,method=['MAE','ME'])
-                    winter_MAE, winter_ME = error_dict['winter']
-                    summer_MAE, summer_ME = error_dict['summer']
-                    annual_MAE, annual_ME = error_dict['annual']
-                    seasonal_MAE = np.mean([winter_MAE, summer_MAE])
-                    seasonal_ME = np.mean([winter_ME, summer_ME])
-                    results = {'winter_MAE':winter_MAE,'summer_MAE':summer_MAE,
-                            'winter_ME':winter_ME,'summer_ME':summer_ME,
-                            'seasonal_MAE':seasonal_MAE,'seasonal_ME':seasonal_ME,
-                            'annual_MAE':annual_MAE,'annual_ME':annual_ME}
+        # out_fn = eb_prms.output_filepath + args.out
+        # if os.path.exists(out_fn + '0.nc') and not os.path.exists(out_fn + '0.pkl'):
+        #     with xr.open_dataset(out_fn + '0.nc') as dataset:
+        #         ds = dataset.load()
+        #         if args.run_type == 'long':
+        #             # seasonal mass balance
+        #             error_dict = seasonal_mass_balance(ds,method=['MAE','ME'])
+        #             winter_MAE, winter_ME = error_dict['winter']
+        #             summer_MAE, summer_ME = error_dict['summer']
+        #             annual_MAE, annual_ME = error_dict['annual']
+        #             seasonal_MAE = np.mean([winter_MAE, summer_MAE])
+        #             seasonal_ME = np.mean([winter_ME, summer_ME])
+        #             results = {'winter_MAE':winter_MAE,'summer_MAE':summer_MAE,
+        #                     'winter_ME':winter_ME,'summer_ME':summer_ME,
+        #                     'seasonal_MAE':seasonal_MAE,'seasonal_ME':seasonal_ME,
+        #                     'annual_MAE':annual_MAE,'annual_ME':annual_ME}
 
-                    # snowpits
-                    for method in ['MAE','ME']:
-                        snowpit_dict = snowpits(ds,method=method)
-                        for var in snowpit_dict:
-                            results[var] = snowpit_dict[var]
+        #             # snowpits
+        #             for method in ['MAE','ME']:
+        #                 snowpit_dict = snowpits(ds,method=method)
+        #                 for var in snowpit_dict:
+        #                     results[var] = snowpit_dict[var]
 
-                elif run_type == '2024':
-                    MAE = cumulative_mass_balance(ds,method='MAE')
-                    ME = cumulative_mass_balance(ds,method='ME')
-                    results = {'MAE':MAE,'ME':ME}
+        #         elif args.run_type == '2024':
+        #             MAE = cumulative_mass_balance(ds,method='MAE')
+        #             ME = cumulative_mass_balance(ds,method='ME')
+        #             results = {'MAE':MAE,'ME':ME}
 
-                # Store the attributes in the results dict
-                for attr in ds.attrs:
-                    results[attr] = ds.attrs[attr]
+        #         # Store the attributes in the results dict
+        #         for attr in ds.attrs:
+        #             results[attr] = ds.attrs[attr]
 
-            # Pickle the dict
-            stats_fn = out_fn + '0.pkl'
-            with open(stats_fn, 'wb') as file:
-                pickle.dump(results,file)
+        #     # Pickle the dict
+        #     stats_fn = out_fn + '0.pkl'
+        #     with open(stats_fn, 'wb') as file:
+        #         pickle.dump(results,file)
 
             # Remove the .nc
             # os.remove(eb_prms.output_filepath + args.out + '0.nc')
