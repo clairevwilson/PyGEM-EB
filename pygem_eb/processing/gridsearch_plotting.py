@@ -13,7 +13,7 @@ machine = socket.gethostname()
 if 'trace' in machine:
     base_fp = '/trace/group/rounce/cvwilson/Output/'
     pygem_fp = '/trace/home/cvwilson/research/PyGEM-EB/'
-elif os.path.exists('/mnt/d/'):
+elif os.path.exists('/mnt/d/grid_search'):
     base_fp = '/mnt/d/grid_search/'
     pygem_fp = '/home/claire/research/PyGEM-EB/'
 else:
@@ -1025,8 +1025,9 @@ def plot_pareto_2024(all_pareto, result_dict, frequency_dict, best, savefig=Fals
     ax.minorticks_on()
     ax.tick_params(which='minor', direction='in', length=4)
     ax.legend()
-    ax.set_ylabel('Surface height change (m)', fontsize=12)
+    ax.set_ylabel('Surface height\nchange (m)', fontsize=12)
 
+    # SURFACE HEIGHT CHANGE TRADEOFFS
     ax = axes[0,1]
     cmap = mpl.colormaps.get_cmap('viridis_r')
     norm =  mpl.colors.Normalize(vmin=0.018,vmax=0.03)
@@ -1043,15 +1044,23 @@ def plot_pareto_2024(all_pareto, result_dict, frequency_dict, best, savefig=Fals
         ax.plot(kp_list, MAE_list,'o-', color=cmap(norm(float(c5))))
     ax.tick_params(length=5)
 
+    # ALBEDO TIMESERIES
     ax = axes[1,0]
     min_series = np.min(np.array(all_timeseries['albedo']), axis=0)
     max_series = np.max(np.array(all_timeseries['albedo']), axis=0)
     albedo_best =  result_dict[best[0]][best[1]][site]['albedo_mod']
     albedo_data = result_dict[best[0]][best[1]][site]['albedo_meas']
     
-    ax.plot(dates_albedo, albedo_data, color='k',linestyle='--', linewidth=1.2, label='Observations')
-    ax.plot(dates_albedo, albedo_best, color='k', linewidth=1.5,label='Best parameters')
-    ax.fill_between(dates_albedo, min_series, max_series, alpha=0.8, color='gray',label='Pareto fronts')
+    # Plot albedo
+    ax.plot(dates_albedo, albedo_data, color='k',linestyle='--', linewidth=1.2) #, label='Observations')
+    ax.plot(dates_albedo, albedo_best, color='k', linewidth=1.5) #,label='Best parameters')
+    ax.fill_between(dates_albedo, min_series, max_series, alpha=0.8, color='gray')
+    # Plot ice exposure date
+    when_modeled = dates_albedo[np.where(albedo_best == np.min(albedo_best))[0][0]]
+    when_measured = pd.to_datetime('2024-07-21')
+    ax.axvline(when_modeled, color='r', linewidth=1.5,label='Ice exposed')
+    ax.axvline(when_measured, color='r', linestyle='--', linewidth=1.2)
+    ax.legend()
     # ax.legend()
     ax.set_xlim(dates_albedo[0],dates_albedo[-1])
     ax.set_ylabel('Albedo (-)', fontsize=12)
@@ -1504,12 +1513,13 @@ def plot_heatmap_by_site_weighted(error_names, result_dict, metric='MAE', savefi
     n_plots = len(error_names)
     n_rows = n_plots // 2
     n_rows = n_rows + 1 if n_plots % 2 != 0 else n_rows
-    fig = plt.figure(figsize=(8,n_rows*1.5)) # , gridspec_kw={'hspace':0.5, 'wspace':0.5}
-    ax1 = fig.add_subplot(4, 3, (1,4))
-    ax2 = fig.add_subplot(4, 3, (2,5),sharex=ax1, sharey=ax1)
-    ax3 = fig.add_subplot(4, 3, (7,10),sharex=ax1, sharey=ax1)
-    ax4 = fig.add_subplot(4, 3, (8,11),sharex=ax1, sharey=ax1)
-    ax5 = fig.add_subplot(4, 3, (6,9))
+    fig = plt.figure(figsize=(8,n_rows*1.3)) # , gridspec_kw={'hspace':0.5, 'wspace':0.5}
+    gs = mpl.gridspec.GridSpec(4,3, figure=fig, wspace=0.6)  # Increase wspace here
+    ax1 = fig.add_subplot(gs[0:2, 0])  # top-left
+    ax2 = fig.add_subplot(gs[0:2, 1])  # top-right
+    ax3 = fig.add_subplot(gs[2:4, 0])  # bottom-left
+    ax4 = fig.add_subplot(gs[2:4, 1])  # bottom-right
+    ax5 = fig.add_subplot(gs[1:3, 2])  # centered vertically
     axes = [ax1,ax2,ax3,ax4,ax5]
     for ax in axes:
         ax.set_xticks(np.arange(0.5,5.5))
@@ -1562,7 +1572,8 @@ def plot_heatmap_by_site_weighted(error_names, result_dict, metric='MAE', savefi
         #     axtitle = axtitle.replace('snow','\nsnow')
         # if 'balance' in axtitle:
         #     axtitle = axtitle.replace('balance','\nbalance')
-        ax.set_title(axtitle,fontsize=10)
+        cbar.ax.set_ylabel(axtitle,rotation=270, labelpad=25, fontsize=12)
+        cbar.ax.yaxis.set_label_position('right')
         if e in [0,1]:
             ax.tick_params(labelbottom=False)
         if e in [1,3,4]:
@@ -1603,26 +1614,30 @@ def compare_calib_valid(error_list, all_calib, all_valid, savefig=False):
     plt.show()
 
 def plot_sensitivity(sens_dict,savefig=False):
-    label_dict = {'kp':'Precip.\nfactor (-)','Boone_c5':'Densification\nparam (-)','lapserate':'Temperature lapse\nrate (K/km)',
+    label_dict = {'kp':'Precipitation\nfactor (-)','Boone_c5':'Densification\nparam (-)','lapserate':'Temperature lapse\nrate (K/km)',
                 'rfz_grainsize':'Refrozen\ngrain size ($\mu m$)','roughness_rate':'Roughness\ndecay rate (mm/day)',
                 'roughness_ice':'Ice\nroughness (mm)','albedo_ground':'Ground\nalbedo (-)', # 'diffuse_cloud_limit':'Cloudy\nthreshold (-)',
-                'ksp_BC':'Solubility\ncoef. of BC (-)','ksp_OC':'Solubility\ncoef. of OC (-)','ksp_dust':'Solubility\ncoef. of dust (-)',
+                'ksp_BC':'Solubility\ncoefficient of BC (-)','ksp_OC':'Solubility\ncoefficient of OC (-)','ksp_dust':'Solubility\nncoefficient of dust (-)',
                 'roughness_fresh_snow':'Fresh snow\nroughness (mm)', 'roughness_aged_snow':'Aged snow\nroughness (mm)'}
     base = sens_dict['base']['base']
 
-    fig, ax = plt.subplots(figsize=(6,4))
-    colors = mpl.colormaps['Set3']
+    fig, ax = plt.subplots(figsize=(4,3))
+    # colors = mpl.colormaps['Set3']
+    colors = ['#63c4c7','#fcc02e','#4D559C','#60C252','#BF1F6A',
+              '#F77808','#298282','#999999','#FF89B0','#427801']
 
     # Loop through vars
     all_names = []
+    vv = -1
     for v, var in enumerate(sens_dict):
         if var in label_dict:
+            vv += 1
             point_50 = sens_dict[var]['-20'] - base
             point_200 = sens_dict[var]['+20'] - base
             x_50 = v - 0.2 -1
             x_200 = v + 0.2 - 1
-            ax.bar(x_50, point_50, 0.3, align='center', color=colors(v), hatch='///')
-            ax.bar(x_200, point_200, 0.3, align='center', color=colors(v))
+            ax.bar(x_50, point_50, 0.3, align='center', color=colors[vv], hatch='///')
+            ax.bar(x_200, point_200, 0.3, align='center', color=colors[vv])
             label = label_dict[var].replace('\n',' ')
             all_names.append(label)
             ax.axvline(x_200+0.3, color='k', linewidth=0.1)
@@ -1631,7 +1646,7 @@ def plot_sensitivity(sens_dict,savefig=False):
     ax.set_xticklabels(all_names, rotation=45, ha='right')
     ax.tick_params(axis='y',length=5)
     ax.axhline(0, linewidth=0.5, color='k')
-    ax.set_ylabel('Mass balance residuals\ncompared to default simulation (m w.e.)',fontsize=12)
+    ax.set_ylabel('Mass balance deviation from\ndefault simulation (m w.e.)',fontsize=12)
     ax.set_xlim(-0.5,x_200+0.3)
 
     ax.bar(np.nan, np.nan, np.nan, color='lightgray',hatch='///',label='Lower end')
@@ -1644,26 +1659,26 @@ def plot_sensitivity(sens_dict,savefig=False):
 
 def plot_bias_correction(mb_dict, savefig=False):
     mb_df = pd.read_csv(USGS_fp, index_col=0)
-    fig, ax = plt.subplots()
-    colors = mpl.colormaps['Set3']
+    fig, ax = plt.subplots(figsize=(4,3))
+    colors = ['#63c4c7','#fcc02e','#4D559C','#60C252','#BF1F6A']
     for s,site in enumerate(mb_dict):
         ba = mb_df.loc[mb_df['site_name'] == site].loc[2024]['ba']
         bw = mb_df.loc[mb_df['site_name'] == site].loc[2024]['bw']
         sacc = mb_df.loc[mb_df['site_name'] == site].loc[2024]['summer_accumulation']
         bs = ba - bw + sacc
 
-        ax.bar(s, mb_dict[site]['og'] - bs, 0.2, color=colors(s))
-        ax.bar(s+0.3, mb_dict[site]['bc'] - bs, 0.2, color=colors(s), hatch='///')
-        ax.bar(s+0.6, mb_dict[site]['aws'] - bs, 0.2, color=colors(s), hatch='xxx')
+        ax.bar(s, mb_dict[site]['og'] - bs, 0.2, color=colors[s])
+        ax.bar(s+0.3, mb_dict[site]['bc'] - bs, 0.2, color=colors[s], hatch='///')
+        ax.bar(s+0.6, mb_dict[site]['aws'] - bs, 0.2, color=colors[s], hatch='xxx')
     ax.tick_params(axis='y',length=5)
     ax.set_xticks([0.3,1.3,2.3,3.3,4.3])
     ax.set_xticklabels(['AU','AB','B','D','T'],fontsize=12)
     ax.axhline(0, linewidth=0.5, color='k')
-    ax.set_ylabel('Difference from measured mass balance (m w.e.)',fontsize=12)
+    ax.set_ylabel('Difference from measured\nmass balance (m w.e.)',fontsize=12)
 
     ax.bar(np.nan, np.nan, np.nan, color='lightgray', label='Original MERRA-2')
     ax.bar(np.nan, np.nan, np.nan, color='lightgray', label='Bias-corrected MERRA-2',hatch='///')
-    ax.bar(np.nan, np.nan, np.nan, color='lightgray', label='AWS',hatch='xxx')
+    ax.bar(np.nan, np.nan, np.nan, color='lightgray', label='Weather station',hatch='xxx')
 
     ax.legend()
     if savefig:

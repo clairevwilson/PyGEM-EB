@@ -15,7 +15,7 @@ import itertools
 machine = socket.gethostname()
 if 'trace' in machine:
     base_fp = '/trace/group/rounce/cvwilson/Output/'
-elif os.path.exists('/mnt/d/'):
+elif os.path.exists('/mnt/d/grid_search'):
     base_fp = '/mnt/d/grid_search/'
 else:
     base_fp = '/home/claire/research/Output/EB/'

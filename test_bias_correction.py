@@ -59,8 +59,8 @@ for site in results:
         # Store the mass balance
         ds = massbal.output.get_output()
         internal_acc = ds.isel(time=-2).cumrefreeze.values
-        summer_mb = ds.accum.sum().values + ds.refreeze.sum().values - ds.melt.sum().values - internal_acc
-        results[site][climate_option] = summer_mb
+        summer_mb = ds.accum.sum().values + ds.refreeze.sum().values - ds.melt.sum().values 
+        results[site][climate_option] = summer_mb - internal_acc
         print(climate_option, site, 'wind',np.mean(climate.cds.wind.values), 'mb', summer_mb)
         # os.remove(eb_prms.output_filepath + args.out + '0.nc')
 

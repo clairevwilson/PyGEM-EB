@@ -54,9 +54,9 @@ def model_run(name):
     # Store the mass balance
     ds = massbal.output.get_output()
     internal_acc = ds.isel(time=-2).cumrefreeze.values
-    summer_mb = ds.accum + ds.refreeze - ds.melt - internal_acc
+    summer_mb = ds.accum + ds.refreeze - ds.melt 
     # plt.plot(summer_mb.time, ds.accum.cumsum().values,label=name+percent)
-    result_dict[var][percent] = summer_mb.sum().values
+    result_dict[var][percent] = summer_mb.sum().values - internal_acc
     # os.remove(eb_prms.output_filepath + args.out + '0.nc')
 
     # Print time
