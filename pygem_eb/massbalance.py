@@ -1069,15 +1069,12 @@ class Output():
         Parameters
         ----------
         """
-        # Get unique filename (or scratch filename)
+        # Get unique filename
         self.out_fn = eb_prms.output_filepath + args.out
-        if eb_prms.new_file:
-            i = 0
-            while os.path.exists(self.out_fn+f'{i}.nc'):
-                i += 1
-            self.out_fn += str(i)
-        else:
-            self.out_fn = self.out_fn+'scratch'
+        i = 0
+        while os.path.exists(self.out_fn+f'{i}.nc'):
+            i += 1
+        self.out_fn += str(i)
         self.out_fn += '.nc'
 
         # Info needed to create the output file

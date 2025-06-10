@@ -7,40 +7,41 @@ import pandas as pd
 import xarray as xr
 # import pygem.oggm_compat as oggm
 
-debug=False           # Print monthly status?
-store_data=False      # Save file?
-new_file=True         # Make new file or write to scratch?
+debug = False           # Print monthly status?
+store_data = False      # Save file?
 
 # ========== USER OPTIONS ========== 
 glac_no = ['01.00570']  # List of RGI glacier IDs
-timezone = pd.Timedelta(hours=-8)   # local GMT time zone
+timezone = pd.Timedelta(hours=-5)   # local GMT time zone (-8 for Gulkana)
 use_AWS = False          # Use AWS data? (or just reanalysis)
-mb_threshold = 0.1       # Threshold to consider not conserving mass (kg m-2 = mm w.e.)
 
 # ========== GLACIER INFO ========== 
-glac_props = {'01.00570':{'name':'Gulkana',
+glac_props = {'01.00570':{'name':'gulkana',
                             'site_elev':1693,
                             'AWS_fn':'Preprocessed/gulkana2024.csv'}, 
-            '01.01104':{'name':'Lemon Creek',
+            '01.01104':{'name':'lemon creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
-            '01.00709':{'name':'Mendenhall',
+            '01.00709':{'name':'mendenhall',
                             'site_elev':1316},
-            '01.01390':{'name':'Taku',
+            '01.01390':{'name':'taku',
                             'site_elev':1166},
-            '01.00704':{'name':'Gilkey',
+            '01.00704':{'name':'gilkey',
                             'site_elev':1459},
-            '01.16195':{'name':'South',
+            '01.16195':{'name':'south',
                             'site_elev':2280,
                             'AWS_fn':'Preprocessed/south/south2280_2008.csv'},
-            '08.00213':{'name':'Storglaciaren',
+            '08.00213':{'name':'storglaciaren',
                             'AWS_fn':'Storglaciaren/SITES_MET_TRS_SGL_dates_15MIN.csv'},
             '11.03674':{'name':'Saint-Sorlin',
                             'site_elev':2720,
                             'AWS_fn':'Preprocessed/saintsorlin/saintsorlin_hourly.csv'},
-            '16.02444':{'name':'Artesonraju',
+            '16.02444':{'name':'artesonraju',
                             'site_elev':4797,
-                            'AWS_fn':'Preprocessed/artesonraju/Artesonraju_hourly.csv'}}
+                            'AWS_fn':'Preprocessed/artesonraju/Artesonraju_hourly.csv'},
+            '16.01345':{'name':'cayambe',
+                            'site_elev':4996,
+                            'AWS_fn':'Preprocessed/cayambe/cayambe.csv'}}
 
 # WAYS OF MAKING BIN_ELEV
 # dynamics = False
@@ -61,7 +62,8 @@ if glac_no[0] in list(glac_props.keys()):
 else:
     elev = 2000
     site = str(elev)
-initial_snow_depth = 2.18
+initial_snow_depth = 0.4
+print('changed initial snow depth')
 initial_firn_depth = 0
 initial_ice_depth = 200
 
@@ -83,7 +85,8 @@ initial_density_fp = 'data/sample_initial_density.csv'
 initial_grains_fp = 'data/sample_initial_grains.csv'
 initial_LAP_fp = 'data/sample_initial_laps.csv' # f'/../Data/Nagorski/May_Mend-2_BC.csv'
 # Shading
-shading_fp = f'shading/out/{glac_name}{site}_shade.csv'
+dem_fp = f'shading/in/GLACIER/dem.tif'
+shading_fp = f'shading/out/GLACIER{site}_shade.csv'
 # Bias adjustment 
 bias_fp = 'data/METHOD_VAR.csv'
 # Output filepaths
@@ -106,7 +109,7 @@ temp_bias_slope = 0.57596           # Slope of MERRA-2 --> ON-ICE AWS
 temp_bias_intercept = 1.799         # Intercept of MERRA-2 --> ON-ICE AWS
 
 # DATES
-dates_from_data = False
+dates_from_data = True
 if dates_from_data:
     cdf = pd.read_csv(AWS_fn,index_col=0)
     cdf = cdf.set_index(pd.to_datetime(cdf.index))
@@ -130,15 +133,18 @@ else:
     
 # ========== MODEL OPTIONS ========== 
 # INITIALIATION
-initialize_temp = 'interpolate'     # 'interpolate' or 'ripe'
+initialize_temp = 'ripe'            # 'interpolate' or 'ripe'
+print('changed initialize temp, density and water')
+initialize_density = 'constant'     # 'interpolate' or 'constant'
 initialize_LAPs = 'clean'           # 'interpolate' or 'clean' 
+initialize_water = 'saturated'      # 'dry' or 'saturated'
 surftemp_guess =  -10               # guess for surface temperature of first timestep
 initial_snow = True                 # initialize with or without snow
 
 # OUTPUT
 store_vars = ['MB','EB','climate','layers']  # Variables to store of the possible set: ['MB','EB','climate','layers']
-store_bands = False     # Store spectral albedo .csv
-store_climate = False   # Store climate dataset .nc
+store_bands = False         # Store spectral albedo .csv
+store_climate = False       # Store climate dataset .nc
 
 # TIMESTEP
 dt = 3600                   # Model timestep [s]
@@ -192,13 +198,15 @@ dz_toplayer = 0.03          # Thickness of the uppermost layer [m]
 layer_growth = 0.5          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
 max_nlayers = 80            # Maximum number of vertical layers allowed (defines output file size)
 max_dz = 2                  # Max layer height
+mb_threshold = 0.1          # Threshold to consider not conserving mass (kg m-2 = mm w.e.)
 # <<<<<< Boundary conditions >>>>>
 temp_temp = 0               # temperature of temperate ice [C]
 temp_depth = 10             # depth of temperate ice [m]
 # <<<<<< Physical properties of snow, ice, water and air >>>>>
-density_ice = 900           # Density of ice [kg m-3]
 density_water = 1000        # Density of water [kg m-3]
-density_firn = 700          # Density threshold for firn
+density_ice = 900           # Density of ice [kg m-3]
+density_firn = 700          # Density threshold for firn [kg m-3]
+density_snow = 500          # Average density of snow if held constant [kg m-3]
 k_air = 0.023               # Thermal conductivity of air [W K-1 m-1] (Mellor, 1997)
 k_ice = 2.25                # Thermal conductivity of ice [W K-1 m-1]
 k_water = 0.56              # Thermal conductivity of water [W K-1 m-1]

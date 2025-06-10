@@ -50,6 +50,12 @@ class energyBalance():
         self.dustdry = climateds_now['dustdry'].values
         self.dustwet = climateds_now['dustwet'].values
 
+        # Store previous timestep incoming shortwave
+        if time != pd.to_datetime(climate.cds.time.values[0]):
+            self.last_SWin_ds = climate.cds.sel(time=time - pd.Timedelta(seconds=dt))['SWin'].values
+        else:
+            self.last_SWin_ds = self.SWin_ds
+
         # Main variables
         self.climateds = climate.cds
         self.args = args
@@ -68,6 +74,7 @@ class energyBalance():
 
         # Radiation terms
         self.measured_SWin = 'SWin' in climate.measured_vars
+        self.nanSWin = True if np.isnan(self.SWin_ds) else False
         self.nanLWin = True if np.isnan(self.LWin_ds) else False
         self.nanSWout = True if np.isnan(self.SWout_ds) else False
         self.nanLWout = True if np.isnan(self.LWout_ds) else False
@@ -103,17 +110,29 @@ class energyBalance():
             If mode is 'list', returns list in the order of 
                     [SWin, SWout, LWin, LWout, sensible, latent, rain, ground]
         """
-        # SHORTWAVE RADIATION  (Snet)
-        SWin,SWout = self.get_SW(surface)
-        Snet_surf = SWin + SWout
-        self.SWin = SWin
-        self.SWout = SWout[0] if '__iter__' in dir(SWout) else SWout
+        if self.nanNR and not self.nanSWin:
+            # SHORTWAVE RADIATION  (Snet)
+            SWin,SWout = self.get_SW(surface)
+            Snet_surf = SWin + SWout
+            self.SWin = SWin
+            self.SWout = SWout[0] if '__iter__' in dir(SWout) else SWout
+        else:
+            self.SWin = np.nan
+            self.SWout = np.nan
                     
         # LONGWAVE RADIATION (Lnet)
         LWin,LWout = self.get_LW(surftemp)
         Lnet = LWin + LWout
         self.LWin = LWin
         self.LWout = LWout[0] if '__iter__' in dir(LWout) else LWout
+
+        # NET RADIATION
+        if self.nanNR and not self.nanSWin:
+            NR = Snet_surf + Lnet
+            self.NR = NR
+        else:
+            NR = self.NR_ds / self.dt
+            self.NR = self.NR_ds / self.dt
 
         # RAIN FLUX (Qp)
         Qp = self.get_rain(surftemp)
@@ -130,7 +149,7 @@ class energyBalance():
         self.lat = Ql[0] if '__iter__' in dir(Qs) else Ql
 
         # OUTPUTS
-        Qm = Snet_surf + Lnet + Qp + Qs + Ql + Qg
+        Qm = NR + Qp + Qs + Ql + Qg
 
         if mode in ['sum']:
             return Qm

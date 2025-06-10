@@ -32,15 +32,15 @@ from pyproj import Transformer
 from numpy import pi, cos, sin, arctan
 
 # =================== INPUTS ===================
-site_by = 'id'                      # method to choose lat/lon ('id' or 'latlon')
-site = 'B'                          # name of site for indexing .csv OR specify lat/lon
-lat,lon = [60.8155986,-139.1236350] # site latitude,longitude 
-timezone = pd.Timedelta(hours=-8)   # time zone of location
-glacier_name = 'Gulkana'            # name of glacier for labeling
+site_by = 'latlon'                  # method to choose lat/lon ('id' or 'latlon')
+site = 'AWS'                        # name of site for indexing .csv OR specify lat/lon
+lat,lon = [0.0178817,-78.0040317]   # [60.8155986,-139.1236350] # site latitude,longitude 
+timezone = pd.Timedelta(hours=-5)   # time zone of location
+glacier_name = 'cayambe'            # name of glacier for labeling
 
 # storage options
-plot = ['result','search']           # list from ['result','search','horizon']
-store = ['result','result_plot','search_plot']   # list from ['result','result_plot','search_plot','horizon_plot']
+plot = ['result','search','horizon']           # list from ['result','search','horizon']
+store = ['result','result_plot','search_plot','horizon_plot']   # list from ['result','result_plot','search_plot','horizon_plot']
 result_vars = ['dirirrslope','shaded']      # variables to include in plot
 
 # model options 
@@ -57,18 +57,22 @@ search_length = 5000    # distance to search from center point (m)
 sub_dt = 10             # timestep to calculate solar corrections (minutes)
 buffer = 20             # min num of gridcells away from which horizon can be found
 
-# =======+========= INPUT FILEPATHS =================
+# ================ INPUT FILEPATHS =================
 # in
-dem_fp = 'in/gulkana/Gulkana_DEM_20m.tif'   # DEM containing glacier + surroundings
+dem_fp = f'in/{glacier_name}/dem.tif'   # DEM containing glacier + surroundings # gulkana/Gulkana_DEM_20m
 # if using get_diffuse, need a solar radiation file
 solar_fp = None # '/home/claire/research/climate_data/AWS/CNR4/cnr4_2023.csv'
 # optional: shapefile of glacier outline for plotting
-shp_fp = None # 'in/shapefile/Gulkana.shp'
+shp_fp = f'in/shapefile/{glacier_name}.shp'
 # optional: if choosing lat/lon by site, need site constants
-site_fp = '../data/Gulkana/site_constants.csv'
+site_fp = f'../data/{glacier_name}/site_constants.csv'
 # optional: slope/aspect .tif (can also be calculated from DEM)
 aspect_fp = None     # 'in/gulkana/Gulkana_aspect_20m.tif'
 slope_fp = None      # 'in/gulkana/Gulkana_slope_20m.tif'
+# make output filepath
+data_fp = os.getcwd().split('PyGEM-EB')[0]
+if not os.path.exists(data_fp + f'PyGEM-EB/data/{glacier_name}'):
+    os.mkdir(data_fp + f'PyGEM-EB/data/{glacier_name}')
 
 # =================== CONSTANTS ===================
 I0 = 1368       # solar constant in W m-2
@@ -91,7 +95,7 @@ class Shading():
     the sun or shade for every hour (or user-defined dt)
     of the year.
     """
-    def __init__(self):
+    def __init__(self,dem_fp=dem_fp):
         """
         Initializes shading model by opening the DEM and 
         calculating slope and aspect.
@@ -105,19 +109,23 @@ class Shading():
             args.lon = site_df.loc[args.site]['lon']    # longitude of point of interest
             args.site_name = glacier_name + args.site
             self.site_df = site_df
+        else:
+            self.site_df = pd.DataFrame({'lat':lat,'lon':lon},index=[args.site])
+            self.site_df.index.name = 'site'
+
+        # out
+        self.args = args
 
         # =================== SETUP ===================
         # load the DEM
-        self.load_dem()
+        self.load_dem(dem_fp)
 
         # output filepaths
         self.shade_fp = f'out/{args.site_name}_shade.csv'
         self.irr_fp = f'out/{args.site_name}_irr.csv'
         self.out_image_fp = f'plots/{args.site_name}.png'
         self.out_horizon_fp = f'plots/{args.site_name}_horizon.png'
-
-        # out
-        self.args = args
+        self.out_search_fp = f'plots/{args.site_name}_angles.png'
         return
 
     def parse_args(self):
@@ -237,7 +245,7 @@ class Shading():
         Loads the DEM and calculates aspect and slope from it.
         """
         # open files
-        dem = rxr.open_rasterio(dem_fp).isel(band=0)
+        dem = rxr.open_rasterio(dem_fp,masked=True).isel(band=0)
         self.x_res = dem.rio.resolution()[0]
         self.y_res = dem.rio.resolution()[1]
 
@@ -247,8 +255,10 @@ class Shading():
             shapefile = shapefile.to_crs(dem.rio.crs)
             self.shapefile = shapefile
 
-        # filter nans
+        # filter below sea level
         dem = dem.where(dem > 0)
+        # filter extremes
+        dem = dem.where(dem < 6000)
 
         # if specified aspect/slope files:
         if aspect_fp and slope_fp:
@@ -272,8 +282,8 @@ class Shading():
             aspect = xr.DataArray(aspect, dims=['y', 'x'], coords={'y': dem.y, 'x': dem.x})
 
         # get min/max elevation for plotting
-        self.min_elev = int(np.round(np.min(dem.values)/100,0)*100)
-        self.max_elev = int(np.round(np.max(dem.values)/100,0)*100)
+        self.min_elev = int(np.round(np.nanmin(dem.values)/100,0)*100)
+        self.max_elev = int(np.round(np.nanmax(dem.values)/100,0)*100)
 
         # get UTM coordinates from lat/lon
         transformer = Transformer.from_crs('EPSG:4326', dem.rio.crs, always_xy=True)
@@ -502,7 +512,7 @@ class Shading():
         plt.ylabel('Northing')
         plt.xlabel('Easting')
         if 'search_plot' in self.args.store:
-            plt.savefig(out_horizon_fp)
+            plt.savefig(self.out_search_fp)
         else:
             plt.show()
 
@@ -543,7 +553,7 @@ class Shading():
         
         # store or show plot
         if 'result_plot' in args.store:
-            plt.savefig(out_image_fp,dpi=150)
+            plt.savefig(self.out_image_fp,dpi=150)
         else: 
             plt.show()
 
@@ -556,7 +566,7 @@ class Shading():
         ax.set_ylabel('Horizon angle ($\circ$)')
         fig.suptitle(args.site_name+' shading by azimuth angle (0$^{\circ}$N)',fontsize=14)
         if 'horizon_plot' in args.store:
-            plt.savefig(f'/home/claire/GulkanaDEM/Outputs/{args.site_name}_angles.png')
+            plt.savefig(self.out_horizon_fp)
         else:
             plt.show()
 

@@ -39,7 +39,7 @@ class Surface():
         self.spectral_weights = np.ones(1)
 
         # Get shading df and initialize surrounding albedo
-        self.shading_df = pd.read_csv(eb_prms.shading_fp,index_col=0)
+        self.shading_df = pd.read_csv(args.shading_fp,index_col=0)
         self.shading_df.index = pd.to_datetime(self.shading_df.index)
         self.albedo_surr = eb_prms.albedo_fresh_snow
 
