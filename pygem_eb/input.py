@@ -5,151 +5,65 @@ import socket
 import numpy as np
 import pandas as pd
 import xarray as xr
-# import pygem.oggm_compat as oggm
-
-debug = False           # Print monthly status?
-store_data = False      # Save file?
 
 # ========== USER OPTIONS ========== 
-glac_no = ['01.00570']  # List of RGI glacier IDs
-timezone = pd.Timedelta(hours=-5)   # local GMT time zone (-8 for Gulkana)
-use_AWS = False          # Use AWS data? (or just reanalysis)
-
-# ========== GLACIER INFO ========== 
-glac_props = {'01.00570':{'name':'gulkana',
-                            'site_elev':1693,
-                            'AWS_fn':'Preprocessed/gulkana2024.csv'}, 
-            '01.01104':{'name':'lemon creek',
-                            'site_elev':1285,
-                            'AWS_fn':'LemonCreek1285_hourly.csv'},
-            '01.00709':{'name':'mendenhall',
-                            'site_elev':1316},
-            '01.01390':{'name':'taku',
-                            'site_elev':1166},
-            '01.00704':{'name':'gilkey',
-                            'site_elev':1459},
-            '01.16195':{'name':'south',
-                            'site_elev':2280,
-                            'AWS_fn':'Preprocessed/south/south2280_2008.csv'},
-            '08.00213':{'name':'storglaciaren',
-                            'AWS_fn':'Storglaciaren/SITES_MET_TRS_SGL_dates_15MIN.csv'},
-            '11.03674':{'name':'Saint-Sorlin',
-                            'site_elev':2720,
-                            'AWS_fn':'Preprocessed/saintsorlin/saintsorlin_hourly.csv'},
-            '16.02444':{'name':'artesonraju',
-                            'site_elev':4797,
-                            'AWS_fn':'Preprocessed/artesonraju/Artesonraju_hourly.csv'},
-            '16.01345':{'name':'cayambe',
-                            'site_elev':4996,
-                            'AWS_fn':'Preprocessed/cayambe/cayambe.csv'}}
-
-# WAYS OF MAKING BIN_ELEV
-# dynamics = False
-# if dynamics:
-#     gdir = oggm.single_flowline_glacier_directory(glac_no[0], logging_level='CRITICAL') #,has_internet=False
-#     all_fls = oggm.get_glacier_zwh(gdir)
-#     fls = all_fls.iloc[np.nonzero(all_fls['h'].to_numpy())] # remove empty bins
-#     bin_indices = np.linspace(len(fls.index)-1,0,n_bins,dtype=int)
-#     bin_elev = fls.iloc[bin_indices]['z'].to_numpy()
-#     bin_ice_depth = fls.iloc[bin_indices]['h'].to_numpy()
-# bin_elev = np.array([1270,1385,1470,1585,1680,1779]) # From Takeuchi 2009
-# bin_elev = np.array([1526,1693,1854])
-# bin_ice_depth = np.ones(len(bin_elev)) * 200
-
-if glac_no[0] in list(glac_props.keys()):
-    elev = glac_props[glac_no[0]]['site_elev']
-    site = 'AWS'
-else:
-    elev = 2000
-    site = str(elev)
-initial_snow_depth = 0.4
-print('changed initial snow depth')
-initial_firn_depth = 0
-initial_ice_depth = 200
+glac_no = '01.00570'    # RGI glacier ID
+use_AWS = False         # Use AWS data?
+debug = False           # Print monthly model status?
+store_data = False      # Save data?
 
 # ========== DIRECTORIES AND FILEPATHS ========== 
 machine = socket.gethostname()
-output_filepath = '../Output/EB/'
-output_sim_fp = output_filepath + 'simulations/'
-model_run_date = str(pd.Timestamp.today()).replace('-','_')[0:10]
-glac_name = glac_props[glac_no[0]]['name']
-glac_no_str = str(glac_no[0]).replace('.','_')
-# Grain size evolution lookup table
-grainsize_fp = 'data/grainsize/drygrainsize(SSAin=##).nc'
-# SNICAR inputs
-snicar_input_fp = 'biosnicar-py/biosnicar/inputs.yaml'
+# GLACIER
+metadata_fp = 'data/glacier_metadata.csv'                   # Glacier metadata
+site_fp = 'data/by_glacier/GLACIER/site_constants.csv'      # Generalized glacier site information
+RGI_fp = '../RGI/rgi60/00_rgi60_attribs/'                   # Randolph Glacier Inventory
+AWS_fp = '../climate_data/AWS/'                             # Weather station data
+grainsize_fp = 'data/grainsize/drygrainsize(SSAin=##).nc'   # Grain size evolution lookup table
+snicar_input_fp = 'biosnicar-py/biosnicar/inputs.yaml'      # SNICAR inputs
 clean_ice_fp = 'biosnicar-py/Data/OP_data/480band/r_sfc/gulkana_cleanice_avg_bba3732.csv'
-# Initial conditions
-initial_temp_fp = 'data/sample_initial_temp.csv'
-initial_density_fp = 'data/sample_initial_density.csv'
-initial_grains_fp = 'data/sample_initial_grains.csv'
-initial_LAP_fp = 'data/sample_initial_laps.csv' # f'/../Data/Nagorski/May_Mend-2_BC.csv'
-# Shading
-dem_fp = f'shading/in/GLACIER/dem.tif'
-shading_fp = f'shading/out/GLACIER{site}_shade.csv'
-# Bias adjustment 
-bias_fp = 'data/METHOD_VAR.csv'
-# Output filepaths
-albedo_out_fp = '../Output/EB/albedo.csv'
-output_name = f'{glac_name}_{model_run_date}_'
+# INITIAL CONDITIONS
+initial_temp_fp = 'data/sample_initial_temp.csv'            # Initial temperature profile
+initial_density_fp = 'data/sample_initial_density.csv'      # Initial density profile
+initial_grains_fp = 'data/sample_initial_grains.csv'        # Initial grain size profile
+initial_LAP_fp = 'data/sample_initial_laps.csv'             # Initial LAP content # f'/../Data/Nagorski/May_Mend-2_BC.csv'
+# SHADING
+dem_fp = 'shading/in/GLACIER/dem.tif'                       # Generalized DEM filepath
+shading_fp = 'data/by_glacier/GLACIER/shade/GLACIERSITE_shade.csv'# Generalized shading filepath
+# CLIMATE DATA
+bias_fp = 'data/bias_adjustment/METHOD_VAR.csv'             # Bias adjustment 
+climate_fp = '../climate_data/'                             # Climate data
+# OUTPUT
+output_filepath = '../Output/EB/'                           # Output filepaths
+albedo_out_fp = '../Output/EB/albedo.csv'                   
 
 # ========== CLIMATE AND TIME INPUTS ========== 
-reanalysis = 'MERRA2' # 'MERRA2' (or 'ERA5-hourly' -- ***BROKEN)
+# TIME
+startdate = pd.to_datetime('2024-04-20 00:00:00') 
+enddate = pd.to_datetime('2024-08-20 00:00:00')
+
+# REANALYSIS CHOICES
+reanalysis = 'MERRA2' # 'MERRA2' (*****'ERA5-hourly' BROKEN)
 MERRA2_filetag = False    # False or string to follow 'MERRA2_VAR_' in MERRA2 filename
-AWS_fp = '../climate_data/AWS/'
-AWS_fn = AWS_fp+glac_props[glac_no[0]]['AWS_fn']
-if use_AWS:
-    assert os.path.exists(AWS_fn), 'Check AWS filepath or glac_no in input.py'
-wind_ref_height = 10 if reanalysis in ['ERA5-hourly'] else 2
 
 # MERRA-2 BIAS ADJUSTMENT
 bias_vars = ['wind','SWin','temp','rh']         # Vars to correct by quantile mapping
-temp_bias_adjust = False             # Adjust MERRA-2 temperature linearly?
-temp_bias_slope = 0.57596           # Slope of MERRA-2 --> ON-ICE AWS
-temp_bias_intercept = 1.799         # Intercept of MERRA-2 --> ON-ICE AWS
-
-# DATES
-dates_from_data = True
-if dates_from_data:
-    cdf = pd.read_csv(AWS_fn,index_col=0)
-    cdf = cdf.set_index(pd.to_datetime(cdf.index))
-    if glac_no != ['01.00570']:
-        elev = cdf['z'].iloc[0]
-    startdate = pd.to_datetime(cdf.index[0])
-    enddate = pd.to_datetime(cdf.index.to_numpy()[-1])
-    if reanalysis == 'MERRA2' and startdate.minute != 30:
-        startdate += pd.Timedelta(minutes=30)
-        enddate -= pd.Timedelta(minutes=30)
-else:
-    startdate = pd.to_datetime('2024-04-20 00:00:00') 
-    enddate = pd.to_datetime('2024-08-20 00:00:00')
-    # enddate = pd.to_datetime('2019-04-25 23:00')
-    # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
-    # enddate = pd.to_datetime('2023-08-10 00:30')
-    # startdate = pd.to_datetime('2008-05-04 18:30')    # South dates
-    # enddate = pd.to_datetime('2008-09-14 00:30')
-    # startdate = pd.to_datetime('2016-05-11 00:30') # JIF sample dates
-    # enddate = pd.to_datetime('2016-07-18 00:30')
     
 # ========== MODEL OPTIONS ========== 
 # INITIALIATION
 initialize_temp = 'ripe'            # 'interpolate' or 'ripe'
-print('changed initialize temp, density and water')
 initialize_density = 'constant'     # 'interpolate' or 'constant'
 initialize_LAPs = 'clean'           # 'interpolate' or 'clean' 
 initialize_water = 'saturated'      # 'dry' or 'saturated'
-surftemp_guess =  -10               # guess for surface temperature of first timestep
-initial_snow = True                 # initialize with or without snow
+surftemp_guess =  -10               # guess for surface temperature of first timestep [C]
+initial_snow_depth = 1              # default amount of initial snow [m]
+initial_firn_depth = 0              # default amount of initial firn [m]
+initial_ice_depth = 200             # default amount of initial ice [m]
 
 # OUTPUT
 store_vars = ['MB','EB','climate','layers']  # Variables to store of the possible set: ['MB','EB','climate','layers']
 store_bands = False         # Store spectral albedo .csv
 store_climate = False       # Store climate dataset .nc
-
-# TIMESTEP
-dt = 3600                   # Model timestep [s]
-daily_dt = 3600*24          # Seconds in a day [s]
-dt_heateq = 3600/5          # Time resolution of heat eq [s], should be integer multiple of 3600s so data can be stored on the hour
 
 # METHODS
 method_turbulent = 'BulkRichardson'     # 'MO-similarity' or 'BulkRichardson' 
@@ -161,8 +75,8 @@ method_ground = 'MolgHardy'             # 'MolgHardy'
 method_conductivity = 'Douville'        # 'Sauter', 'Douville','Jansson','OstinAndersson','VanDusen'
 
 # CONSTANT SWITCHES
-constant_snowfall_density = False       # False or density in kg m-3
-constant_freshgrainsize = 54.5          # False or grain size in um (Kuipers Munneke (2011): 54.5)
+constant_snowfall_density = False       # False or density [kg m-3]
+constant_freshgrainsize = 54.5          # False or grain size [um] (Kuipers Munneke (2011): 54.5)
 constant_drdry = False                  # False or dry metamorphism grain size growth rate [um s-1] (1e-4 seems reasonable)
 
 # ALBEDO SWITCHES
@@ -170,12 +84,18 @@ switch_snow = 1             # 0 to turn off fresh snow feedback; 1 to include it
 switch_melt = 2             # 0 to turn off melt feedback; 1 for simple degradation; 2 for grain size evolution
 switch_LAPs = 1             # 0 to turn off LAPs; 1 to turn on
 
+# ========== INTERNAL CONFIGURATION ========== 
+# TIMESTEP
+dt = 3600                   # Model timestep [s]
+daily_dt = 3600*24          # Seconds in a day [s]
+dt_heateq = 3600/5          # Time resolution of heat eq [s] (integer multiple of 3600s)
+
 # ALBEDO BANDS
 wvs = np.round(np.arange(0.2,5,0.01),2) # 480 bands used by SNICAR
-band_indices = {}
+band_indices = {}           # dictionary for storing spectral albedo
 for i in np.arange(0,480):
     band_indices['Band '+str(i)] = np.array([i])
-initSSA = 80   # initial estimate of Specific Surface Area of fresh snowfall (interpolation tables)
+initSSA = 80   # estimate of Specific Surface Area of fresh snowfall (60, 80 or 100)
 grainsize_ds = xr.open_dataset(grainsize_fp.replace('##',str(initSSA)))
 
 # ========== PARAMETERS and CONSTANTS ==========
@@ -188,20 +108,16 @@ lapserate = -0.0065         # Temperature lapse rate for both gcm to glacier and
 albedo_ice = 0.47           # Ice albedo [-] 
 snow_threshold_low = 0.2    # Lower threshold for linear snow-rain scaling [C]
 snow_threshold_high = 2.2   # Upper threshold for linear snow-rain scaling [C]
-# <<<<<< Slope/aspect >>>>>
-slope = 0                   # Point slope (degrees)
-aspect = 0                  # Point aspect (degrees; 0 = North)
-lat = 63.3                  # Point latitude
-lon = -142.2                # Point longitude
-# <<<<<< Discretization >>>>>
+wind_ref_height = 10 if reanalysis in ['ERA5-hourly'] else 2  # Reference height for wind speed [m]
+# <<<<<< Numerical >>>>>
 dz_toplayer = 0.03          # Thickness of the uppermost layer [m]
 layer_growth = 0.5          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
-max_nlayers = 80            # Maximum number of vertical layers allowed (defines output file size)
+max_nlayers = 80            # Maximum number of vertical layers allowed (more layers --> larger file size)
 max_dz = 2                  # Max layer height
 mb_threshold = 0.1          # Threshold to consider not conserving mass (kg m-2 = mm w.e.)
 # <<<<<< Boundary conditions >>>>>
-temp_temp = 0               # temperature of temperate ice [C]
-temp_depth = 10             # depth of temperate ice [m]
+temp_temp = 0               # Temperature of temperate ice [C]
+temp_depth = 10             # Depth of temperate ice [m]
 # <<<<<< Physical properties of snow, ice, water and air >>>>>
 density_water = 1000        # Density of water [kg m-3]
 density_ice = 900           # Density of ice [kg m-3]
@@ -240,12 +156,12 @@ roughness_aging_rate = 0.5  # Rate in mm/day fresh --> aged snow (60 days from 0
 wet_snow_C = 4.22e-13       # Constant for wet snow metamorphosis [m3 s-1]
 Sr = 0.033                  # Fraction of irreducible water content for percolation [-]
 albedo_ground = 0.2         # Albedo of ground [-]
-# <<<<<< SNICAR things >>>>>
+# <<<<<< SNICAR >>>>>
 albedo_TOD = [14]           # List of time(s) of day to calculate albedo [hr] 
 diffuse_cloud_limit = 0.6   # Threshold to consider cloudy vs clear-sky in SNICAR [-]
 include_LWC_SNICAR = False  # Include liquid water in SNICAR? (slush)
 grainshape_SNICAR = 0       # 0: sphere, 1: spheroid, 2: hexagonal plate, 3: koch snowflake, 4: hexagonal prisms
-snicar_snow_limit = 0.003   # Cutoff for snow depth to run SNICAR
+snicar_snow_limit = 0.003   # Cutoff for minimum snow depth to run SNICAR
 # <<<<<< Constants for switch runs >>>>>
 albedo_deg_rate = 15        # Rate of exponential decay of albedo
 average_grainsize = 1000    # Grainsize to treat as constant if switch_melt is 0 [um]
@@ -253,13 +169,13 @@ albedo_fresh_snow = 0.85    # Albedo of fresh snow for exponential method [-] (M
 albedo_firn = 0.5           # Albedo of firn [-]
 # <<<<<< BC and dust >>>>>
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
-ksp_BC = 0.9               # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
-ksp_OC = 0.9               # Meltwater scavenging efficiency of OC (0.1-0.2 from CLM5)
-ksp_dust = 0.01             # Meltwater scavenging efficiency of dust (0.015 from CLM5)
+ksp_BC = 0.9                # Meltwater scavenging efficiency of BC [-] (0.1-0.2 from CLM5)
+ksp_OC = 0.9                # Meltwater scavenging efficiency of OC [-] (0.1-0.2 from CLM5)
+ksp_dust = 0.01             # Meltwater scavenging efficiency of dust [-] (0.015 from CLM5)
 BC_freshsnow = 0            # Concentration of BC in fresh snow for initialization [kg m-3]
 OC_freshsnow = 0            # Concentration of OC in fresh snow for initialization [kg m-3]
 dust_freshsnow = 0          # Concentration of dust in fresh snow for initilization [kg m-3]
-adjust_deposition = False   # Adjust deposition according to preprocessed 
+adjust_deposition = False   # Adjust deposition according to preprocessed factor
 # <<<<<< MERRA-2: LAP binning >>>>>
 ratio_BC2_BCtot = 2.08      # Ratio to transform BC bin 2 deposition to total BC
 ratio_OC2_OCtot = 1.54      # Ratio to transform OC bin 2 deposition to total OC
@@ -275,31 +191,54 @@ new_snow_threshold = 0.05   # Threshold for new snow to consider the start of wi
 new_snow_days = 10          # Number of days to sum snow over and compare against threshold
 
 # ========== OTHER PYGEM INPUTS ========== 
-rgi_regionsO1 = [1]
-rgi_regionsO2 = [2]
-rgi_glac_number = 'all'
+# rgi_regionsO1 = [1]
+# rgi_regionsO2 = [2]
+# rgi_glac_number = 'all'
 
-# Types of glaciers to include (True) or exclude (False)
-include_landterm = True                # Switch to include land-terminating glaciers
-include_laketerm = True                # Switch to include lake-terminating glaciers
-include_tidewater = True               # Switch to include tidewater glaciers
-ignore_calving = False                 # Switch to ignore calving and treat tidewater glaciers as land-terminating
-oggm_base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands/'
-logging_level = 'DEBUG' # DEBUG, INFO, WARNING, ERROR, WORKFLOW, CRITICAL (recommended WORKFLOW)
-option_leapyear = 1 # 0 to exclude leap years
+# # Types of glaciers to include (True) or exclude (False)
+# include_landterm = True                # Switch to include land-terminating glaciers
+# include_laketerm = True                # Switch to include lake-terminating glaciers
+# include_tidewater = True               # Switch to include tidewater glaciers
+# ignore_calving = False                 # Switch to ignore calving and treat tidewater glaciers as land-terminating
+# oggm_base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands/'
+# logging_level = 'DEBUG' # DEBUG, INFO, WARNING, ERROR, WORKFLOW, CRITICAL (recommended WORKFLOW)
+# option_leapyear = 1 # 0 to exclude leap years
 
-# Reference period runs (runs up to present)
-ref_startyear = 1980                # first year of model run (reference dataset)
-ref_endyear = 2019                  # last year of model run (reference dataset)
-ref_wateryear = 'calendar'          # options for years: 'calendar', 'hydro', 'custom'
-ref_spinupyears = 0                 # spin up years
+# # Reference period runs (runs up to present)
+# ref_startyear = 1980                # first year of model run (reference dataset)
+# ref_endyear = 2019                  # last year of model run (reference dataset)
+# ref_wateryear = 'calendar'          # options for years: 'calendar', 'hydro', 'custom'
+# ref_spinupyears = 0                 # spin up years
 
-# This is where the simulation runs climate data will be set up once we're there
-# Simulation runs (refers to period of simulation and needed separately from reference year to account for bias adjustments)
-gcm_startyear = 1980            # first year of model run (simulation dataset)
-gcm_endyear = 2019              # last year of model run (simulation dataset)
-gcm_wateryear = 'calendar'      # options for years: 'calendar', 'hydro', 'custom'
-gcm_spinupyears = 0             # spin up years for simulation (output not set up for spinup years at present)
+# # This is where the simulation runs climate data will be set up once we're there
+# # Simulation runs (refers to period of simulation and needed separately from reference year to account for bias adjustments)
+# gcm_startyear = 1980            # first year of model run (simulation dataset)
+# gcm_endyear = 2019              # last year of model run (simulation dataset)
+# gcm_wateryear = 'calendar'      # options for years: 'calendar', 'hydro', 'custom'
+# gcm_spinupyears = 0             # spin up years for simulation (output not set up for spinup years at present)
 # constantarea_years = 0          # number of years to not let the area or volume change
 # if gcm_spinupyears > 0:
 #     assert 0==1, 'Code needs to be tested to enure spinup years are correctly accounted for in output files'
+
+# GRAVEYARD
+# WAYS OF MAKING BIN_ELEV
+# dynamics = False
+# if dynamics:
+#     gdir = oggm.single_flowline_glacier_directory(glac_no, logging_level='CRITICAL') #,has_internet=False
+#     all_fls = oggm.get_glacier_zwh(gdir)
+#     fls = all_fls.iloc[np.nonzero(all_fls['h'].to_numpy())] # remove empty bins
+#     bin_indices = np.linspace(len(fls.index)-1,0,n_bins,dtype=int)
+#     bin_elev = fls.iloc[bin_indices]['z'].to_numpy()
+#     bin_ice_depth = fls.iloc[bin_indices]['h'].to_numpy()
+# bin_elev = np.array([1270,1385,1470,1585,1680,1779]) # From Takeuchi 2009
+# bin_elev = np.array([1526,1693,1854])
+# bin_ice_depth = np.ones(len(bin_elev)) * 200
+
+# temp_bias_adjust = False                        # Adjust MERRA-2 temperature linearly? ***** probably can delete these
+# temp_bias_slope = 0.57596                       # Slope of MERRA-2 --> ON-ICE AWS
+# temp_bias_intercept = 1.799                     # Intercept of MERRA-2 --> ON-ICE AWS
+# in climate.py under if eb_prms.reanalysis == 'MERRA2':
+            # Correct MERRA-2 temperature bias
+            # temp_filled = True if not self.args.use_AWS else 'temp' in self.need_vars
+            # if eb_prms.temp_bias_adjust and temp_filled:
+            #     self.adjust_temp_bias()

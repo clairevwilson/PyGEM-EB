@@ -308,6 +308,11 @@ class Surface():
         DIFFUSE_CLOUD_LIMIT = eb_prms.diffuse_cloud_limit
         DENSITY_FIRN = eb_prms.density_firn
 
+        # Determine if lighting conditions are diffuse
+        time_2024 = pd.to_datetime(str(time).replace(str(time.year),'2024'))
+        point_shade = bool(self.shading_df.loc[time_2024,'shaded'])
+        diffuse_conditions = self.tcc > DIFFUSE_CLOUD_LIMIT or point_shade
+
         # Get layers to include in the calculation
         if not nlayers and max_depth:
             nlayers = np.where(layers.ldepth > max_depth)[0][0] + 1
@@ -403,12 +408,12 @@ class Surface():
         # Solar zenith angle
         lat = self.climate.lat
         lon = self.climate.lon
-        time_UTC = time - eb_prms.timezone
+        time_UTC = time - self.args.timezone
         altitude_angle = suncalc.get_position(time_UTC,lon,lat)['altitude']
         zenith = 180/np.pi * (np.pi/2 - altitude_angle) if altitude_angle > 0 else 89
         # zenith = np.round(zenith / 10) * 10
         list_doc['RTM']['SOLZEN'] = int(zenith)
-        list_doc['RTM']['DIRECT'] = 0 if self.tcc > DIFFUSE_CLOUD_LIMIT else 1
+        list_doc['RTM']['DIRECT'] = 0 if diffuse_conditions else 1
 
         # Save SNICAR input file
         with open(self.snicar_fn, 'w') as f:

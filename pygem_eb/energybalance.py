@@ -184,7 +184,7 @@ class energyBalance():
         assert np.abs(1-np.sum(spectral_weights)) < 1e-5, 'Solar weights dont sum to 1'
 
         # Get solar position
-        time_UTC = self.time - eb_prms.timezone
+        time_UTC = self.time - self.args.timezone
         sunpos = suncalc.get_position(time_UTC,LON,LAT)
         # suncalc gives azimuth with 0 = South, we want 0 = North
         SUN_AZ = sunpos['azimuth'] + np.pi     # solar azimuth angle

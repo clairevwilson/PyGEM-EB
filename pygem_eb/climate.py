@@ -8,6 +8,7 @@ import xarray as xr
 import pandas as pd
 import threading
 import os,sys
+import time
 import pygem_eb.input as eb_prms
 
 class Climate():
@@ -22,10 +23,13 @@ class Climate():
         Initializes glacier information and creates the dataset where 
         climate data will be stored.
         """
+        # start timer
+        self.start_time = time.time()
+
         # load args and run information
         self.args = args
         self.dates = pd.date_range(args.startdate,args.enddate,freq='h')
-        self.dates_UTC = self.dates - eb_prms.timezone
+        self.dates_UTC = self.dates - args.timezone
         n_time = len(self.dates)
         self.elev = args.elev
 
@@ -226,7 +230,7 @@ class Climate():
         # TEMPERATURE: correct according to lapserate
         temp_elev = self.AWS_elev if 'temp' in self.measured_vars else self.reanalysis_elev
         new_temp = self.cds.temp.values + LAPSE_RATE*(self.elev - temp_elev)
-        if 'gulkana_22yrs' in eb_prms.AWS_fn and 'temp' in self.measured_vars:
+        if 'gulkana_22yrs' in self.args.AWS_fn and 'temp' in self.measured_vars:
             new_temp -= 1
             print('Reducing temperature for on-ice weather station')
             
@@ -257,10 +261,6 @@ class Climate():
         self.cds['winddir'].values = winddir
 
         if eb_prms.reanalysis == 'MERRA2':
-            # Correct MERRA-2 temperature bias
-            temp_filled = True if not self.args.use_AWS else 'temp' in self.need_vars
-            if eb_prms.temp_bias_adjust and temp_filled:
-                self.adjust_temp_bias()
             # Correct other MERRA-2 variables
             for var in eb_prms.bias_vars:
                 from_MERRA = True if not self.args.use_AWS else var in self.need_vars
@@ -295,6 +295,9 @@ class Climate():
             out_fp = eb_prms.output_filepath + self.args.out + self.args.site + '_climate'
             self.cds.to_netcdf(out_fp+'.nc')
             print('Climate dataset saved to',out_fp+'.nc')
+        
+        time_elapsed = time.time()-self.start_time
+        print(f'~ Loaded climate dataset in {time_elapsed:.1f} seconds ~')
         return
     
     def check_units(self,var,ds):
@@ -431,7 +434,7 @@ class Climate():
         tag = eb_prms.MERRA2_filetag if eb_prms.MERRA2_filetag else f'{flat}_{flon}'
 
         # Update filenames for MERRA-2 (need grid lat/lon)
-        self.reanalysis_fp = '../climate_data/'
+        self.reanalysis_fp = eb_prms.climate_fp
         self.var_dict = {'temp':{'fn':[],'vn':[]},
             'rh':{'fn':[],'vn':[]},'sp':{'fn':[],'vn':[]},
             'tp':{'fn':[],'vn':[]},'tcc':{'fn':[],'vn':[]},

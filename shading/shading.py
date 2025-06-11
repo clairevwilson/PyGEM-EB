@@ -37,6 +37,7 @@ site = 'AWS'                        # name of site for indexing .csv OR specify 
 lat,lon = [0.0178817,-78.0040317]   # [60.8155986,-139.1236350] # site latitude,longitude 
 timezone = pd.Timedelta(hours=-5)   # time zone of location
 glacier_name = 'cayambe'            # name of glacier for labeling
+glac_no = '01.16195'                # 
 
 # storage options
 plot = ['result','search','horizon']           # list from ['result','search','horizon']
@@ -62,17 +63,17 @@ buffer = 20             # min num of gridcells away from which horizon can be fo
 dem_fp = f'in/{glacier_name}/dem.tif'   # DEM containing glacier + surroundings # gulkana/Gulkana_DEM_20m
 # if using get_diffuse, need a solar radiation file
 solar_fp = None # '/home/claire/research/climate_data/AWS/CNR4/cnr4_2023.csv'
-# optional: shapefile of glacier outline for plotting
-shp_fp = f'in/shapefile/{glacier_name}.shp'
-# optional: if choosing lat/lon by site, need site constants
-site_fp = f'../data/{glacier_name}/site_constants.csv'
 # optional: slope/aspect .tif (can also be calculated from DEM)
 aspect_fp = None     # 'in/gulkana/Gulkana_aspect_20m.tif'
 slope_fp = None      # 'in/gulkana/Gulkana_slope_20m.tif'
+# RGI for glacier shapefile
+rgi_fp = f'../../RGI/rgi60/'
 # make output filepath
 data_fp = os.getcwd().split('PyGEM-EB')[0]
-if not os.path.exists(data_fp + f'PyGEM-EB/data/{glacier_name}'):
-    os.mkdir(data_fp + f'PyGEM-EB/data/{glacier_name}')
+fp_base = data_fp + 'PyGEM-EB/shading/'
+fp_out = fp_base + f'../data/by_glacier/'
+# optional: site constants file
+site_fp = fp_out + 'GLACIER/site_constants.csv'
 
 # =================== CONSTANTS ===================
 I0 = 1368       # solar constant in W m-2
@@ -95,37 +96,51 @@ class Shading():
     the sun or shade for every hour (or user-defined dt)
     of the year.
     """
-    def __init__(self,dem_fp=dem_fp):
+    def __init__(self,dem_fp=dem_fp,args=None):
         """
         Initializes shading model by opening the DEM and 
         calculating slope and aspect.
+        If this model is executed frpm PyGEM-EB, args and
+        dem_fp are both automated.
         """
-        # Parse line args
-        args = self.parse_args()
-        if args.site_by == 'id':
+        # If they were not input, parse command line args
+        if not args:
+            args = self.parse_args()
+
+        # Define site filepath and make the folder if it doesn't exist
+        args.site_fp = site_fp.replace('GLACIER',args.glac_name)
+        if not os.path.exists(fp_out + args.glac_name):
+            os.mkdir(fp_out + args.glac_name)
+
+        # Open or create the site constants file
+        if os.path.exists(args.site_fp):
             # get site lat and lon    
-            site_df = pd.read_csv(site_fp,index_col=0)
-            args.lat = site_df.loc[args.site]['lat']    # latitude of point of interest
-            args.lon = site_df.loc[args.site]['lon']    # longitude of point of interest
-            args.site_name = glacier_name + args.site
+            site_df = pd.read_csv(args.site_fp,index_col=0)
             self.site_df = site_df
+            if args.site_by == 'id':
+                args.lat = site_df.loc[args.site,'lat']    # latitude of point of interest
+                args.lon = site_df.loc[args.site,'lon']    # longitude of point of interest
         else:
             self.site_df = pd.DataFrame({'lat':lat,'lon':lon},index=[args.site])
             self.site_df.index.name = 'site'
 
-        # out
+        # Save the args to self
         self.args = args
 
-        # =================== SETUP ===================
-        # load the DEM
+        # Load the DEM
         self.load_dem(dem_fp)
 
-        # output filepaths
-        self.shade_fp = f'out/{args.site_name}_shade.csv'
-        self.irr_fp = f'out/{args.site_name}_irr.csv'
-        self.out_image_fp = f'plots/{args.site_name}.png'
-        self.out_horizon_fp = f'plots/{args.site_name}_horizon.png'
-        self.out_search_fp = f'plots/{args.site_name}_angles.png'
+        # Define output filepaths
+        gn = args.glac_name
+        if not os.path.exists(fp_base + f'plots/{gn}'):
+            os.mkdir(fp_base + f'plots/{gn}')
+        if not os.path.exists(fp_out + f'{gn}/shade/'):
+            os.mkdir(fp_out + f'{gn}/shade/')
+        self.shade_fp = fp_out + f'{gn}/shade/{gn}{args.site}_shade.csv'
+        self.irr_fp = fp_out + f'{gn}/shade/{gn}{args.site}_irr.csv'
+        self.out_image_fp = fp_base + f'plots/{gn}/{gn}{args.site}.png'
+        self.out_horizon_fp = fp_base + f'plots/{gn}/{gn}{args.site}_horizon.png'
+        self.out_search_fp = fp_base + f'plots/{gn}/{gn}{args.site}_angles.png'
         return
 
     def parse_args(self):
@@ -133,13 +148,14 @@ class Shading():
         parser = argparse.ArgumentParser(description='pygem-eb shading model')
         parser.add_argument('-latitude','--lat',action='store',default=lat)
         parser.add_argument('-longitude','--lon',action='store',default=lon)
+        parser.add_argument('-glac_no',action='store',default=glac_no)
         parser.add_argument('-site',action='store',default=site)
-        parser.add_argument('-site_name',action='store',default=glacier_name)
+        parser.add_argument('-glac_name',action='store',default=glacier_name)
         parser.add_argument('-site_by',action='store',default=site_by)
         parser.add_argument('-plot',action='store',default=plot)
         parser.add_argument('-store',action='store',default=store)
         args = parser.parse_args()
-        args.site_name += args.site
+        args.glac_name += args.site
         return args
     
     def main(self):
@@ -249,9 +265,20 @@ class Shading():
         self.x_res = dem.rio.resolution()[0]
         self.y_res = dem.rio.resolution()[1]
 
-        if 'search' in self.args.plot and shp_fp:
-            # load shapefile and ensure same coordinates
-            shapefile = gpd.read_file(shp_fp).set_crs(epsg=4326)
+        if 'search' in self.args.plot:
+            # find the shapefile in the RGI from the glac_no
+            id = self.args.glac_no
+            region = id.split('.')[0]
+            # search RGI folders for the correct shapefile
+            for folder in os.listdir(fp_base + rgi_fp):
+                if folder[:2] == region:
+                    for f in os.listdir(fp_base + rgi_fp + folder):
+                        if f[-3:] == 'shp':
+                            fn = folder + '/' + f
+            # open and index regional shapefile to the glacier
+            all_gdf = gpd.read_file(fp_base + rgi_fp + fn).set_crs(epsg=4326)
+            shapefile = all_gdf.loc[all_gdf['RGIId'] == 'RGI60-'+id]
+            # ensure consistent coordinates
             shapefile = shapefile.to_crs(dem.rio.crs)
             self.shapefile = shapefile
 
@@ -263,8 +290,8 @@ class Shading():
         # if specified aspect/slope files:
         if aspect_fp and slope_fp:
             # open files
-            aspect = rxr.open_rasterio(aspect_fp).isel(band=0)
-            slope = rxr.open_rasterio(slope_fp).isel(band=0)
+            aspect = rxr.open_rasterio(fp_base + aspect_fp).isel(band=0)
+            slope = rxr.open_rasterio(fp_base + slope_fp).isel(band=0)
 
             # filter nans and convert to radians
             aspect = aspect.where(aspect > 0)*np.pi/180
@@ -302,7 +329,7 @@ class Shading():
         # get slope and aspect at point of interest
         point_aspect = aspect.sel(x=xx, y=yy, method='nearest').values
         point_slope = slope.sel(x=xx, y=yy, method='nearest').values
-        print(f'{self.args.site_name} point stats:')
+        print(f'Point stats at {self.args.glac_name} {self.args.site}:')
         print(f'        elevation: {self.point_elev:.0f} m a.s.l.')
         print(f'        aspect: {point_aspect*180/pi:.1f} o')
         print(f'        slope: {point_slope*180/pi:.2f} o')
@@ -339,7 +366,7 @@ class Shading():
     def find_horizon(self):
         args = self.args
         # plot DEM as background
-        if 'search' in args.plot and shp_fp:
+        if 'search' in args.plot:
             fig,ax = plt.subplots(figsize=(6,6))
             self.dem.plot(ax=ax,cmap='viridis')
             self.shapefile.plot(ax=ax,color='none',edgecolor='black',linewidth=1.5)
@@ -490,7 +517,7 @@ class Shading():
         to 
         """
         # load solar dataset
-        solar_df = pd.read_csv(solar_fp,index_col=0)
+        solar_df = pd.read_csv(fp_base + solar_fp,index_col=0)
         solar_df.index = pd.to_datetime(solar_df.index) + pd.Timedelta(days=365,hours=9)
 
         # get hours where station is in the shade
@@ -508,7 +535,7 @@ class Shading():
 
     def plot_search(self):
         plt.scatter(self.xx,self.yy,marker='*',color='orange')
-        plt.title(f'{self.args.site_name} Horizon Search \n Sky-view Factor = {self.sky_view:.3f}')
+        plt.title(f'{self.args.glac_name} Horizon Search \n Sky-view Factor = {self.sky_view:.3f}')
         plt.ylabel('Northing')
         plt.xlabel('Easting')
         if 'search_plot' in self.args.store:
@@ -523,7 +550,7 @@ class Shading():
         ncols = len(result_vars) if len(result_vars) <= 2 else int(len(result_vars)/2)
         fig,axes = plt.subplots(nrows,ncols,figsize=(ncols*4,nrows*3),layout='constrained')
         axes = axes.flatten()
-        fig.suptitle(f'Annual plots for {args.site_name} \n Sky-view factor: {self.sky_view:.3f}')
+        fig.suptitle(f'Annual plots for {args.glac_name} \n Sky-view factor: {self.sky_view:.3f}')
         
         # get days and hours of the year
         days = np.arange(366)
@@ -564,19 +591,21 @@ class Shading():
         ax.plot(self.angles,self.horizon_elev*180/pi,color='black')
         ax.set_xlabel('Azimuth angle ($\circ$)')
         ax.set_ylabel('Horizon angle ($\circ$)')
-        fig.suptitle(args.site_name+' shading by azimuth angle (0$^{\circ}$N)',fontsize=14)
+        fig.suptitle(args.glac_name+' shading by azimuth angle (0$^{\circ}$N)',fontsize=14)
         if 'horizon_plot' in args.store:
             plt.savefig(self.out_horizon_fp)
         else:
             plt.show()
 
     def store_site_info(self):
+        self.site_df.loc[self.args.site,'lat'] = self.args.lat
+        self.site_df.loc[self.args.site,'lon'] = self.args.lon
         self.site_df.loc[self.args.site,'sky_view'] = self.sky_view
         self.site_df.loc[self.args.site,'slope'] = self.point_slope*180/pi
         self.site_df.loc[self.args.site,'aspect'] = self.point_aspect*180/pi
         self.site_df.loc[self.args.site,'elevation'] = int(self.point_elev)
-        self.site_df.to_csv(site_fp)
-        print(f'Saved sky view, slope, aspect and elevation to {site_fp}')
+        self.site_df.to_csv(self.args.site_fp)
+        print(f'Saved sky view, slope, aspect and elevation to {self.args.glac_name}/site_constants.csv')
 
 # RUN MODEL
 if __name__ == '__main__':
