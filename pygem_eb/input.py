@@ -14,11 +14,13 @@ store_data = False      # Save data?
 
 # ========== DIRECTORIES AND FILEPATHS ========== 
 machine = socket.gethostname()
+# *** should data go to ../data?
 # GLACIER
 metadata_fp = 'data/glacier_metadata.csv'                   # Glacier metadata
 site_fp = 'data/by_glacier/GLACIER/site_constants.csv'      # Generalized glacier site information
 RGI_fp = '../RGI/rgi60/00_rgi60_attribs/'                   # Randolph Glacier Inventory
 AWS_fp = '../climate_data/AWS/'                             # Weather station data
+# SNICAR
 grainsize_fp = 'data/grainsize/drygrainsize(SSAin=##).nc'   # Grain size evolution lookup table
 snicar_input_fp = 'biosnicar-py/biosnicar/inputs.yaml'      # SNICAR inputs
 clean_ice_fp = 'biosnicar-py/Data/OP_data/480band/r_sfc/gulkana_cleanice_avg_bba3732.csv'
@@ -30,7 +32,7 @@ initial_LAP_fp = 'data/sample_initial_laps.csv'             # Initial LAP conten
 # SHADING
 dem_fp = 'shading/in/GLACIER/dem.tif'                       # Generalized DEM filepath
 shading_fp = 'data/by_glacier/GLACIER/shade/GLACIERSITE_shade.csv'# Generalized shading filepath
-# CLIMATE DATA
+# CLIMATE
 bias_fp = 'data/bias_adjustment/METHOD_VAR.csv'             # Bias adjustment 
 climate_fp = '../climate_data/'                             # Climate data
 # OUTPUT
@@ -43,11 +45,9 @@ startdate = pd.to_datetime('2024-04-20 00:00:00')
 enddate = pd.to_datetime('2024-08-20 00:00:00')
 
 # REANALYSIS CHOICES
-reanalysis = 'MERRA2' # 'MERRA2' (*****'ERA5-hourly' BROKEN)
-MERRA2_filetag = False    # False or string to follow 'MERRA2_VAR_' in MERRA2 filename
-
-# MERRA-2 BIAS ADJUSTMENT
-bias_vars = ['wind','SWin','temp','rh']         # Vars to correct by quantile mapping
+reanalysis = 'MERRA2'                       # 'MERRA2' ('ERA5-hourly' ***** BROKEN)
+MERRA2_filetag = False                      # False or string to follow 'MERRA2_VAR_' in MERRA2 filename
+bias_vars = ['wind','SWin','temp','rh']     # Vars to correct by quantile mapping
     
 # ========== MODEL OPTIONS ========== 
 # INITIALIATION
@@ -59,6 +59,7 @@ surftemp_guess =  -10               # guess for surface temperature of first tim
 initial_snow_depth = 1              # default amount of initial snow [m]
 initial_firn_depth = 0              # default amount of initial firn [m]
 initial_ice_depth = 200             # default amount of initial ice [m]
+# Initial depths of snow and firn may be specified in site_constants or the command line using --s0, --f0
 
 # OUTPUT
 store_vars = ['MB','EB','climate','layers']  # Variables to store of the possible set: ['MB','EB','climate','layers']
@@ -100,11 +101,11 @@ grainsize_ds = xr.open_dataset(grainsize_fp.replace('##',str(initSSA)))
 
 # ========== PARAMETERS and CONSTANTS ==========
 # <<<<<< Climate downscaling >>>>>
-sky_view = 0.936            # Sky-view factor [-]
+sky_view = 0.95             # Sky-view factor [-]
 wind_factor = 1             # Wind factor [-]
 kp = 2                      # Precipitation factor [-]
-precgrad = 0.0001           # Precipitation gradient on glacier [m-1]
-lapserate = -0.0065         # Temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
+precgrad = 0.0001           # Precipitation gradient with elevation [m-1]
+lapserate = -0.0065         # Temperature lapse rate [C m-1]
 albedo_ice = 0.47           # Ice albedo [-] 
 snow_threshold_low = 0.2    # Lower threshold for linear snow-rain scaling [C]
 snow_threshold_high = 2.2   # Upper threshold for linear snow-rain scaling [C]
@@ -135,7 +136,7 @@ Lh_rf = 333550              # Latent heat of fusion of ice [J kg-1]
 viscosity_snow = 3.7e7      # Viscosity of snow [Pa-s]
 firn_grainsize = 2000       # Grain size of firn [um]
 rfz_grainsize = 1500        # Grain size of refrozen snow [um]
-ice_grainsize = 5000        # Grain size of ice [um] (placeholder -- unused)
+ice_grainsize = 5000        # Grain size of ice [um] (placeholder; unused)
 # <<<<<< Universal constants >>>>>
 gravity = 9.81              # Gravity [m s-2]
 karman = 0.4                # von Karman's constant [-]

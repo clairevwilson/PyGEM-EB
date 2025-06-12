@@ -1375,7 +1375,7 @@ class Output():
 
         # Save NetCDF
         ds.to_netcdf(self.out_fn)
-        print('Success: saved to '+self.out_fn)
+        print(f'~ Success: saved to {self.out_fn}')
         return
     
     def add_attrs(self,new_attrs):

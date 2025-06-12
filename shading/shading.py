@@ -329,7 +329,7 @@ class Shading():
         # get slope and aspect at point of interest
         point_aspect = aspect.sel(x=xx, y=yy, method='nearest').values
         point_slope = slope.sel(x=xx, y=yy, method='nearest').values
-        print(f'Point stats at {self.args.glac_name} {self.args.site}:')
+        print(f'~ Point stats at {self.args.glac_name} {self.args.site}:')
         print(f'        elevation: {self.point_elev:.0f} m a.s.l.')
         print(f'        aspect: {point_aspect*180/pi:.1f} o')
         print(f'        slope: {point_slope*180/pi:.2f} o')
@@ -605,7 +605,7 @@ class Shading():
         self.site_df.loc[self.args.site,'aspect'] = self.point_aspect*180/pi
         self.site_df.loc[self.args.site,'elevation'] = int(self.point_elev)
         self.site_df.to_csv(self.args.site_fp)
-        print(f'Saved sky view, slope, aspect and elevation to {self.args.glac_name}/site_constants.csv')
+        print(f'~ Saved sky view, slope, aspect and elevation to {self.args.glac_name}/site_constants.csv')
 
 # RUN MODEL
 if __name__ == '__main__':
