@@ -60,7 +60,7 @@ buffer = 20             # min num of gridcells away from which horizon can be fo
 
 # ================ INPUT FILEPATHS =================
 # in
-dem_fp = f'in/{glacier_name}/dem.tif'   # DEM containing glacier + surroundings # gulkana/Gulkana_DEM_20m
+dem_fp = f'../../Data/dems/{glacier_name}_dem.tif'   # DEM containing glacier + surroundings # gulkana/Gulkana_DEM_20m
 # if using get_diffuse, need a solar radiation file
 solar_fp = None # '/home/claire/research/climate_data/AWS/CNR4/cnr4_2023.csv'
 # optional: slope/aspect .tif (can also be calculated from DEM)
@@ -96,12 +96,12 @@ class Shading():
     the sun or shade for every hour (or user-defined dt)
     of the year.
     """
-    def __init__(self,dem_fp=dem_fp,args=None):
+    def __init__(self,args=None):
         """
         Initializes shading model by opening the DEM and 
         calculating slope and aspect.
-        If this model is executed frpm PyGEM-EB, args and
-        dem_fp are both automated.
+        If this model is executed frpm PyGEM-EB, args is
+        filled in run_simulation_eb.py with the needed inputs.
         """
         # If they were not input, parse command line args
         if not args:
@@ -127,8 +127,17 @@ class Shading():
         # Save the args to self
         self.args = args
 
+        # Check if the DEM exists; if not, print out the bounding box to manually retrieve one
+        self.get_shapefile()
+        if not os.path.exists(args.dem_fp):
+            minx, miny, maxx, maxy = self.shapefile.total_bounds
+            dem_not_found = 'DEM was not found: download for the box around:'
+            bounding_box = f'      latitude: {miny:.6f} to {maxy:.6f}    longitude: {minx:.6f} to {maxx:.6f}'
+            move_to = f'                and move to PyGEM-EB/../data/DEMs/{args.glac_name}_dem.tif'
+            assert os.path.exists(args.dem_fp), f'{dem_not_found}\n{bounding_box}\n{move_to}'
+
         # Load the DEM
-        self.load_dem(dem_fp)
+        self.load_dem()
 
         # Define output filepaths
         gn = args.glac_name
@@ -149,7 +158,9 @@ class Shading():
         parser.add_argument('-latitude','--lat',action='store',default=lat)
         parser.add_argument('-longitude','--lon',action='store',default=lon)
         parser.add_argument('-glac_no',action='store',default=glac_no)
+        parser.add_argument('-dem_fp',action='store',default=dem_fp)
         parser.add_argument('-site',action='store',default=site)
+        parser.add_argument('-timezone',action='store',default=timezone)
         parser.add_argument('-glac_name',action='store',default=glacier_name)
         parser.add_argument('-site_by',action='store',default=site_by)
         parser.add_argument('-plot',action='store',default=plot)
@@ -208,7 +219,7 @@ class Shading():
 
     def zenith(self,time):
         """Calculates solar zenith angle for time, lat and lon"""
-        time_UTC = time - timezone
+        time_UTC = time - self.args.timezone
         lon = self.args.lon
         lat = self.args.lat
         altitude_angle = suncalc.get_position(time_UTC,lon,lat)['altitude']
@@ -256,31 +267,51 @@ class Shading():
         
         return xs,ys
     
-    def load_dem(self,dem_fp):
+    def get_shapefile(self):
+        # find the shapefile in the RGI from the glac_no
+        id = self.args.glac_no
+        region = id.split('.')[0]
+        # search RGI folders for the correct shapefile
+        for folder in os.listdir(fp_base + rgi_fp):
+            if folder[:2] == region:
+                for f in os.listdir(fp_base + rgi_fp + folder):
+                    if f[-3:] == 'shp':
+                        fn = folder + '/' + f
+        # open and index regional shapefile to the glacier
+        all_gdf = gpd.read_file(fp_base + rgi_fp + fn).set_crs(epsg=4326)
+        shapefile = all_gdf.loc[all_gdf['RGIId'] == 'RGI60-'+id]
+        self.shapefile = shapefile
+
+    def get_utm_epsg(self, lat, lon):
+        if not -80.0 <= lat <= 84.0:
+            raise ValueError('UTM zones are only defined between 84°N and 80°S')
+        zone_number = int((lon + 180) / 6) + 1
+
+        if lat >= 0:
+            epsg_code = 32600 + zone_number  # Northern hemisphere
+        else:
+            epsg_code = 32700 + zone_number  # Southern hemisphere
+
+        return epsg_code
+    
+    def load_dem(self):
         """
         Loads the DEM and calculates aspect and slope from it.
         """
         # open files
+        dem_fp = self.args.dem_fp
         dem = rxr.open_rasterio(dem_fp,masked=True).isel(band=0)
+        
+        # convert DEM to appropriate UTM coordinate system
+        epsg = self.get_utm_epsg(self.args.lat, self.args.lon)
+        dem = dem.rio.reproject(f'EPSG:{epsg}',resolution=30)
+
+        # determine resolution in meters
         self.x_res = dem.rio.resolution()[0]
         self.y_res = dem.rio.resolution()[1]
 
-        if 'search' in self.args.plot:
-            # find the shapefile in the RGI from the glac_no
-            id = self.args.glac_no
-            region = id.split('.')[0]
-            # search RGI folders for the correct shapefile
-            for folder in os.listdir(fp_base + rgi_fp):
-                if folder[:2] == region:
-                    for f in os.listdir(fp_base + rgi_fp + folder):
-                        if f[-3:] == 'shp':
-                            fn = folder + '/' + f
-            # open and index regional shapefile to the glacier
-            all_gdf = gpd.read_file(fp_base + rgi_fp + fn).set_crs(epsg=4326)
-            shapefile = all_gdf.loc[all_gdf['RGIId'] == 'RGI60-'+id]
-            # ensure consistent coordinates
-            shapefile = shapefile.to_crs(dem.rio.crs)
-            self.shapefile = shapefile
+        # ensure consistent coordinates for the shapefile
+        self.shapefile = self.shapefile.to_crs(dem.rio.crs)
 
         # filter below sea level
         dem = dem.where(dem > 0)
@@ -298,6 +329,7 @@ class Shading():
             slope = slope.where(slope > 0)*np.pi/180
         else:
             # calculate gradient from DEM
+            print(self.y_res, self.x_res)
             dx,dy = np.gradient(dem,self.y_res,self.x_res)
             # calculate slope and aspect from gradient
             slope = np.arctan(np.sqrt(dx**2 + dy**2))
@@ -371,9 +403,6 @@ class Shading():
             self.dem.plot(ax=ax,cmap='viridis')
             self.shapefile.plot(ax=ax,color='none',edgecolor='black',linewidth=1.5)
             plt.axis('equal')
-        elif 'search' in args.plot:
-            fig,ax = plt.subplots(figsize=(6,6))
-            plt.axis('equal')
 
         # loop through angles
         self.angles = np.arange(0,360,angle_step)
@@ -410,6 +439,10 @@ class Shading():
                 plt.scatter(xs,ys,color=colors,s=1,marker='.',alpha=0.7)
                 plt.scatter(hz_x,hz_y,color='red',marker='x',s=50)
 
+        # plot shapefile over everything
+        if 'search' in args.plot:
+            self.shapefile.plot(ax=ax,color='none',edgecolor='black',linewidth=1.5)
+
         # calculate sky-view factor
         horizon_elev = np.array([horizons[ang]['horizon_elev'] for ang in self.angles])
         angle_step_rad = angle_step * pi/180
@@ -443,7 +476,7 @@ class Shading():
                 period_dict[var] = np.array([])
             for minutes in np.arange(0,timestep_min,sub_dt):
                 # calculate time-dependent variables
-                time_UTC = time - timezone + pd.Timedelta(minutes = minutes)
+                time_UTC = time - args.timezone + pd.Timedelta(minutes = minutes)
                 P = self.pressure(self.point_elev)
                 r = self.r_sun(time + pd.Timedelta(minutes = minutes))
                 Z = self.zenith(time + pd.Timedelta(minutes = minutes))

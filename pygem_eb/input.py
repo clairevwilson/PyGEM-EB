@@ -30,10 +30,10 @@ initial_density_fp = 'data/sample_initial_density.csv'      # Initial density pr
 initial_grains_fp = 'data/sample_initial_grains.csv'        # Initial grain size profile
 initial_LAP_fp = 'data/sample_initial_laps.csv'             # Initial LAP content # f'/../Data/Nagorski/May_Mend-2_BC.csv'
 # SHADING
-dem_fp = 'shading/in/GLACIER/dem.tif'                       # Generalized DEM filepath
+dem_fp = '../data/DEMs/GLACIER_dem.tif'                       # Generalized DEM filepath
 shading_fp = 'data/by_glacier/GLACIER/shade/GLACIERSITE_shade.csv'# Generalized shading filepath
 # CLIMATE
-bias_fp = 'data/bias_adjustment/METHOD_VAR.csv'             # Bias adjustment 
+bias_fp = '../data/bias_adjustment_METHOD_VAR.csv'             # Bias adjustment 
 climate_fp = '../climate_data/'                             # Climate data
 # OUTPUT
 output_filepath = '../Output/EB/'                           # Output filepaths
