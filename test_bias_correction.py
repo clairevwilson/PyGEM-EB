@@ -15,7 +15,7 @@ from objectives import *
 args = sim.get_args()
 args.store_data = True
 eb_prms.AWS_fn = '../climate_data/AWS/Preprocessed/gulkana2024.csv'
-eb_prms.store_vars = ['MB']
+eb_prms.store_vars = ['MB','EB']
 args.startdate = pd.to_datetime('2024-04-18 00:00:00')
 args.enddate = pd.to_datetime('2024-08-20 00:00:00')
 args.kp = 2.25

@@ -54,6 +54,8 @@ diverging_cmaps = []
 for i in range(5):
     with open(pygem_fp + f'data/cmaps/custom_divergent_cmap_{i}.pkl','rb') as f:
         diverging_cmaps.append(pickle.load(f))
+all_colors = ['#63c4c7','#fcc02e','#4D559C','#60C252','#BF1F6A',
+              '#F77808','#298282','#999999','#FF89B0','#427801']
 
 def modify_colormap(cmap_name, min=0, max=0.7):
     # Get the colormap
@@ -334,7 +336,7 @@ def plot_pareto_heatmap(pareto_fronts, result_dict, error_names, bootstrap=True,
         n_cols = n_rows = 1
     if figaxes is None:
         fig,axes = plt.subplots(n_rows, n_cols, figsize=(n_cols*3,n_rows*2),
-                             sharex=True, sharey=True, gridspec_kw={'hspace':0.1, 'wspace':0.5}) #, constrained_layout=True)
+                             sharex=True, gridspec_kw={'hspace':0.1, 'wspace':0.7}) #, constrained_layout=True)
         if n_cols > 1 or n_rows > 1:
             axes = axes.flatten()
         else:
@@ -387,7 +389,7 @@ def plot_pareto_heatmap(pareto_fronts, result_dict, error_names, bootstrap=True,
                           vmin=min_value, vmax=max_value)
         cbar = fig.colorbar(c, ax=ax)
         cbar.ax.tick_params(length=5)
-        cbar.set_label(errorlabels[error.split('_')[0]], rotation=270, labelpad=25, fontsize=12)
+        cbar.set_label(errorlabels[error.split('_')[0]], rotation=270, labelpad=27, fontsize=12)
         cbar.ax.yaxis.set_label_position('right')
 
         if not bootstrap:
@@ -474,8 +476,8 @@ def plot_pareto_heatmap(pareto_fronts, result_dict, error_names, bootstrap=True,
         cax.set_xlim(np.min(boundaries) - border, np.max(boundaries) + 1 + border)
         cax.set_ylim(-0.3,1.3)
         cax.axis('off')
-        cax.text(1.1, -2.2, 'Less frequent')
-        cax.text(5.1, -2.2, 'More frequent')
+        cax.text(1.1, -2.7, 'Less frequent')
+        cax.text(5.1, -2.7, 'More frequent')
 
     if savefig:
         plt.savefig(base_fp+f'pareto_params_heatmap_{metric}_site{site}_{error_names[-1]}.png',dpi=180,bbox_inches='tight')
@@ -967,10 +969,11 @@ def plot_tradeoffs(result_dict, error_names, site='mean',
         if '2024' in error_name:
             ax.legend(title=labels['Boone_c5'],fontsize=12,bbox_to_anchor=(1.5,0.5))
         error_label = errorlabels[error_name.split('_')[0]]
-        title = f'{error_label} {methodlabels[metric]}'
+        method_label = methodlabels[metric].replace('B','b')
+        title = error_label # .replace('(', method_label+' (').replace('\n',' ')
         if site not in ['mean','median']:
             title += f' at site {site}'
-        ax.set_title(title)
+        ax.set_ylabel(title,fontsize=12)
         ax.tick_params(length=5,labelsize=11)
     if e < len(axes) - 1:
         axes[-1].axis('off')
@@ -1493,7 +1496,8 @@ def plot_heatmap_by_site(error_names, result_dict, metric='MAE', savefig=False):
         cbar = plt.colorbar(c, ax=ax)
         cbar.ax.tick_params(length=5)
         axtitle = errorlabels[error.split('_')[0]]
-        ax.set_title(axtitle,fontsize=10)
+        lp = 10 if 'weight' in error else 27
+        ax.set_title(axtitle,fontsize=10,labelpad=lp)
         if e in [0,1]:
             ax.tick_params(labelbottom=False)
         if e in [1,3]:
@@ -1572,7 +1576,8 @@ def plot_heatmap_by_site_weighted(error_names, result_dict, metric='MAE', savefi
         #     axtitle = axtitle.replace('snow','\nsnow')
         # if 'balance' in axtitle:
         #     axtitle = axtitle.replace('balance','\nbalance')
-        cbar.ax.set_ylabel(axtitle,rotation=270, labelpad=25, fontsize=12)
+        lp = 15 if 'weight' in error else 27
+        cbar.ax.set_ylabel(axtitle,rotation=270, labelpad=lp, fontsize=12)
         cbar.ax.yaxis.set_label_position('right')
         if e in [0,1]:
             ax.tick_params(labelbottom=False)
@@ -1614,17 +1619,17 @@ def compare_calib_valid(error_list, all_calib, all_valid, savefig=False):
     plt.show()
 
 def plot_sensitivity(sens_dict,savefig=False):
-    label_dict = {'kp':'Precipitation\nfactor (-)','Boone_c5':'Densification\nparam (-)','lapserate':'Temperature lapse\nrate (K/km)',
+    label_dict = {'kp':'Precipitation\nfactor (-)','Boone_c5':'Densification\nparameter (-)','lapserate':'Temperature lapse\nrate (K/km)',
                 'rfz_grainsize':'Refrozen\ngrain size ($\mu m$)','roughness_rate':'Roughness\ndecay rate (mm/day)',
                 'roughness_ice':'Ice\nroughness (mm)','albedo_ground':'Ground\nalbedo (-)', # 'diffuse_cloud_limit':'Cloudy\nthreshold (-)',
-                'ksp_BC':'Solubility\ncoefficient of BC (-)','ksp_OC':'Solubility\ncoefficient of OC (-)','ksp_dust':'Solubility\nncoefficient of dust (-)',
+                'ksp_BC':'Solubility\ncoefficient of BC (-)','ksp_OC':'Solubility\ncoefficient of OC (-)','ksp_dust':'Solubility\ncoefficient of dust (-)',
                 'roughness_fresh_snow':'Fresh snow\nroughness (mm)', 'roughness_aged_snow':'Aged snow\nroughness (mm)'}
     base = sens_dict['base']['base']
+    base_low = sens_dict['kp']['-20']
 
     fig, ax = plt.subplots(figsize=(4,3))
     # colors = mpl.colormaps['Set3']
-    colors = ['#63c4c7','#fcc02e','#4D559C','#60C252','#BF1F6A',
-              '#F77808','#298282','#999999','#FF89B0','#427801']
+    colors = all_colors
 
     # Loop through vars
     all_names = []
@@ -1632,8 +1637,9 @@ def plot_sensitivity(sens_dict,savefig=False):
     for v, var in enumerate(sens_dict):
         if var in label_dict:
             vv += 1
-            point_50 = sens_dict[var]['-20'] - base
-            point_200 = sens_dict[var]['+20'] - base
+            compare = base # _low if var == 'roughness_ice' else base
+            point_50 = sens_dict[var]['-20'] - compare
+            point_200 = sens_dict[var]['+20'] - compare
             x_50 = v - 0.2 -1
             x_200 = v + 0.2 - 1
             ax.bar(x_50, point_50, 0.3, align='center', color=colors[vv], hatch='///')
@@ -1660,27 +1666,54 @@ def plot_sensitivity(sens_dict,savefig=False):
 def plot_bias_correction(mb_dict, savefig=False):
     mb_df = pd.read_csv(USGS_fp, index_col=0)
     fig, ax = plt.subplots(figsize=(4,3))
-    colors = ['#63c4c7','#fcc02e','#4D559C','#60C252','#BF1F6A']
+    colors = all_colors
+    all = [[],[],[]]
     for s,site in enumerate(mb_dict):
         ba = mb_df.loc[mb_df['site_name'] == site].loc[2024]['ba']
         bw = mb_df.loc[mb_df['site_name'] == site].loc[2024]['bw']
         sacc = mb_df.loc[mb_df['site_name'] == site].loc[2024]['summer_accumulation']
         bs = ba - bw + sacc
 
-        ax.bar(s, mb_dict[site]['og'] - bs, 0.2, color=colors[s])
-        ax.bar(s+0.3, mb_dict[site]['bc'] - bs, 0.2, color=colors[s], hatch='///')
-        ax.bar(s+0.6, mb_dict[site]['aws'] - bs, 0.2, color=colors[s], hatch='xxx')
+        ax.bar(s, mb_dict[site]['og'] - bs, 0.3, color=colors[s])
+        ax.bar(s+0.3, mb_dict[site]['bc'] - bs, 0.3, color=colors[s], hatch='///')
+        ax.bar(s+0.6, mb_dict[site]['aws'] - bs, 0.3, color=colors[s], hatch='....')
+        all[0].append(mb_dict[site]['og'] - bs)
+        all[1].append(mb_dict[site]['bc'] - bs)
+        all[2].append(mb_dict[site]['aws'] - bs)
     ax.tick_params(axis='y',length=5)
     ax.set_xticks([0.3,1.3,2.3,3.3,4.3])
     ax.set_xticklabels(['AU','AB','B','D','T'],fontsize=12)
     ax.axhline(0, linewidth=0.5, color='k')
-    ax.set_ylabel('Difference from measured\nmass balance (m w.e.)',fontsize=12)
+    ax.set_ylabel('Modeled $-$ Measured\nmass balance (m w.e.)',fontsize=12)
+    ax.set_xlabel('Site name',fontsize=12)
 
     ax.bar(np.nan, np.nan, np.nan, color='lightgray', label='Original MERRA-2')
     ax.bar(np.nan, np.nan, np.nan, color='lightgray', label='Bias-corrected MERRA-2',hatch='///')
-    ax.bar(np.nan, np.nan, np.nan, color='lightgray', label='Weather station',hatch='xxx')
+    ax.bar(np.nan, np.nan, np.nan, color='lightgray', label='Weather station',hatch='....',)
 
     ax.legend()
     if savefig:
         plt.savefig(base_fp + 'bias_correction_comparison.png',dpi=200,bbox_inches='tight')
     plt.show()
+
+def plot_fluxes():
+    fp = base_fp + 'bias_correct/'
+    fig, axes = plt.subplots(5, 3,sharex=True,sharey=True)
+    flux_labels = {'SWnet':'$SW_{net}$','LWnet':'$LW_{net}$',
+                   'sensible':'$Q_s$','latent':'$Q_l$',
+                   'rain':'$Q_r$','ground':'$Q_g$'}
+    colors = all_colors
+    for s,site in enumerate(['AU','AB','B','D','T']):
+        for d,data in enumerate(['og','bc','aws']):
+            ax = axes[s, d]
+            ds = xr.open_dataset(fp + f'{site}_{data}_0.nc')
+            ds['hour'] = (['time'],pd.to_datetime(ds['time'].values).hour)
+            for v,var in enumerate(['SWnet','LWnet','sensible','latent','rain','ground']):
+                var_hourly = []
+                for hour in np.arange(24):
+                    ds_hour = ds.where(ds['hour'] == hour,drop=True)
+                    hourly_mean = np.mean(ds_hour[var].to_numpy())
+                    var_hourly.append(hourly_mean)
+                ax.plot(np.arange(24),var_hourly,label=flux_labels[var],color=colors[v])
+    ax.supxlabel('Hour of day')
+    ax.supylabel('Flux magnitude (W m$^{-2}$)')
