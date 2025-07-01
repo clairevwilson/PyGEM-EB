@@ -38,8 +38,8 @@ sitedict = {'2024':['AB','ABB','B','BD','D','T'],'long':['A','AU','B','D']}     
 all_sites = sitedict['long']+sitedict['2024']+['mean','median']                  # List all sites
 
 # USER OPTIONS
-run_info = {'long':{'date':'03_05', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11)
-            '2024':{'date':'03_06', 'idx':'0'}}                     # (12_06)
+run_info = {'long':{'date':'07_01', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
+            '2024':{'date':'07_02', 'idx':'0'}}                     # (12_06) (03_06)
 # params = {'c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
 #           'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5]} # 
 params = {'c5':[0.018,0.02,0.022,0.023,0.024,0.025,0.026,0.027,0.028,0.03], # 

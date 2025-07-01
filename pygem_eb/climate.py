@@ -337,7 +337,7 @@ class Climate():
         """
         Updates deposition based on preprocessed reduction coefficients
         """
-        print('Hard-coded MERRA-2 to UK-ESM filepath')
+        print('Hard-coded MERRA-2 to UK-ESM filepath for deposition adjustment')
         fn = self.reanalysis_fp + 'merra2_to_ukesm_conversion_map_MERRAgrid.nc'
         ds_f = xr.open_dataarray(fn)
         ds_f = ds_f.sel({self.lat_vn:self.lat,self.lon_vn:self.lon},method='nearest')

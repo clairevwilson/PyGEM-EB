@@ -1238,7 +1238,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
     ax.set_xlim([dates[0],dates[len(dates)-1]])
 
     if dates[-1] - dates[1] < pd.Timedelta(days=5):
-        date_form = mpl.dates.DateFormatter('%d-%b %H')
+        date_form = mpl.dates.DateFormatter('%m/%d %H:00')
         ax.xaxis.set_major_formatter(date_form)
         ax.set_xticks(pd.date_range(dates[0],dates[len(dates)-1],5))
 

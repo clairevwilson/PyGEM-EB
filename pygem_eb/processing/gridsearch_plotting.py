@@ -1696,24 +1696,63 @@ def plot_bias_correction(mb_dict, savefig=False):
         plt.savefig(base_fp + 'bias_correction_comparison.png',dpi=200,bbox_inches='tight')
     plt.show()
 
-def plot_fluxes():
-    fp = base_fp + 'bias_correct/'
-    fig, axes = plt.subplots(5, 3,sharex=True,sharey=True)
+def plot_fluxes(savefig=False):
+    fp = gsproc.base_fp + 'bias_correct/'
     flux_labels = {'SWnet':'$SW_{net}$','LWnet':'$LW_{net}$',
-                   'sensible':'$Q_s$','latent':'$Q_l$',
-                   'rain':'$Q_r$','ground':'$Q_g$'}
+                    'sensible':'$Q_s$','latent':'$Q_l$',
+                    'rain':'$Q_r$','ground':'$Q_g$'}
+    data_labels = {'og':'Original\nMERRA-2','bc':'Bias-corrected\nMERRA-2','aws':'Weather\nstation'}
+    vars = ['SWnet','LWnet','sensible','latent','rain','ground']
     colors = all_colors
+    fig, axes = plt.subplots(3, 5, sharex=True, sharey=True,gridspec_kw={'hspace':0, 'wspace':0})
+    lax = fig.add_axes([0.15,-0.06,0.8,0.05])
     for s,site in enumerate(['AU','AB','B','D','T']):
         for d,data in enumerate(['og','bc','aws']):
-            ax = axes[s, d]
+            ax = axes[d, s]
             ds = xr.open_dataset(fp + f'{site}_{data}_0.nc')
-            ds['hour'] = (['time'],pd.to_datetime(ds['time'].values).hour)
-            for v,var in enumerate(['SWnet','LWnet','sensible','latent','rain','ground']):
-                var_hourly = []
-                for hour in np.arange(24):
-                    ds_hour = ds.where(ds['hour'] == hour,drop=True)
-                    hourly_mean = np.mean(ds_hour[var].to_numpy())
-                    var_hourly.append(hourly_mean)
-                ax.plot(np.arange(24),var_hourly,label=flux_labels[var],color=colors[v])
-    ax.supxlabel('Hour of day')
-    ax.supylabel('Flux magnitude (W m$^{-2}$)')
+            ds['hour'] = ('time', pd.to_datetime(ds['time'].values).hour)
+            ds = ds.set_coords('hour')
+            ds['SWnet'] = ds['SWin'] + ds['SWout']
+            ds['LWnet'] = ds['LWin'] + ds['LWout']
+            ds_hourly = ds.groupby('hour').mean(dim='time')
+            for v,var in enumerate(vars):
+                ax.plot(ds_hourly['hour'], ds_hourly[var], color=colors[v])
+                if s == 0 and d == 0:
+                    lax.plot(np.nan, np.nan,label=flux_labels[var],color=colors[v])
+            ds.close()
+            ax.tick_params(length=5)
+            ax.set_xticks([0,8,16])
+            ax.set_xlim(0,23)
+            axes[d, -1].set_ylabel(data_labels[data],rotation=270,labelpad=25,fontsize=12)
+            ax.yaxis.set_label_position('right')
+        axes[0, s].set_title(site)
+    fig.suptitle('Site name',y=0.97)
+    fig.supxlabel('Hour of day')
+    fig.supylabel('Flux magnitude (W m$^{-2}$)')
+
+    lax.axis('off')
+    lax.legend(ncols=len(vars))
+    if savefig:
+        plt.savefig(base_fp + 'fluxes.png',dpi=200,bbox_inches='tight')
+    plt.show()
+
+def find_precip_gradient():
+    data = pd.read_csv('../MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv')
+    grads = []
+    colors = plt.get_cmap('Grays')
+    norm = mpl.colors.Normalize(vmin=1990, vmax=2025)
+    for year in np.unique(data['Year']):
+        if year > 1999:
+            year_data = data.loc[data['Year'] == year]
+            year_elev = year_data['elevation'].values[~np.isnan(year_data['bw'].values)]
+            year_bw = year_data['bw'].values[~np.isnan(year_data['bw'].values)]
+            winter_abl = year_data['winter_ablation'].values[~np.isnan(year_data['bw'].values)]
+            winter_abl[np.isnan(winter_abl)] = 0
+            year_acc = year_bw - winter_abl
+            # gradient = np.sum(year_elev * year_acc) / np.sum(year_elev**2)
+            gradient ,b = np.polyfit(year_elev, year_acc, 1)
+            if gradient > 0:
+                grads.append(gradient)
+                plt.scatter(year_elev, year_acc, color=colors(norm(year)))
+                plt.plot(year_elev, year_elev * gradient+b, color=colors(norm(year)))
+    return np.nanmean(grads)

@@ -119,7 +119,7 @@ if dates_from_data:
         enddate -= pd.Timedelta(minutes=30)
 else:
     startdate = pd.to_datetime('2024-04-20 00:00:00') 
-    enddate = pd.to_datetime('2024-08-20 00:00:00')
+    enddate = pd.to_datetime('2024-06-20 00:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
@@ -177,7 +177,7 @@ grainsize_ds = xr.open_dataset(grainsize_fp.replace('##',str(initSSA)))
 sky_view = 0.936            # Sky-view factor [-]
 wind_factor = 1             # Wind factor [-]
 kp = 2                      # Precipitation factor [-]
-precgrad = 0.0001           # Precipitation gradient on glacier [m-1]
+precgrad = 0.000130         # Precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # Temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 albedo_ice = 0.47           # Ice albedo [-] 
 snow_threshold_low = 0.2    # Lower threshold for linear snow-rain scaling [C]
@@ -245,8 +245,8 @@ albedo_fresh_snow = 0.85    # Albedo of fresh snow for exponential method [-] (M
 albedo_firn = 0.5           # Albedo of firn [-]
 # <<<<<< BC and dust >>>>>
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
-ksp_BC = 0.9               # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
-ksp_OC = 0.9               # Meltwater scavenging efficiency of OC (0.1-0.2 from CLM5)
+ksp_BC = 1                  # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
+ksp_OC = 1                  # Meltwater scavenging efficiency of OC (0.1-0.2 from CLM5)
 ksp_dust = 0.01             # Meltwater scavenging efficiency of dust (0.015 from CLM5)
 BC_freshsnow = 0            # Concentration of BC in fresh snow for initialization [kg m-3]
 OC_freshsnow = 0            # Concentration of OC in fresh snow for initialization [kg m-3]
