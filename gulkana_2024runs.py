@@ -1,3 +1,10 @@
+"""
+This script executes parallel runs for the 2024 melt season
+across all sites for a single parameter combination.
+
+@author: clairevwilson
+"""
+
 # Built-in libraries
 import time
 import copy
@@ -5,7 +12,7 @@ import copy
 import pandas as pd
 from multiprocessing import Pool
 # Internal libraries
-import run_simulation_eb as sim
+import run_simulation as sim
 import pygem_eb.massbalance as mb
 import pygem_eb.input as eb_prms
 

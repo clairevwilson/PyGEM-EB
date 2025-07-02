@@ -1,16 +1,27 @@
+"""
+This script executes a grid search in parallel over
+multiple parameters. These parameters can be specified
+in the params dict below. It is set up to perform the
+search over two parameters for ***Paper 1*** 
+(Boone c5 densification parameter and kp precipitation
+factor) but with minor edits more parameters can be added.
+
+@author: clairevwilson
+"""
+
 # Built-in libraries
 import os
 import time
 import copy
 import traceback
+import pickle
+from multiprocessing import Pool
 # External libraries
 import pandas as pd
 import xarray as xr
-import pickle
-from multiprocessing import Pool
 # Internal libraries
 import pygem_eb.input as eb_prms
-import run_simulation_eb as sim
+import run_simulation as sim
 import pygem_eb.massbalance as mb
 from objectives import *
 

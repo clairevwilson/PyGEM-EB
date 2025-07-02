@@ -1,3 +1,13 @@
+"""
+This script contains a function which parses the model output
+(can be in parallel if called from process_gridsearch_parallel)
+for many grid search runs. It stores the error metrics and
+time series associated with each error metric as a pickle
+for each model run output .nc.
+
+@author: clairevwilson
+"""
+
 import socket
 import pickle
 # Local libraries

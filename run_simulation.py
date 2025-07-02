@@ -1,3 +1,15 @@
+"""
+Main script to execute ****MODEL NAME****
+
+This script parses the command-line arguments, 
+checks the inputs of the model, runs the shading
+model if the inputs are incomplete, initializes
+the climate dataset, and runs the model for a
+single point.
+
+@author: clairevwilson
+"""
+
 import argparse
 import time
 import os
@@ -12,7 +24,7 @@ import pygem_eb.massbalance as mb
 import pygem_eb.climate as climutils
 from shading.shading import Shading
 
-# Start timer
+# start timer
 start_time = time.time()
 
 # ===== INITIALIZE UTILITIES =====
@@ -23,6 +35,7 @@ def get_args(parse=True):
     (returns args) or not (returns parser)
     """
     parser = argparse.ArgumentParser(description='pygem-eb model runs')
+    
     # GLACIER INFORMATION
     parser.add_argument('-glac_no', action='store', default=eb_prms.glac_no,
                         help='RGI glacier ID')
@@ -63,19 +76,11 @@ def get_args(parse=True):
     parser.add_argument('-switch_snow',action='store', type=int,
                         default=eb_prms.switch_snow, help='')
     
-    # CALIBRATED PARAMETERS *** can delete some of these?
-    parser.add_argument('-k_snow',default=eb_prms.method_conductivity,action='store',
-                        help='Thermal conductivity of snow')
-    parser.add_argument('-a_ice',default=eb_prms.albedo_ice,action='store',type=float,
-                        help='Broadband albedo of ice')
-    parser.add_argument('-kw',default=eb_prms.wind_factor,action='store',type=float,
-                        help='Multiplicative wind factor')
+    # CALIBRATED PARAMETERS
     parser.add_argument('-kp',default=eb_prms.kp,action='store',type=float,
                         help='Multiplicative precipitation factor')
     parser.add_argument('-Boone_c5',default=eb_prms.Boone_c5,action='store',type=float,
                         help='Parameter for Boone densification scheme')
-    parser.add_argument('-roughness_ice',default=eb_prms.roughness_ice,action='store',type=float,
-                        help='Surface roughness of ice')
     
     # FILEPATHS
     parser.add_argument('-initial_temp_fp',default=eb_prms.initial_temp_fp,type=str,
@@ -107,7 +112,7 @@ def get_site_table(site_df, args):
     Loads the table for site locations on the
     glacier of interest and stores them in args
     """
-    # Get site-specific variables
+    # get site-specific variables
     site = args.site
     args.lat = site_df.loc[args.site,'lat']
     args.lon = site_df.loc[args.site,'lon']
@@ -116,7 +121,7 @@ def get_site_table(site_df, args):
     args.aspect = site_df.loc[site]['aspect']
     args.sky_view = site_df.loc[site]['sky_view']
 
-    # Snow and firn depth may be specified in the site_constants table
+    # snow and firn depth may be specified in the site_constants table
     if 'snowdepth' in site_df.columns:
         if not np.isnan(site_df.loc[site,'snowdepth']):
             args.initial_snow_depth = site_df.loc[site,'snowdepth']
@@ -126,13 +131,13 @@ def get_site_table(site_df, args):
 
     # *****Special HARD-CODED handling for Gulkana*****
     if args.glac_name == 'gulkana' and args.site != 'center':
-        # Set scaling albedo
+        # set scaling albedo
         slope = (0.485 - 0.315)/(site_df.loc['B','elevation'] - site_df.loc['A','elevation'])
         intercept = 0.315
         args.a_ice = intercept + (args.elev - site_df.loc['A','elevation'])*slope
         args.a_ice = min(0.485,args.a_ice)
 
-        # Set initial density profile from measurements
+        # set initial density profile from measurements
         if args.site not in ['AB','ABB','BD']:
             if pd.to_datetime(args.startdate) > pd.to_datetime('2023-12-31'):
                 args.initial_density_fp = f'data/by_glacier/gulkana/density/gulkana{args.site}density24.csv'
@@ -160,60 +165,57 @@ def get_shading(args):
     store_attrs : dict
         Dictionary of additional metadata to store in the .nc
     """
-    # Shading file does not exist: warn the user
+    # shading file does not exist: warn the user
     print(f'! Shading file was not found for {args.glac_name} {args.site}')
 
-    # Check if the DEM exists
-    assert os.path.exists(args.dem_fp), f'Add DEM to shading/in/{args.glac_name}/'
-
-    # DEM exists: need to add some arguments
+    # specify shading model arguments
     args.site_by = 'latlon'
     args.plot = ['result','search']
     args.store = ['result','result_plot','search_plot']
 
-    # Check if we can index the lat/lon for this site
+    # check if we can index the lat/lon for this site
     site_fp = eb_prms.site_fp.replace('GLACIER', args.glac_name)
     if os.path.exists(site_fp):
-        # Open site constants file and check if our site is there
+        # open site constants file and check if our site is there
         site_df = pd.read_csv(site_fp,index_col='site')
         assert args.site in site_df.index, f'Add lat/lon for {args.site} in site_constants.csv'
         
-        # Grab the lat/lon from site_constants
+        # grab the lat/lon from site_constants
         args.lat = site_df.loc[args.site,'lat']
         args.lon = site_df.loc[args.site,'lon']
     else:
-        # No site constants file: use RGI cenlat and cenlon
+        # no site constants file: use RGI cenlat and cenlon
         RGI_region = args.glac_no.split('.')[0]
         for fn in os.listdir(eb_prms.RGI_fp):
-            # Open the attributes .csv for the correct region
+            # open the attributes .csv for the correct region
             if fn[:2] == RGI_region and fn[-3:] == 'csv':
                 RGI_df = pd.read_csv(eb_prms.RGI_fp + fn)
                 RGI_df.index = [f.split('-')[-1] for f in RGI_df['RGIId']]
-        # Grab the lat/lon from RGI
+        # grab the lat/lon from RGI
         args.lat = RGI_df.loc[args.glac_no,'CenLat']
         args.lon = RGI_df.loc[args.glac_no,'CenLon']
         if args.site != 'center':
             print('~ Using centerpoint lat/lon: changed site name to \"center\"')
 
-    # Run the shading model
+    # run the shading model
     print(f'~ Running shading model at [{args.lat:.5f}, {args.lon:.5f}] ...')
     start_shading = time.time()
-    model = Shading(args.dem_fp, args)
+    model = Shading(args)
     model.main()
 
-    # Store the data and print the time to run the shading model
+    # store the data and print the time to run the shading model
     model.store_site_info()
     shading_elapsed_time = time.time() - start_shading
-    print(f'~ Calculated shading for {args.glac_name} {args.site} in {shading_elapsed_time:.1f} seconds')
+    print(f'~ Calculated shading for {args.glac_name} {args.site} in {shading_elapsed_time:.1f} seconds ~')
     return args
     
 def check_inputs(glac_no, args):
     """
     Checks that the glacier point has all required inputs.
     - Shading file: if not found, executes the shading model
-      which requires a DEM under data/by_glacier/{NAME}/dem
+        which requires a DEM under data/by_glacier/{NAME}/dem
     - Loads site_constants (created by shading) and finds the
-      lat/lon/elevation/slope/aspect for the point.
+        lat/lon/elevation/slope/aspect for the point.
     - Specifies the model start and end date
     - Names the output filepath
     
@@ -224,49 +226,47 @@ def check_inputs(glac_no, args):
     args
         Command line arguments from get_args
     """
-    # Check if the RGI ID is in the metadata file
+    # check if the RGI ID is in the metadata file
     all_df = pd.read_csv(eb_prms.metadata_fp,index_col=0,converters={0: str})
     assert glac_no in all_df.index, f'Add {glac_no} to data/glacier_metadata.csv'
 
-    # Load the metadata for the glacier
+    # load the metadata for the glacier
     args.timezone = pd.Timedelta(hours=int(all_df.loc[glac_no,'timezone']))
     args.glac_name = all_df.loc[glac_no,'name']
     args.AWS_fn = eb_prms.AWS_fp + all_df.loc[glac_no,'AWS_fn']
 
-    # Specify filepaths to args
+    # specify filepaths to args
     args.shading_fp = eb_prms.shading_fp.replace('GLACIER',args.glac_name).replace('SITE',args.site)
     args.dem_fp = eb_prms.dem_fp.replace('GLACIER', args.glac_name)
 
-    # Check if the shading file exists
+    # check if the shading file exists
     if not os.path.exists(args.shading_fp):
         args = get_shading(args)
     
-    # Load site constants table
+    # load site constants table
     site_fp = eb_prms.site_fp.replace('GLACIER', args.glac_name)
     site_df = pd.read_csv(site_fp,index_col='site')
 
-    # Update args from the site table
+    # update args from the site table
     args = get_site_table(site_df, args)
 
-    # Check if time should be taken from AWS data
+    # check if time should be taken from AWS data
     if args.dates_from_data:
         cdf = pd.read_csv(args.AWS_fn,index_col=0)
         cdf.index = pd.to_datetime(cdf.index)
-        # Take start and end time from the climate dataframe
+        # take start and end time from the climate dataframe
         startdate = pd.to_datetime(cdf.index[0])
         enddate = pd.to_datetime(cdf.index.to_numpy()[-1])
-        # Have to offset by 30 minutes for MERRA-2
+        # have to offset by 30 minutes for MERRA-2
         if eb_prms.reanalysis == 'MERRA2' and startdate.minute != 30:
             startdate += pd.Timedelta(minutes=30)
             enddate -= pd.Timedelta(minutes=30)
 
-    # Create model run name
+    # create model run name
     if args.out == '':
         model_run_date = str(pd.Timestamp.today()).replace('-','_')[0:10]
         args.out = f'{args.glac_name}{args.site}_{model_run_date}_'
     
-    # for line in open('pygem_eb/print.txt'):
-    #     print(line)
     print('~ Inputs verified ~')
     return args
 
@@ -290,15 +290,15 @@ def initialize_model(glac_no,args):
     args = check_inputs(glac_no, args)
 
     # ===== GET GLACIER CLIMATE =====
-    # Initialize the climate class
+    # initialize the climate class
     climate = climutils.Climate(args)
-    # Load in available AWS data, then reanalysis
+    # load in available AWS data, then reanalysis
     if args.use_AWS:
         need_vars = climate.get_AWS(args.AWS_fn)
         climate.get_reanalysis(need_vars)
     else:
         climate.get_reanalysis(climate.all_vars)
-    # Check the dataset is ready to go
+    # check the climate dataset is ready to go
     climate.check_ds()
 
     # ===== PRINT MODEL RUN INFO =====
@@ -326,15 +326,15 @@ def run_model(climate,args,store_attrs=None):
     # ===== RUN ENERGY BALANCE =====
     massbal = mb.massBalance(args,climate)
     massbal.main()
+    # ==============================
 
-    # ===== END ENERGY BALANCE =====
-    # Get final model run time
+    # get final model run time
     end_time = time.time()
     time_elapsed = end_time-start_time
     print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
     print(f'~ Model run complete in {time_elapsed:.1f} seconds ~')
 
-    # Store metadata in netcdf and save result
+    # store metadata in netcdf and save result
     if args.store_data:
         massbal.output.add_vars()
         massbal.output.add_basic_attrs(args,time_elapsed,climate)
@@ -344,19 +344,19 @@ def run_model(climate,args,store_attrs=None):
         print('~ Success: data was not saved ~')
         out = None
     
-    return out
-
-if __name__ == '__main__':
-    # Get command line arguments
-    args = get_args()
-
-    # Initialize the model
-    climate, args = initialize_model(args.glac_no,args)
-    
-    # Run the model
-    out = run_model(climate,args)
-
-    # Print the final mass balance
+    # print the final mass balance
     if isinstance(out, xr.Dataset):
         mb = out.accum + out.refreeze - out.melt
         print(f'Net mass balance: {mb.sum().values:.3f} m w.e.')
+    
+    return out
+
+if __name__ == '__main__':
+    # get command line arguments
+    args = get_args()
+
+    # initialize the model
+    climate, args = initialize_model(args.glac_no,args)
+    
+    # run the model
+    out = run_model(climate,args)

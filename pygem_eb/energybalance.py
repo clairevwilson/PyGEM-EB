@@ -1,5 +1,5 @@
 """
-Energy balance class for PyGEM Energy Balance
+Energy balance class for ****MODEL NAME****
 
 @author: clairevwilson
 """
@@ -9,7 +9,6 @@ import numpy as np
 import suncalc
 # Local libraries
 import pygem_eb.input as eb_prms
-
 
 class energyBalance():
     """
@@ -32,7 +31,7 @@ class energyBalance():
         dt : float
             Resolution for the time loop [s]
         """
-        # Unpack climate variables
+        # unpack climate variables
         climateds_now = climate.cds.sel(time=time)
         self.tempC = climateds_now['temp'].values
         self.tp = climateds_now['tp'].values
@@ -53,29 +52,29 @@ class energyBalance():
         self.dustdry = climateds_now['dustdry'].values
         self.dustwet = climateds_now['dustwet'].values
 
-        # Store previous timestep incoming shortwave
+        # store previous timestep incoming shortwave
         if time != pd.to_datetime(climate.cds.time.values[0]):
             self.last_SWin_ds = climate.cds.sel(time=time - pd.Timedelta(seconds=dt))['SWin'].values
         else:
             self.last_SWin_ds = self.SWin_ds
 
-        # Main variables
+        # main variables
         self.climateds = climate.cds
         self.args = args
 
-        # Define additional useful values
+        # define additional useful values
         self.tempK = self.tempC + 273.15
         self.prec =  self.tp / 3600     # tp is hourly total precip, prec is the rate in m/s
         self.rh = 100 if self.rh > 100 else self.rh
         
-        # Time
+        # time
         self.time = time
         self.dt = dt
 
-        # Adjust calibrated values
-        self.wind *= float(args.kw)
+        # adjust wind speed
+        self.wind *= float(eb_prms.wind_factor)
 
-        # Radiation terms
+        # radiation terms
         self.measured_SWin = 'SWin' in climate.measured_vars
         self.nanSWin = True if np.isnan(self.SWin_ds) else False
         self.nanLWin = True if np.isnan(self.LWin_ds) else False
@@ -113,15 +112,11 @@ class energyBalance():
             If mode is 'list', returns list in the order of 
                     [SWin, SWout, LWin, LWout, sensible, latent, rain, ground]
         """
-        if self.nanNR and not self.nanSWin:
-            # SHORTWAVE RADIATION  (Snet)
-            SWin,SWout = self.get_SW(surface)
-            Snet_surf = SWin + SWout
-            self.SWin = SWin
-            self.SWout = SWout[0] if '__iter__' in dir(SWout) else SWout
-        else:
-            self.SWin = np.nan
-            self.SWout = np.nan
+        # SHORTWAVE RADIATION  (Snet)
+        SWin,SWout = self.get_SW(surface)
+        Snet_surf = SWin + SWout
+        self.SWin = SWin
+        self.SWout = SWout[0] if '__iter__' in dir(SWout) else SWout
                     
         # LONGWAVE RADIATION (Lnet)
         LWin,LWout = self.get_LW(surftemp)
@@ -174,26 +169,26 @@ class energyBalance():
         surface
             class object from surface.py
         """
-        # Constants
+        # CONSTANTS
         SKY_VIEW = self.args.sky_view
         LAT = self.args.lat
         LON = self.args.lon
         SLOPE = self.args.slope * np.pi/180
         ASPECT = self.args.aspect * np.pi/180
 
-        # Albedo inputs
+        # albedo inputs
         albedo = surface.albedo
         spectral_weights = surface.spectral_weights
         assert np.abs(1-np.sum(spectral_weights)) < 1e-5, 'Solar weights dont sum to 1'
 
-        # Get solar position
+        # get solar position
         time_UTC = self.time - self.args.timezone
         sunpos = suncalc.get_position(time_UTC,LON,LAT)
         # suncalc gives azimuth with 0 = South, we want 0 = North
         SUN_AZ = sunpos['azimuth'] + np.pi     # solar azimuth angle
         SUN_ZEN = np.pi/2 - sunpos['altitude'] # solar zenith angle
 
-        # Calculate slope correction
+        # calculate slope correction
         cos_theta = (np.cos(SUN_ZEN)*np.cos(SLOPE) + 
                     np.sin(SUN_ZEN)*np.sin(SLOPE)*np.cos(SUN_AZ - ASPECT))
         slope_correction = min(cos_theta / np.cos(SUN_ZEN), 5)
@@ -267,20 +262,25 @@ class energyBalance():
             Surface temperature of snowpack/ice [C]
         """
         if self.nanLWout:
+            # calculate LWout frmo surftemp
             surftempK = surftemp+273.15
             LWout = -eb_prms.sigma_SB*surftempK**4
         else:
+            # take LWout from data
             LWout = -self.LWout_ds/self.dt
         
         if self.nanLWin and self.nanNR:
+            # calculate LWin from air temperature
             ezt = self.vapor_pressure(self.tempC)    # vapor pressure in hPa
             Ecs = .23+ .433*(ezt/self.tempK)**(1/8)  # clear-sky emissivity
             Ecl = 0.984               # cloud emissivity, Klok and Oerlemans, 2002
             Esky = Ecs*(1-self.tcc**2)+Ecl*self.tcc**2    # sky emissivity
             LWin = eb_prms.sigma_SB*(Esky*self.tempK**4)
         elif not self.nanLWin:
+            # take LWin from data
             LWin = self.LWin_ds/self.dt
         elif not self.nanNR:
+            # take LWout from net radiation data
             LWin = self.NR_ds/self.dt - LWout - self.SWin - self.SWout
             
         return LWin,LWout
@@ -300,11 +300,11 @@ class energyBalance():
         DENSITY_WATER = eb_prms.density_water
         CP_WATER = eb_prms.Cp_water
 
-        # Define rain vs snow scaling
+        # define rain vs snow scaling
         rain_scale = np.linspace(0,1,20)
         temp_scale = np.linspace(SNOW_THRESHOLD_LOW,SNOW_THRESHOLD_HIGH,20)
         
-        # Get fraction of precip that is rain
+        # get fraction of precip that is rain
         if self.tempC < SNOW_THRESHOLD_LOW:
             frac_rain = 0
         elif SNOW_THRESHOLD_LOW < self.tempC < SNOW_THRESHOLD_HIGH:
@@ -324,6 +324,7 @@ class energyBalance():
         surftemp : float
             Surface temperature of snowpack/ice [C]
         """
+        # calculate ground flux from surface temperature
         K_ICE = eb_prms.k_ice
         if eb_prms.method_ground in ['MolgHardy']:
             Qg = -K_ICE * (surftemp - eb_prms.temp_temp) / eb_prms.temp_depth
@@ -352,36 +353,36 @@ class energyBalance():
         MM_AIR = eb_prms.molarmass_air
         CP_AIR = eb_prms.Cp_air
         WIND_REF_Z = eb_prms.wind_ref_height
+        SLOPE = self.args.slope * np.pi/180
 
         # ROUGHNESS LENGTHS
         z0 = roughness  # Roughness length for momentum
         z0t = z0/100    # Roughness length for heat
         z0q = z0/10     # Roughness length for moisture
 
-        # SLOPE
-        SLOPE = self.args.slope * np.pi/180
-
-        # ADJUST WIND SPEED
+        # adjust wind speed to reference height
         z = 2 # reference height in m
         if eb_prms.wind_ref_height != 2:
             wind_2m *= np.log(2/roughness) / np.log(WIND_REF_Z/roughness)
         else:
             wind_2m = self.wind
 
-        # Transform humidity into mixing ratio (q), get air density from PV=nRT
+        # transform humidity into mixing ratio (q) 
         Ewz = self.vapor_pressure(self.tempC)  # vapor pressure at 2m
         Ew0 = self.vapor_pressure(surftemp)    # vapor pressure at the surface
         qz = (self.rh/100)*0.622*(Ewz/(self.sp-Ewz))
         q0 = 1.0*0.622*(Ew0/(self.sp-Ew0))
+
+        # get air density from PV=nRT
         density_air = self.sp/R_GAS/self.tempK*MM_AIR
 
-        # Latent heat term depends on direction of heat exchange
+        # latent heat term depends on direction of heat exchange
         if surftemp == 0. and (qz-q0) > 0:
             Lv = eb_prms.Lv_evap
         else:
             Lv = eb_prms.Lv_sub 
 
-        # Initiate loop
+        # initiate loop
         loop = True
         counter = 0
         L = 0
@@ -413,11 +414,14 @@ class energyBalance():
                         print('Turbulent fluxes didnt converge; Qs still changing by',diff)
 
                 Qs_last = Qs
-        elif eb_prms.method_turbulent in ['BulkRichardson']:   
+        elif eb_prms.method_turbulent in ['BulkRichardson']:
+            # calculate Richardson number
             if wind_2m != 0:
                 RICHARDSON = GRAVITY/self.tempK*(self.tempC-surftemp)*(z-z0)/wind_2m**2
             else:
                 RICHARDSON = 0
+
+            # calculate stability coefficients
             csT = KARMAN**2/(np.log(z/z0) * np.log(z/z0t))
             csQ = KARMAN**2/(np.log(z/z0) * np.log(z/z0q))
             if RICHARDSON <= 0.01:
@@ -436,16 +440,18 @@ class energyBalance():
         return Qs, Ql
     
     def get_dry_deposition(self, layers):
+        # CONSTANTS
         BC_RATIO = eb_prms.ratio_BC2_BCtot
         OC_RATIO = eb_prms.ratio_OC2_OCtot
         DUST_RATIO = eb_prms.ratio_DU3_DUtot
         
-        # Switch runs have no LAPs
+        # switch runs have no LAPs
         if eb_prms.switch_LAPs == 0:
             self.bcdry = 0
             self.ocdry = 0
             self.dustdry = 0
 
+        # ice layers are not affected by LAPs
         if layers.ltype[0] != 'ice':
             layers.lBC[0] += self.bcdry * self.dt * BC_RATIO
             layers.lOC[0] += self.ocdry * self.dt * OC_RATIO
@@ -468,9 +474,10 @@ class energyBalance():
         ROUGHNESS_FRESH_SNOW = eb_prms.roughness_fresh_snow
         ROUGHNESS_AGED_SNOW = eb_prms.roughness_aged_snow
         ROUGHNESS_FIRN = eb_prms.roughness_firn
-        ROUGHNESS_ICE = self.args.roughness_ice
+        ROUGHNESS_ICE = eb_prms.roughness_ice
         AGING_RATE = eb_prms.roughness_aging_rate
 
+        # determine roughness from surface type
         if layertype[0] in ['snow']:
             sigma = min(ROUGHNESS_FRESH_SNOW + AGING_RATE * days_since_snowfall, ROUGHNESS_AGED_SNOW)
         elif layertype[0] in ['firn']:
@@ -524,14 +531,14 @@ class energyBalance():
         P3 = 9.4758
         P4 = 0.2465
 
-        # Calculate potential (extraterrestrial) shortwave radiation
+        # calculate potential (extraterrestrial) shortwave radiation
         doy = self.time.day_of_year
         rad_pot = SOLAR_CONSTANT*(1+0.033*np.cos(2*np.pi*doy/366))*np.cos(solar_zenith)
 
-        # Clearness index
+        # determine clearness index
         CI = rad_glob / rad_pot
 
-        # Empirical relationship
+        # empirical relationship for diffuse fraction
         if CI > 50:
             diffuse_fraction = P4
         else:
@@ -568,4 +575,3 @@ class energyBalance():
         else:
             phit = 0.0
         return phit
-    

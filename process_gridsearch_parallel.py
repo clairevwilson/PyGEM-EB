@@ -1,3 +1,9 @@
+"""
+This script processes grid search outputs in parallel.
+
+@author: clairevwilson
+"""
+
 import pygem_eb.processing.gridsearch_processing as gsproc
 from multiprocessing import Pool
 

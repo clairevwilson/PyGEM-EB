@@ -14,30 +14,29 @@ store_data = False      # Save data?
 
 # ========== DIRECTORIES AND FILEPATHS ========== 
 machine = socket.gethostname()
-# *** should data go to ../data?
 # GLACIER
-metadata_fp = 'data/glacier_metadata.csv'                   # Glacier metadata
-site_fp = 'data/by_glacier/GLACIER/site_constants.csv'      # Generalized glacier site information
-RGI_fp = '../RGI/rgi60/00_rgi60_attribs/'                   # Randolph Glacier Inventory
-AWS_fp = '../climate_data/AWS/'                             # Weather station data
+metadata_fp = 'data/glacier_metadata.csv'                   # Glacier metadata filepath
+site_fp = 'data/by_glacier/GLACIER/site_constants.csv'      # Generalized glacier site info filepath
+RGI_fp = '../RGI/rgi60/00_rgi60_attribs/'                   # Randolph Glacier Inventory filepath
+AWS_fp = '../climate_data/AWS/'                             # Weather station data filepath
 # SNICAR
-grainsize_fp = 'data/grainsize/drygrainsize(SSAin=##).nc'   # Grain size evolution lookup table
-snicar_input_fp = 'biosnicar-py/biosnicar/inputs.yaml'      # SNICAR inputs
-clean_ice_fp = 'biosnicar-py/Data/OP_data/480band/r_sfc/gulkana_cleanice_avg_bba3732.csv'
+grainsize_fp = 'data/grainsize/drygrainsize(SSAin=##).nc'   # Grain size evolution lookup table filepath
+snicar_input_fp = 'biosnicar-py/biosnicar/inputs.yaml'      # SNICAR input filepath
+clean_ice_fp = 'biosnicar-py/Data/OP_data/480band/r_sfc/gulkana_cleanice_avg_bba3732.csv' # Ice spectra filepath
 # INITIAL CONDITIONS
-initial_temp_fp = 'data/sample_initial_temp.csv'            # Initial temperature profile
-initial_density_fp = 'data/sample_initial_density.csv'      # Initial density profile
-initial_grains_fp = 'data/sample_initial_grains.csv'        # Initial grain size profile
+initial_temp_fp = 'data/sample_initial_temp.csv'            # Initial temperature profile filepath
+initial_density_fp = 'data/sample_initial_density.csv'      # Initial density profile filepath
+initial_grains_fp = 'data/sample_initial_grains.csv'        # Initial grain size profile filepath
 initial_LAP_fp = 'data/sample_initial_laps.csv'             # Initial LAP content # f'/../Data/Nagorski/May_Mend-2_BC.csv'
 # SHADING
-dem_fp = '../data/DEMs/GLACIER_dem.tif'                       # Generalized DEM filepath
+dem_fp = '../data/dems/GLACIER_dem.tif'                     # Generalized DEM filepath
 shading_fp = 'data/by_glacier/GLACIER/shade/GLACIERSITE_shade.csv'# Generalized shading filepath
 # CLIMATE
-bias_fp = '../data/bias_adjustment_METHOD_VAR.csv'             # Bias adjustment 
-climate_fp = '../climate_data/'                             # Climate data
+bias_fp = '../data/bias_adjustment/METHOD_VAR.csv'          # Generalized bias adjustment filepath
+climate_fp = '../climate_data/'                             # Climate data filepath
 # OUTPUT
-output_filepath = '../Output/EB/'                           # Output filepaths
-albedo_out_fp = '../Output/EB/albedo.csv'                   
+output_filepath = '../Output/EB/'                           # Output filepath
+albedo_out_fp = '../Output/EB/albedo.csv'                   # Output spectral albedo filepath
 
 # ========== CLIMATE AND TIME INPUTS ========== 
 # TIME
@@ -104,7 +103,7 @@ grainsize_ds = xr.open_dataset(grainsize_fp.replace('##',str(initSSA)))
 sky_view = 0.95             # Sky-view factor [-]
 wind_factor = 1             # Wind factor [-]
 kp = 2                      # Precipitation factor [-]
-precgrad = 0.000130         # Precipitation gradient on glacier [m-1]
+precgrad = 0.000130         # Precipitation gradient with elevation [m-1]
 lapserate = -0.0065         # Temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 albedo_ice = 0.47           # Ice albedo [-] 
 snow_threshold_low = 0.2    # Lower threshold for linear snow-rain scaling [C]
@@ -116,6 +115,7 @@ layer_growth = 0.5          # Rate of exponential growth of layer size (smaller 
 max_nlayers = 80            # Maximum number of vertical layers allowed (more layers --> larger file size)
 max_dz = 2                  # Max layer height
 mb_threshold = 0.1          # Threshold to consider not conserving mass (kg m-2 = mm w.e.)
+min_glacier_depth = 2       # Minimum depth to consider a glacier [m] (when there is less ice, the run ends)
 # <<<<<< Boundary conditions >>>>>
 temp_temp = 0               # Temperature of temperate ice [C]
 temp_depth = 10             # Depth of temperate ice [m]
@@ -162,7 +162,6 @@ albedo_TOD = [14]           # List of time(s) of day to calculate albedo [hr]
 diffuse_cloud_limit = 0.6   # Threshold to consider cloudy vs clear-sky in SNICAR [-]
 include_LWC_SNICAR = False  # Include liquid water in SNICAR? (slush)
 grainshape_SNICAR = 0       # 0: sphere, 1: spheroid, 2: hexagonal plate, 3: koch snowflake, 4: hexagonal prisms
-snicar_snow_limit = 0.003   # Cutoff for minimum snow depth to run SNICAR
 # <<<<<< Constants for switch runs >>>>>
 albedo_deg_rate = 15        # Rate of exponential decay of albedo
 average_grainsize = 1000    # Grainsize to treat as constant if switch_melt is 0 [um]
@@ -170,9 +169,9 @@ albedo_fresh_snow = 0.85    # Albedo of fresh snow for exponential method [-] (M
 albedo_firn = 0.5           # Albedo of firn [-]
 # <<<<<< BC and dust >>>>>
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
-ksp_BC = 1                  # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
-ksp_OC = 1                  # Meltwater scavenging efficiency of OC (0.1-0.2 from CLM5)
-ksp_dust = 0.01             # Meltwater scavenging efficiency of dust (0.015 from CLM5)
+ksp_BC = 1                  # Meltwater scavenging efficiency of BC [-] (0.1-0.2 from CLM5)
+ksp_OC = 1                  # Meltwater scavenging efficiency of OC [-] (0.1-0.2 from CLM5)
+ksp_dust = 0.01             # Meltwater scavenging efficiency of dust [-] (0.015 from CLM5)
 BC_freshsnow = 0            # Concentration of BC in fresh snow for initialization [kg m-3]
 OC_freshsnow = 0            # Concentration of OC in fresh snow for initialization [kg m-3]
 dust_freshsnow = 0          # Concentration of dust in fresh snow for initilization [kg m-3]

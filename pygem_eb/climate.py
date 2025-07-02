@@ -1,11 +1,12 @@
 """
-Climate class for PyGEM Energy Balance
+Climate class for ****MODEL NAME****
 
 @author: clairevwilson
 """
 # Built-in libraries
 import threading
 import os,sys
+import time
 # External libraries
 import pandas as pd
 import numpy as np
@@ -15,10 +16,14 @@ import pygem_eb.input as eb_prms
 
 class Climate():
     """
-    Climate-related functions. If use_AWS = True in the input, the climate 
-    dataset will be filled with as many AWS variables as exist before turning 
-    to reanalysis data to fill the necessary variables. If use_AWS = False,
-    only reanalysis data will be used.
+    Climate-related functions which build the climate dataset
+    for a single simulation.
+
+    If use_AWS = True in the input, the climate dataset will be 
+    filled with as many AWS variables as exist before turning 
+    to reanalysis data to fill the necessary variables.
+
+    If use_AWS = False, only reanalysis data will be used.
     """
     def __init__(self,args):
         """
@@ -33,11 +38,12 @@ class Climate():
         self.dates = pd.date_range(args.startdate,args.enddate,freq='h')
         self.dates_UTC = self.dates - args.timezone
         n_time = len(self.dates)
-        self.elev = args.elev
 
-        # glacier cenlat and lon
+        # specify glacier and time information
         self.lat = args.lat
         self.lon = args.lon
+        self.n_time = n_time
+        self.elev = args.elev
 
         # define reanalysis variables
         self.get_vardict()
@@ -75,13 +81,12 @@ class Climate():
                 sp = (['time'],nans,{'units':'Pa'})
                 ),
                 coords = dict(time=(['time'],self.dates)))
-        self.n_time = n_time
         return
     
     def get_AWS(self,fp):
         """
         Loads available AWS data and determines which variables
-        are remaining to come from reanalysis.
+        are missing and need come from reanalysis.
         """
         # load data
         df = pd.read_csv(fp,index_col=0)
@@ -107,24 +112,23 @@ class Climate():
         AWS_vars = df.columns
         self.measured_vars = list(set(all_AWS_vars) & set(AWS_vars))
 
-        # warning about wind speed
+        # check if wind direction can be calculated
         uwind_measured = 'uwind' in AWS_vars
         vwind_measured = 'vwind' in AWS_vars
         if uwind_measured ^ vwind_measured:
             self.wind_direction = False
-            print('WARNING! Wind speed was input as a scalar. Wind shading is not handled')
+            # print('! Wind speed was input as a scalar. Wind shading is not handled')
         
         # extract and store data
         for var in self.measured_vars:
             self.cds[var].values = df[var].astype(float)
 
-        # figure out which data is still needed from reanalysis
+        # determine which data variables are still needed from reanalysis
         need_vars = [e for e in self.all_vars if e not in AWS_vars]
 
         # if net radiation was measured, don't need LWin
         if 'NR' in self.measured_vars:
             need_vars.remove('LWin')
-            need_vars.remove('SWin')
 
         # if wind was input as a scalar, don't need the other direction of wind
         if not self.wind_direction:
@@ -140,6 +144,7 @@ class Climate():
         """
         Fetches reanalysis climate data variables.
         """
+        # load time and point data
         dates = self.dates_UTC
         lat = self.lat
         lon = self.lon
@@ -172,6 +177,7 @@ class Climate():
             # check the units
             ds = self.check_units(var,ds)
 
+            # for time-varying variables, select/interpolate to the model time
             if var != 'elev':
                 dep_var = 'bc' in var or 'dust' in var or 'oc' in var
                 if not dep_var and eb_prms.reanalysis == 'ERA5-hourly':
@@ -183,26 +189,32 @@ class Climate():
                 else:
                     ds = ds.sel(time=dates)
             
+            # make sure the gridcell corrected is close enough to the glacier
             assert np.abs(ds.coords[lat_vn].values - float(lat)) <= 0.5, 'Wrong grid cell accessed'
             assert np.abs(ds.coords[lon_vn].values - float(lon)) <= 0.5, 'Wrong grid cell accessed'
+
             # store result
             result_dict[var] = ds.values.ravel()
             ds.close()
+
+            # if not threading, return the result
             if not use_threads:
                 return result_dict
         
         # initiate variables
         all_data = {}
         threads = []
-        # loop through vars to initiate threads
+        # loop through vars
         for var in vars:
             fn = self.reanalysis_fp + self.var_dict[var]['fn']
             if use_threads:
+                # initiate threads
                 thread = threading.Thread(target=access_cell,
                                         args=(fn, var, all_data))
                 thread.start()
                 threads.append(thread)
             else:
+                # gather data in series
                 all_data = access_cell(fn,var,all_data)
         if use_threads:
             # join threads
@@ -236,7 +248,7 @@ class Climate():
             new_temp -= 1
             print('Reducing temperature for on-ice weather station')
             
-        # PRECIP: correct according to lapse rate
+        # PRECIP: correct according to precipitation gradient
         tp_elev = self.AWS_elev if 'tp' in self.measured_vars else self.reanalysis_elev
         new_tp = self.cds.tp.values*(1+PREC_GRAD*(self.elev-tp_elev))
 
@@ -253,8 +265,8 @@ class Climate():
         return
     
     def check_ds(self):
-        # Calculate wind speed and direction from u and v components
-        # *** Add function which sends to WindMapper or uses a lookup table
+        # calculate wind speed and direction from u and v components
+        # ***WINDMAPPER GOES HERE***
         uwind = self.cds['uwind'].values
         vwind = self.cds['vwind'].values
         wind = np.sqrt(np.power(uwind,2)+np.power(vwind,2))
@@ -263,7 +275,7 @@ class Climate():
         self.cds['winddir'].values = winddir
 
         if eb_prms.reanalysis == 'MERRA2':
-            # Correct other MERRA-2 variables
+            # correct other MERRA-2 variables
             for var in eb_prms.bias_vars:
                 from_MERRA = True if not self.args.use_AWS else var in self.need_vars
                 if from_MERRA:
@@ -272,27 +284,30 @@ class Climate():
                     #     self.bias_adjust_binned(var)
                     # elif from_MERRA and eb_prms.bias_vars[var] == 'quantile':
 
-        # Adjust elevation dependent variables
+        # adjust elevation dependent variables
         self.adjust_to_elevation()
         
-        # Adjust MERRA-2 deposition by reduction coefficient
+        # adjust MERRA-2 deposition by reduction coefficient
         if eb_prms.reanalysis == 'MERRA2' and eb_prms.adjust_deposition:
             self.adjust_dep()
 
-        # Check all variables are there
+        # check all variables are there
         failed = []
         for var in self.all_vars:
             data = self.cds[var].values
             if np.any(np.isnan(data)):
                 failed.append(var)
-        # Can input net radiation instead of incoming LW radiation
+
+        # can input net radiation instead of incoming LW radiation
         if 'LWin' in failed and 'NR' in self.measured_vars:
             failed.remove('LWin')
+
+        # print any missing data
         if len(failed) > 0:
             print('Missing data from',failed)
             self.exit()
 
-        # Store the dataset as a netCDF
+        # store the dataset as a netCDF
         if eb_prms.store_climate:
             out_fp = eb_prms.output_filepath + self.args.out + self.args.site + '_climate'
             self.cds.to_netcdf(out_fp+'.nc')
@@ -303,7 +318,7 @@ class Climate():
         return
     
     def check_units(self,var,ds):
-        # Define the units the model needs
+        # define the units the model needs
         model_units = {'temp':'C','uwind':'m s-1','vwind':'m s-1',
                        'rh':'%','sp':'Pa','tp':'m s-1','elev':'m',
                        'SWin':'J m-2', 'LWin':'J m-2', 'NR':'J m-2', 'tcc':'-',
@@ -311,11 +326,11 @@ class Climate():
                        'ocdry':'kg m-2 s-1', 'ocwet':'kg m-2 s-1',
                        'dustdry':'kg m-2 s-1', 'dustwet':'kg m-2 s-1'}
         
-        # Get the current variable's units
+        # get the current variable's units
         units_in = ds.attrs['units'].replace('*','')
         units_out = model_units[var]
 
-        # Check and make replacements
+        # check and make replacements
         if units_in != units_out:
             if var == 'temp' and units_in == 'K':
                 ds = ds - 273.15
@@ -341,7 +356,7 @@ class Climate():
         """
         Updates deposition based on preprocessed reduction coefficients
         """
-        print('Hard-coded MERRA-2 to UK-ESM filepath for deposition adjustment')
+        print('***Hard-coded MERRA-2 to UK-ESM filepath for deposition adjustment***')
         fn = self.reanalysis_fp + 'merra2_to_ukesm_conversion_map_MERRAgrid.nc'
         ds_f = xr.open_dataarray(fn)
         ds_f = ds_f.sel({self.lat_vn:self.lat,self.lon_vn:self.lon},method='nearest')
@@ -376,39 +391,39 @@ class Climate():
         """
         Updated variables according to preprocessed bias adjustments
         """
-        # Open .csv with binned correction factors
+        # open .csv with binned correction factors
         bias_fp = eb_prms.bias_fp.replace('METHOD','binned').replace('VAR',var)
         assert os.path.exists(bias_fp), f'Binned data does not exist for {var}'
         bias_df = pd.read_csv(bias_fp)
 
-        # Define bins and values
+        # define bins and values
         bins = np.append(np.zeros(1), bias_df['bins'])
         values = self.cds[var].values
         scale = np.ones_like(self.cds[var].values)
 
-        # Loop through bins and assign scale factor
+        # loop through bins and assign scale factor
         for i in range(1,len(bins)):
             index = np.where((values >= bins[i-1]) & (values < bins[i]))[0]
             scale[index] = bias_df['factor'][i-1]
 
-        # Update values with scale factor
+        # update values with scale factor
         self.cds[var].values = values * scale
         return
     
     def bias_adjust_quantile(self,var):
         """
-        Updated variables according to preprocessed quantile mapping
+        Updates variables according to preprocessed quantile mapping
         """
-        # Open .csv with quantile mapping
+        # open .csv with quantile mapping
         bias_fp = eb_prms.bias_fp.replace('METHOD','quantile_mapping').replace('VAR',var)
         assert os.path.exists(bias_fp), f'Quantile mapping file does not exist for {var}'
         bias_df = pd.read_csv(bias_fp)
         
-        # Interpolate values according to quantile mapping
+        # interpolate values according to quantile mapping
         values = self.cds[var].values
         adjusted = np.interp(values, bias_df['sorted'], bias_df['mapping'])
 
-        # Update values
+        # update values
         self.cds[var].values = adjusted
         return
 
@@ -430,12 +445,12 @@ class Climate():
         return RMSE
 
     def get_vardict(self):
-        # Determine filetag for MERRA2 lat/lon gridded files
+        # determine filetag for MERRA2 lat/lon gridded files
         flat = str(int(np.floor(self.lat/10)*10))
         flon = str(int(np.floor(self.lon/10)*10))
         tag = eb_prms.MERRA2_filetag if eb_prms.MERRA2_filetag else f'{flat}_{flon}'
 
-        # Update filenames for MERRA-2 (need grid lat/lon)
+        # update filenames for MERRA-2 (need grid lat/lon)
         self.reanalysis_fp = eb_prms.climate_fp
         self.var_dict = {'temp':{'fn':[],'vn':[]},
             'rh':{'fn':[],'vn':[]},'sp':{'fn':[],'vn':[]},
@@ -469,6 +484,7 @@ class Climate():
             self.lat_vn = 'lat'
             self.lon_vn = 'lon'
             self.elev_vn = self.var_dict['elev']['vn']
+
             # Variable filenames
             self.var_dict['temp']['fn'] = f'T2M/MERRA2_T2M_{tag}.nc'
             self.var_dict['rh']['fn'] = f'RH2M/MERRA2_RH2M_{tag}.nc'
@@ -488,6 +504,7 @@ class Climate():
             self.var_dict['dustdry']['fn'] = f'DUDP003/MERRA2_DUDP003_{tag}.nc'
         elif eb_prms.reanalysis == 'ERA5-hourly':
             self.reanalysis_fp += 'ERA5/ERA5_hourly/'
+
             # Variable names for energy balance
             self.var_dict['temp']['vn'] = 't2m'
             self.var_dict['rh']['vn'] = 'rh'
@@ -509,6 +526,7 @@ class Climate():
             self.lat_vn = 'latitude'
             self.lon_vn = 'longitude'
             self.elev_vn = self.var_dict['elev']['vn']
+
             # Variable filenames
             self.var_dict['temp']['fn'] = 'ERA5_temp_hourly.nc'
             self.var_dict['rh']['fn'] = 'ERA5_rh_hourly.nc'
@@ -528,54 +546,5 @@ class Climate():
             self.var_dict['dustdry']['fn'] = f'./../../MERRA2/DUDP003/MERRA2_DUDP003_{tag}.nc'
 
     def exit(self):
+        """Exits model if there is a problem"""
         sys.exit()
- 
-
-    # UNUSED --- MOVE TO PYGEM EB GRAVEYARD
-    # from sklearn.ensemble import RandomForestRegressor
-    # def getGrainSizeModel(self,initSSA,var):
-    #     path = '/home/claire/research/PyGEM-EB/pygem_eb/data/'
-    #     fn = 'drygrainsize(SSAin=##).nc'.replace('##',str(initSSA))
-    #     ds = xr.open_dataset(path+fn)
-
-    #     # extract X values (temperature, density, temperature gradient)
-    #     T = ds.coords['TVals'].to_numpy()
-    #     p = ds.coords['DENSVals'].to_numpy()
-    #     dTdz = ds.coords['DTDZVals'].to_numpy()
-        
-    #     # form meshgrid and corresponding y for model input
-    #     TT,pp,ddTT = np.meshgrid(T,p,dTdz)
-    #     X = np.array([TT.ravel(),pp.ravel(),ddTT.ravel()]).T
-    #     y = []
-    #     for tpd in X:
-    #         tsel = tpd[0]
-    #         psel = tpd[1]
-    #         dtsel = tpd[2]
-    #         y.append(ds.sel(TVals=tsel,DENSVals=psel,DTDZVals=dtsel)[var].to_numpy())
-    #     y = np.array(y)
-
-    #     # dr0 can be modeled linearly; kappa and tau should be log transformed
-    #     transform = 'none' if var=='dr0mat' else 'log'
-    #     if transform == 'log':
-    #         y = np.log(y)
-
-    #     # randomly select training and testing data to store statistics
-    #     np.random.seed(9)
-    #     percent_train = 90
-    #     N = len(y)
-    #     train_mask = np.zeros_like(y,dtype=np.bool_)
-    #     train_mask[np.random.permutation(N)[:int(N*percent_train / 100)]] = True
-    #     X_train = X[train_mask,:]
-    #     X_val = X[np.logical_not(train_mask),:]
-    #     y_train = y[train_mask].reshape(-1,1)
-    #     y_val = y[np.logical_not(train_mask)].reshape(-1,1)
-
-    #     # train rain forest model
-    #     rf = RandomForestRegressor(max_depth=15,n_estimators=10)
-    #     y_train = y_train.ravel()
-    #     rf.fit(X_train,y_train)
-    #     trainloss = self.RMSE(y_train,rf.predict(X_train))
-    #     valloss = self.RMSE(y_val,rf.predict(X_val))
-
-    #     return rf,trainloss,valloss
-        

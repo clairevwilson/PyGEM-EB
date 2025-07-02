@@ -1,3 +1,14 @@
+"""
+This script runs the model for multiple sites using 
+1) weather station data
+2) original MERRA-2 data
+3) bias-corrected MERRA-2 data
+These simulates are done in series and thus this script
+is inefficient but is only used for a figure in ***Paper 1***
+
+@author: clairevwilson
+"""
+
 # Built-in libraries
 import os
 import time
@@ -7,7 +18,7 @@ import pickle
 from multiprocessing import Pool
 # Internal libraries
 import pygem_eb.input as eb_prms
-import run_simulation_eb as sim
+import run_simulation as sim
 import pygem_eb.massbalance as mb
 from objectives import *
 

@@ -1,8 +1,7 @@
-# Local (edited by Claire)
+# Local (MAKE EDITS HERE)
 shading/plots
 biosnicar-py/
-# pygem_eb/processing/ebplotting.ipynb
-# pygem_eb/input.py
+data/by_glacier
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

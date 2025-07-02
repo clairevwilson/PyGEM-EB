@@ -1,7 +1,7 @@
 """
 Created on Tue Mar 19 11:32:50 2024
 
-Shading model for PyGEM-EB
+Shading model for ****MODEL NAME****
 Requirements: - DEM which contains glacier and surrounding ridges
               - Coordinates for point to perform calculations
 
@@ -34,12 +34,13 @@ from pyproj import Transformer
 from numpy import pi, cos, sin, arctan
 
 # =================== INPUTS ===================
+# this section is unused if running this from run_simulation_eb
 site_by = 'latlon'                  # method to choose lat/lon ('id' or 'latlon')
 site = 'AWS'                        # name of site for indexing .csv OR specify lat/lon
 lat,lon = [0.0178817,-78.0040317]   # [60.8155986,-139.1236350] # site latitude,longitude 
 timezone = pd.Timedelta(hours=-5)   # time zone of location
 glacier_name = 'cayambe'            # name of glacier for labeling
-glac_no = '01.16195'                # 
+glac_no = '01.16195'                # RGI glacier ID
 
 # storage options
 plot = ['result','search','horizon']           # list from ['result','search','horizon']
@@ -47,13 +48,11 @@ store = ['result','result_plot','search_plot','horizon_plot']   # list from ['re
 result_vars = ['dirirrslope','shaded']      # variables to include in plot
 
 # model options 
-run_model = True    # set to False if importing shading.py in another script
 get_shade = True    # run shade model?
 get_direct = True   # run slope-corrected irradiance model?
-get_diffuse = False # doesn't work yet
-assert get_shade or get_direct or get_diffuse, 'Why are you running this?'
+assert get_shade or get_direct, 'Why are you running this?'
 
-# model parameters
+# model parameters (shouldn't need to change anything here)
 time_freq = '30min'     # timestep in offset alias notation
 angle_step = 5          # step to calculate horizon angle (degrees)
 search_length = 5000    # distance to search from center point (m)
@@ -61,16 +60,11 @@ sub_dt = 10             # timestep to calculate solar corrections (minutes)
 buffer = 20             # min num of gridcells away from which horizon can be found
 
 # ================ INPUT FILEPATHS =================
-# in
+# input filepath
 dem_fp = f'../../Data/dems/{glacier_name}_dem.tif'   # DEM containing glacier + surroundings # gulkana/Gulkana_DEM_20m
-# if using get_diffuse, need a solar radiation file
-solar_fp = None # '/home/claire/research/climate_data/AWS/CNR4/cnr4_2023.csv'
-# optional: slope/aspect .tif (can also be calculated from DEM)
-aspect_fp = None     # 'in/gulkana/Gulkana_aspect_20m.tif'
-slope_fp = None      # 'in/gulkana/Gulkana_slope_20m.tif'
 # RGI for glacier shapefile
 rgi_fp = f'../../RGI/rgi60/'
-# make output filepath
+# output filepath
 data_fp = os.getcwd().split('PyGEM-EB')[0]
 fp_base = data_fp + 'PyGEM-EB/shading/'
 fp_out = fp_base + f'../data/by_glacier/'
@@ -83,7 +77,7 @@ P0 = 101325     # sea-level pressure in Pa
 PSI = 0.75      # vertical atmospheric clear-sky transmissivity
 MEAN_RAD = 1    # mean earth-sun radius in AU
 
-# =================== LABELING ===================
+# =================== VISUALIZATION ===================
 varprops = {'dirirr':{'label':'direct flat-surface irradiance [W m-2]','cmap':'plasma'},
             'dirirrslope':{'label':'direct slope-corrected irradiance [W m-2]','cmap':'plasma'},
             'shaded':{'label':'shading [black = shaded]','cmap':'binary'},
@@ -105,16 +99,16 @@ class Shading():
         If this model is executed frpm PyGEM-EB, args is
         filled in run_simulation_eb.py with the needed inputs.
         """
-        # If they were not input, parse command line args
+        # parse command line args if they were not input
         if not args:
             args = self.parse_args()
 
-        # Define site filepath and make the folder if it doesn't exist
+        # define site filepath and make the folder if it doesn't exist
         args.site_fp = site_fp.replace('GLACIER',args.glac_name)
         if not os.path.exists(fp_out + args.glac_name):
             os.mkdir(fp_out + args.glac_name)
 
-        # Open or create the site constants file
+        # open or create the site constants file
         if os.path.exists(args.site_fp):
             # get site lat and lon    
             site_df = pd.read_csv(args.site_fp,index_col=0)
@@ -126,10 +120,10 @@ class Shading():
             self.site_df = pd.DataFrame({'lat':lat,'lon':lon},index=[args.site])
             self.site_df.index.name = 'site'
 
-        # Save the args to self
+        # save the args
         self.args = args
 
-        # Check if the DEM exists; if not, print out the bounding box to manually retrieve one
+        # check if the DEM exists; if not, print out the bounding box to manually retrieve one
         self.get_shapefile()
         if not os.path.exists(args.dem_fp):
             minx, miny, maxx, maxy = self.shapefile.total_bounds
@@ -201,10 +195,6 @@ class Shading():
             if get_direct:
                 df['dirirrslope'].astype(float).to_csv(self.irr_fp,
                                                 header=f'skyview={self.sky_view}')
-
-        # get diffuse fraction from incoming solar data
-        if get_diffuse:
-            self.diffuse(df)
         return
 
     # =================== FUNCTIONS ===================
@@ -288,12 +278,10 @@ class Shading():
         if not -80.0 <= lat <= 84.0:
             raise ValueError('UTM zones are only defined between 84°N and 80°S')
         zone_number = int((lon + 180) / 6) + 1
-
         if lat >= 0:
             epsg_code = 32600 + zone_number  # Northern hemisphere
         else:
             epsg_code = 32700 + zone_number  # Southern hemisphere
-
         return epsg_code
     
     def load_dem(self):
@@ -320,27 +308,16 @@ class Shading():
         # filter extremes
         dem = dem.where(dem < 6000)
 
-        # if specified aspect/slope files:
-        if aspect_fp and slope_fp:
-            # open files
-            aspect = rxr.open_rasterio(fp_base + aspect_fp).isel(band=0)
-            slope = rxr.open_rasterio(fp_base + slope_fp).isel(band=0)
-
-            # filter nans and convert to radians
-            aspect = aspect.where(aspect > 0)*np.pi/180
-            slope = slope.where(slope > 0)*np.pi/180
-        else:
-            # calculate gradient from DEM
-            print(self.y_res, self.x_res)
-            dx,dy = np.gradient(dem,self.y_res,self.x_res)
-            # calculate slope and aspect from gradient
-            slope = np.arctan(np.sqrt(dx**2 + dy**2))
-            aspect = np.arctan2(-dy,-dx)
-            # adjust so 0 is North
-            aspect = (aspect + 2*np.pi) % (2*np.pi) 
-            # store in a DataArray
-            slope = xr.DataArray(slope, dims=['y', 'x'], coords={'y': dem.y, 'x': dem.x})
-            aspect = xr.DataArray(aspect, dims=['y', 'x'], coords={'y': dem.y, 'x': dem.x})
+        # calculate gradient from DEM
+        dx,dy = np.gradient(dem,self.y_res,self.x_res)
+        # calculate slope and aspect from gradient
+        slope = np.arctan(np.sqrt(dx**2 + dy**2))
+        aspect = np.arctan2(-dy,-dx)
+        # adjust so 0 is North
+        aspect = (aspect + 2*np.pi) % (2*np.pi) 
+        # store in a DataArray
+        slope = xr.DataArray(slope, dims=['y', 'x'], coords={'y': dem.y, 'x': dem.x})
+        aspect = xr.DataArray(aspect, dims=['y', 'x'], coords={'y': dem.y, 'x': dem.x})
 
         # get min/max elevation for plotting
         self.min_elev = int(np.round(np.nanmin(dem.values)/100,0)*100)
@@ -546,28 +523,6 @@ class Shading():
         
         return df
 
-    def diffuse(self,df):
-        """
-        Loads a dataset of measured incoming shortwave radiation
-        to 
-        """
-        # load solar dataset
-        solar_df = pd.read_csv(fp_base + solar_fp,index_col=0)
-        solar_df.index = pd.to_datetime(solar_df.index) + pd.Timedelta(days=365,hours=9)
-
-        # get hours where station is in the shade
-        measured_list = []
-        modeled_list = []
-        for hour in solar_df.index:
-            shaded = bool(df.loc[hour,'shaded'])
-            modeled = df.loc[hour,'dirirr']
-            if shaded and ~np.isnan(modeled):
-                measured = solar_df.loc[hour,'sw_down_Avg']
-                if modeled > 1e-3:
-                    measured_list.append(measured)
-                    modeled_list.append(modeled)
-                    print(measured,modeled)
-
     def plot_search(self):
         plt.scatter(self.xx,self.yy,marker='*',color='orange')
         plt.title(f'{self.args.glac_name} Horizon Search \n Sky-view Factor = {self.sky_view:.3f}')
@@ -640,7 +595,7 @@ class Shading():
         self.site_df.loc[self.args.site,'aspect'] = self.point_aspect*180/pi
         self.site_df.loc[self.args.site,'elevation'] = int(self.point_elev)
         self.site_df.to_csv(self.args.site_fp)
-        print(f'~ Saved sky view, slope, aspect and elevation to {self.args.glac_name}/site_constants.csv')
+        print(f'~ Saved sky view, slope, aspect and elevation to {self.args.glac_name}/site_constants.csv ~')
 
 # RUN MODEL
 if __name__ == '__main__':
