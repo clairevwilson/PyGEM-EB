@@ -2,7 +2,7 @@
 Created on Tue Mar 19 11:32:50 2024
 
 Shading model for PyGEM-EB
-Requirements: - DEM, slope and aspect rasters surrounding glacier
+Requirements: - DEM which contains glacier and surrounding ridges
               - Coordinates for point to perform calculations
 
 1. Input site coordinates and time zone
@@ -11,13 +11,17 @@ Requirements: - DEM, slope and aspect rasters surrounding glacier
         Optional: plot horizon search
 4. Calculate sky-view factor
 5. Calculate direct clear-sky slope-corrected irradiance and
-                           shading for each hour of the year
+   shading for each hour of the year
 6. Store .csv of Icorr and shade 
         Optional: plot results
 7. Optional: calculate diffuse fraction from measured solar
 
 @author: clairevwilson
 """
+# Built-in libraries
+import os
+import argparse
+# External libraries
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -25,9 +29,7 @@ import rioxarray as rxr
 import xarray as xr
 import pandas as pd
 import geopandas as gpd
-import argparse
 import suncalc
-import os
 from pyproj import Transformer
 from numpy import pi, cos, sin, arctan
 

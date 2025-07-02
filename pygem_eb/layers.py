@@ -3,13 +3,15 @@ Layers class for PyGEM Energy Balance
 
 @author: clairevwilson
 """
-
+# Built-in libraries
+import warnings, sys
+warnings.simplefilter('error', RuntimeWarning)
+# External libraries
 import numpy as np
 import pandas as pd
 import xarray as xr
+# Local libraries
 import pygem_eb.input as eb_prms
-import warnings, sys
-warnings.simplefilter('error', RuntimeWarning)
 
 class Layers():
     """

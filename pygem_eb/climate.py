@@ -3,11 +3,14 @@ Climate class for PyGEM Energy Balance
 
 @author: clairevwilson
 """
-import numpy as np
-import xarray as xr
-import pandas as pd
+# Built-in libraries
 import threading
 import os,sys
+# External libraries
+import pandas as pd
+import numpy as np
+import xarray as xr
+# Local libraries
 import pygem_eb.input as eb_prms
 
 class Climate():

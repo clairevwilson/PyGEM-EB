@@ -3,10 +3,13 @@ Energy balance class for PyGEM Energy Balance
 
 @author: clairevwilson
 """
+# External libraries
 import pandas as pd
 import numpy as np
-import pygem_eb.input as eb_prms
 import suncalc
+# Local libraries
+import pygem_eb.input as eb_prms
+
 
 class energyBalance():
     """
