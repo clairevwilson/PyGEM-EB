@@ -14,7 +14,7 @@ All functions use the following notation for the arguments:
     ds : xarray.Dataset
         Output dataset from PyGEM-EB
     method : str, default 'MAE'
-        Choose between 'RMSE','MAE','ME','MSE'
+        Choose between 'RMSE','MAE','MdAE','ME','MSE'
     plot : Bool, default False
         Plot the result
 
@@ -37,25 +37,24 @@ USGS_fp = '../MB_data/Gulkana/Input_Gulkana_Glaciological_Data.csv'
 # Objective function
 def objective(model,data,method):
     if method == 'MSE':
-        return np.mean(np.square(model - data))
+        return np.nanmean(np.square(model - data))
     elif method == 'RMSE':
-        return np.sqrt(np.mean(np.square(model - data)))
+        return np.sqrt(np.nanmean(np.square(model - data)))
     elif method == 'MAE':
-        return np.mean(np.abs(model - data))
+        return np.nanmean(np.abs(model - data))
+    elif method == 'MdAE':
+        return np.nanmedian(np.abs(model - data))
     elif method == 'ME':
-        return np.mean(model - data)
+        return np.nanmean(model - data)
     
 # ========== 1. SEASONAL MASS BALANCE ==========
-def seasonal_mass_balance(ds,method='MAE'):
+def seasonal_mass_balance(ds,method='MAE',out=None):
     """
     Compares seasonal mass balance measurements from
     USGS stake surveys to a model output.
 
     The stake data comes directly from the USGS Data
     Release (Input_Glaciological_Data.csv).
-
-    ** Additional argument site : str
-    Name of the USGS site.
     """
     # Determine the site
     site = ds.attrs['site']
@@ -67,15 +66,21 @@ def seasonal_mass_balance(ds,method='MAE'):
 
     # Get overlapping years
     years_model = np.unique(pd.to_datetime(ds.time.values).year)
+    if pd.to_datetime(f'{years_model[-1]}-08-01') not in ds.time.values:
+        years_model = years_model[:-1]
+    # if site == 'AU':
+    #     years_model = years_model[1:]
     years_measure = np.unique(df_mb.index)
     years = np.sort(list(set(years_model) & set(years_measure)))
 
     # Retrieve the model data
-    mb_dict = {'bw':[],'bs':[],'w-':[],'s+':[]}
+    mb_dict = {'bw':[],'bs':[],'ba':[]}
     for year in years[1:]:
+        # Get sample dates
         spring_date = df_mb.loc[year,'spring_date']
         fall_date = df_mb.loc[year,'fall_date']
         last_fall_date = df_mb.loc[year-1,'fall_date']
+
         # Fill nans
         if str(spring_date) == 'nan':
             spring_date = str(year)+'-04-20 00:00'
@@ -83,51 +88,70 @@ def seasonal_mass_balance(ds,method='MAE'):
             fall_date = str(year)+'-08-20 00:00'
         if str(last_fall_date) == 'nan':
             last_fall_date = str(year-1)+'-08-20 00:00'
+
         # Split into winter and summer
         summer_dates = pd.date_range(spring_date,fall_date,freq='h')
         winter_dates = pd.date_range(last_fall_date,spring_date,freq='h')
+        annual_dates = pd.date_range(last_fall_date,fall_date,freq='h')
         if pd.to_datetime(ds.time.values[0]).minute == 30:
-            summer_dates = summer_dates + pd.Timedelta(minutes=30)
-            winter_dates = winter_dates + pd.Timedelta(minutes=30)
-        # sum mass balance
-        try:
-            wds = ds.sel(time=winter_dates).sum()
-            sds = ds.sel(time=summer_dates).sum()
-        except:
-            if year == years[-1]:
-                years = years[:-1]
-                break
+            summer_dates += pd.Timedelta(minutes=30)
+            winter_dates += pd.Timedelta(minutes=30)
+            annual_dates += pd.Timedelta(minutes=30)
+
+        # Sum model mass balance
+        if summer_dates[-1] not in ds.time.values:
+            summer_dates = pd.date_range(summer_dates[0], ds.time.values[-1],freq='h')
+            annual_dates = pd.date_range(annual_dates[0], ds.time.values[-1],freq='h')
+        wds = ds.sel(time=winter_dates).sum()
+        sds = ds.sel(time=summer_dates).sum()
+        ads = ds.sel(time=annual_dates).sum()
         winter_mb = wds.accum + wds.refreeze - wds.melt
         internal_acc = ds.sel(time=summer_dates[-2]).cumrefreeze.values
         summer_mb = sds.accum + sds.refreeze - sds.melt - internal_acc
+        annual_mb = ads.accum + ads.refreeze - ads.melt - internal_acc
         mb_dict['bw'].append(winter_mb.values)
         mb_dict['bs'].append(summer_mb.values)
-        mb_dict['w-'].append(wds.melt.values*-1)
-        mb_dict['s+'].append(sds.accum.values)
+        mb_dict['ba'].append(annual_mb.values)
 
     # Index mass balance data
     df_mb = df_mb.loc[years]
     this_winter_abl_data = df_mb['winter_ablation'].iloc[1:].values
     past_summer_acc_data = df_mb['summer_accumulation'].iloc[:-1].values
     this_summer_acc_data = df_mb['summer_accumulation'].iloc[1:].values
+    past_summer_acc_data[np.isnan(past_summer_acc_data)] = 0
+    this_summer_acc_data[np.isnan(this_summer_acc_data)] = 0
+    this_winter_abl_data[np.isnan(this_winter_abl_data)] = 0
     winter_data = df_mb['bw'].iloc[1:] - past_summer_acc_data + this_winter_abl_data
     summer_data = df_mb['ba'].iloc[1:] - df_mb['bw'].iloc[1:] + this_summer_acc_data
+    annual_data = winter_data + summer_data
 
     # Clean up arrays
     winter_model = np.array(mb_dict['bw'])
     summer_model = np.array(mb_dict['bs'])
+    annual_model = np.array(mb_dict['ba'])
     assert winter_model.shape == winter_data.shape
     assert summer_model.shape == summer_data.shape    
+    assert annual_model.shape == annual_data.shape    
 
     # Assess error
-    winter_error = objective(winter_model,winter_data,method) 
-    summer_error = objective(summer_model,summer_data,method) 
-
-    return winter_error, summer_error
+    if isinstance(method, str) and out is None:
+        winter_error = objective(winter_model,winter_data,method) 
+        summer_error = objective(summer_model,summer_data,method) 
+        annual_error = objective(annual_model,annual_data,method)
+        return winter_error, summer_error, annual_error
+    elif out == 'data':
+        return years[1:],winter_model,winter_data,summer_model,summer_data,annual_model,annual_data
+    else:
+        out_dict = {'winter':[],'summer':[],'annual':[]}
+        for mm in method:
+            out_dict['winter'].append(objective(winter_model,winter_data,mm))
+            out_dict['summer'].append(objective(summer_model,summer_data,mm))
+            out_dict['annual'].append(objective(annual_model,annual_data,mm))
+        return out_dict
 
 def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='default'):
     """
-    plot_var : 'mb' (default), 'w-s+' (winter melt, summer accumulation), 'bw','bs'
+    plot_var : 'mb' (default), 'bw','bs','ba'
     """
     # Determine the site
     site = ds.attrs['site']
@@ -147,9 +171,11 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
     years_model = np.unique(pd.to_datetime(ds.time.values).year)
     years_measure = np.unique(df_mb.index)
     years = np.sort(list(set(years_model) & set(years_measure)))
+    if site == 'A':
+        years = years[:-1]
 
     # Retrieve the model data
-    mb_dict = {'bw':[],'bs':[],'w-':[],'s+':[]}
+    mb_dict = {'bw':[],'bs':[],'ba':[]}
     for year in years[1:]:
         spring_date = df_mb.loc[year,'spring_date']
         fall_date = df_mb.loc[year,'fall_date']
@@ -164,69 +190,77 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
         # Split into winter and summer
         summer_dates = pd.date_range(spring_date,fall_date,freq='h')
         winter_dates = pd.date_range(last_fall_date,spring_date,freq='h')
+        annual_dates = pd.date_range(last_fall_date,fall_date,freq='h')
         if pd.to_datetime(ds.time.values[0]).minute == 30:
-            summer_dates = summer_dates + pd.Timedelta(minutes=30)
-            winter_dates = winter_dates + pd.Timedelta(minutes=30)
-        # sum mass balance
-        try:
-            wds = ds.sel(time=winter_dates).sum()
-            sds = ds.sel(time=summer_dates).sum()
-        except:
-            if year == years[-1]:
-                years = years[:-1]
-                break
+            summer_dates += pd.Timedelta(minutes=30)
+            winter_dates += pd.Timedelta(minutes=30)
+            annual_dates += pd.Timedelta(minutes=30)
+
+        # Sum model mass balance
+        if summer_dates[-1] not in ds.time.values:
+            summer_dates = pd.date_range(summer_dates[0], ds.time.values[-1],freq='h')
+            annual_dates = pd.date_range(annual_dates[0], ds.time.values[-1],freq='h')
+        wds = ds.sel(time=winter_dates).sum()
+        sds = ds.sel(time=summer_dates).sum()
+        ads = ds.sel(time=annual_dates).sum()
         winter_mb = wds.accum + wds.refreeze - wds.melt
         internal_acc = ds.sel(time=summer_dates[-2]).cumrefreeze.values
         summer_mb = sds.accum + sds.refreeze - sds.melt - internal_acc
+        annual_mb = ads.accum + ads.refreeze - ads.melt - internal_acc
         mb_dict['bw'].append(winter_mb.values)
         mb_dict['bs'].append(summer_mb.values)
-        mb_dict['w-'].append(wds.melt.values*-1)
-        mb_dict['s+'].append(sds.accum.values)
+        mb_dict['ba'].append(annual_mb.values)
 
     # Index mass balance data
     df_mb = df_mb.loc[years]
     this_winter_abl_data = df_mb['winter_ablation'].iloc[1:].values
     past_summer_acc_data = df_mb['summer_accumulation'].iloc[:-1].values
     this_summer_acc_data = df_mb['summer_accumulation'].iloc[1:].values
+    past_summer_acc_data[np.isnan(past_summer_acc_data)] = 0
+    this_summer_acc_data[np.isnan(this_summer_acc_data)] = 0
+    this_winter_abl_data[np.isnan(this_winter_abl_data)] = 0
     winter_data = df_mb['bw'].iloc[1:] - past_summer_acc_data + this_winter_abl_data
     summer_data = df_mb['ba'].iloc[1:] - df_mb['bw'].iloc[1:] + this_summer_acc_data
-    wabl_data = df_mb['winter_ablation'].iloc[1:]
-    sacc_data = df_mb['summer_accumulation'].iloc[1:]
+    annual_data = winter_data + summer_data
 
-    if color == 'default' and plot_var in ['mb','w-s+']:
+    cannual = 'orchid'
+    if color == 'default' and plot_var == 'mb':
         cwinter = 'turquoise'
         csummer = 'orange'
+    elif color != 'default':
+        cwinter = color
+        csummer = color
     elif plot_var == 'bw':
         cwinter = color
     elif plot_var == 'bs':
         csummer = color
 
     years = years[1:]
-    if plot_var == 'w-s+':
-        ax.plot(years,mb_dict['w-'],label='Winter Melt',color=cwinter,linewidth=2)
-        ax.plot(years,mb_dict['s+'],label='Summer Acc.',color=csummer,linewidth=2)
-        ax.plot(years,wabl_data,color='turquoise',linestyle='--')
-        ax.plot(years,sacc_data,color='orange',linestyle='--')
-        ax.set_ylabel('Partitioned seasonal mass balance (m w.e.)',fontsize=14)
-        ax.set_title(f'Summer accumulation and winter ablation at site {site}')
-    else:
-        if plot_var in ['mb','bw']:
-            ax.plot(years,mb_dict['bw'],label='Winter',color=cwinter,linewidth=2)
-            ax.plot(years,winter_data,color=cwinter,linestyle='--')
-        if plot_var in ['mb','bs']:
-            ax.plot(years,mb_dict['bs'],label='Summer',color=csummer,linewidth=2)
-            ax.plot(years,summer_data,color=csummer,linestyle='--')
-        ax.axhline(0,color='grey',linewidth=0.5)
+    if plot_var in ['mb','bw']:
+        ax.plot(years,mb_dict['bw'],label='Winter',color=cwinter,linewidth=2)
+        ax.plot(years,winter_data,color=cwinter,linestyle='--')
+    if plot_var in ['mb','bs']:
+        ax.plot(years,mb_dict['bs'],label='Summer',color=csummer,linewidth=2)
+        ax.plot(years,summer_data,color=csummer,linestyle='--')
+    if plot_var in ['ba']:
+        ax.plot(years,mb_dict['ba'],color=cannual,linewidth=2)
+        ax.plot(years,annual_data,color=cannual,linestyle='--')
+    ax.axhline(0,color='grey',linewidth=0.5)
+    if plot_var in ['mb','bw','bs']:
         min_all = np.nanmin(np.array([mb_dict['bw'],mb_dict['bs'],winter_data,summer_data]))
         max_all = np.nanmax(np.array([mb_dict['bw'],mb_dict['bs'],winter_data,summer_data]))
-        ax.set_xticks(np.arange(years[0],years[-1],4))
-        ax.set_yticks(np.arange(np.round(min_all,0),np.round(max_all,0)+1,1))
-        ax.set_ylabel('Seasonal mass balance (m w.e.)',fontsize=14)
+    else:
+        min_all = np.nanmin(np.array([mb_dict['ba'],annual_data]))
+        max_all = np.nanmax(np.array([mb_dict['ba'],annual_data]))
+    ax.set_xticks(np.arange(years[0],years[-1],4))
+    ax.set_yticks(np.arange(np.round(min_all,0),np.round(max_all,0)+1,1))
+    ax.set_ylabel('Seasonal mass balance (m w.e.)',fontsize=14)
     ax.plot(np.nan,np.nan,linestyle='--',color='grey',label='Data')
     ax.plot(np.nan,np.nan,color='grey',label='Modeled')
     ax.legend(fontsize=12,ncols=2)
     ax.tick_params(labelsize=12,length=5,width=1)
     ax.set_xlim(years[0],years[-1])
+    ax.set_ylim(min_all-0.5,max_all+0.5)
     ax.set_xticks(np.arange(years[0],years[-1],4))
     if plot_ax:
         return ax
@@ -234,8 +268,13 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
         return fig,ax
 
 # ========== 3. END-OF-WINTER SNOWPACK ==========
-def snowpits(ds,method='MAE'):
+def snowpits(ds,method='MAE',out=None):
     all_years = np.arange(2000,2025)
+    years_model = np.unique(pd.to_datetime(ds.time.values).year)
+    year_0 = pd.to_datetime(ds.time.values[0]).year
+    if pd.to_datetime(f'{year_0}-04-01') not in ds.time.values:
+        years_model = years_model[1:]
+    years = np.sort(list(set(years_model) & set(all_years)))
 
     # Open the mass balance
     with open('../MB_data/pits.pkl', 'rb') as file:
@@ -247,11 +286,15 @@ def snowpits(ds,method='MAE'):
 
     # Storage to determine error
     error_dict = {}
+    if type(method) == str:
+        method = [method]
     for var in ['snowmass_','snowdepth_','snowdensity_']:
-        error_dict[var+method] = {}
+        for m in method:
+            error_dict[var+m] = {}
 
     # Loop through years
-    for year in all_years:
+    data = {'snowdepth_mod':[],'snowdepth_meas':[],'snowdensity_mod':[],'snowdensity_meas':[]}
+    for year in years:
         # Some years don't have data: skip
         if year in profiles['sbd']:
             # Load data
@@ -262,43 +305,70 @@ def snowpits(ds,method='MAE'):
             sample_date = profiles['date'][year]
             dsyear = ds.sel(time=pd.to_datetime(f'{year}-{sample_date}'))
 
-            # Calculate layer density and determine snow indices
+            # Calculate layer density
             ldz = dsyear.layerheight.values
             depth_mod = np.array([np.sum(ldz[:i+1])-(ldz[i]/2) for i in range(len(ldz))])
             dens_mod = dsyear['layerdensity'].values
-            snow_idx = np.where(depth_mod < dsyear.snowdepth.values)[0]
+
+            # Find the snow depth
+            snowdepth_mod = dsyear.snowdepth.values
+            snowdepth_pit = sbd[~np.isnan(sbd)][-1]
+
+            # Only consider modeled density up to the minimum snow depth
+            min_depth = min(snowdepth_mod, snowdepth_pit)
+            dens_meas = dens_meas[sbd <= min_depth]
+            sbd = sbd[sbd <= min_depth]
 
             # Interpolate modeled density to the snowpit depths
             dens_interp = np.interp(sbd,depth_mod,dens_mod)
 
-            # Find the snow depth
-            snowdepth_mod = depth_mod[snow_idx[-1]]
-            snowdepth_pit = sbd[~np.isnan(sbd)][-1]
-
             # Calculate mass of snow
+            snow_idx = np.where(depth_mod < dsyear.snowdepth.values)[0]
             snowmass_mod = np.sum(dsyear.layerheight.values[snow_idx] * dsyear.layerdensity.values[snow_idx]) / 1000
             sample_heights = np.append(np.array([profiles['sbd'][year][0]]),np.diff(np.array(profiles['sbd'][year])))
             snowmass_meas = np.sum(profiles['density'][year] * sample_heights) / 1000
 
-            # Calculate error from mass and density 
-            density_error = objective(dens_interp, dens_meas, method) # kg/m3
-            mass_error = objective(snowmass_mod, snowmass_meas, method) # m w.e.
-            depth_error = objective(snowdepth_mod, snowdepth_pit, method) # m
+            # Store in timeseries
+            data['snowdensity_meas'].append(np.array(dens_meas))
+            data['snowdensity_mod'].append(np.array(dens_interp))
+            data['snowdepth_meas'].append(snowdepth_pit)
+            data['snowdepth_mod'].append(snowdepth_mod)
 
-            # Store
-            error_dict['snowmass_'+method][str(year)] = mass_error
-            error_dict['snowdepth_'+method][str(year)] = depth_error
-            error_dict['snowdensity_'+method][str(year)] = density_error
+            # Calculate error from mass and density 
+            for m in method:
+                density_error = objective(dens_interp, dens_meas, m) # kg/m3
+                mass_error = objective(snowmass_mod, snowmass_meas, m) # m w.e.
+                depth_error = objective(snowdepth_mod, snowdepth_pit, m) # m
+
+                # Store
+                error_dict['snowmass_'+m][str(year)] = mass_error
+                error_dict['snowdepth_'+m][str(year)] = depth_error
+                error_dict['snowdensity_'+m][str(year)] = density_error
+        else:
+            data['snowdensity_meas'].append(np.array(np.nan))
+            data['snowdensity_mod'].append(np.array(np.nan))
+            data['snowdepth_meas'].append(np.nan)
+            data['snowdepth_mod'].append(np.nan)
 
     # Aggregate to time mean
     for var in error_dict:
         data_arr = list(error_dict[var].values())
         error_dict[var]['mean'] = np.mean(data_arr)
 
-    return error_dict
+    if out == 'data':
+        for item in data:
+            data[item] = data[item]
+        return years, data
+    elif out == 'mean_error':
+        dict_out = {}
+        for var in error_dict:
+            dict_out[var] = error_dict[var]['mean']
+        return dict_out
+    else:
+        return error_dict
 
 # ========== 3. CUMULATIVE MASS BALANCE ==========
-def cumulative_mass_balance(ds,method='MAE',out_mbs=False):
+def cumulative_mass_balance(ds,method='MAE',out=None):
     """
     Compares cumulative mass balance measurements from
     a stake to a model output. 
@@ -332,7 +402,7 @@ def cumulative_mass_balance(ds,method='MAE',out_mbs=False):
         df_mb_daily = df_mb_dict['GNSS_IR']
 
     # Get the summer mass balance
-    if out_mbs:
+    if out== 'mbs':
         # Load USGS seasonal MB
         if site not in ['ABB','BD']:
             year = pd.to_datetime(ds.time.values[0]).year
@@ -340,11 +410,17 @@ def cumulative_mass_balance(ds,method='MAE',out_mbs=False):
             df_mb = df_mb.loc[df_mb['site_name'] == site]
             mba = df_mb.loc[df_mb['Year'] == year,'ba'].values[0]
             mbw = df_mb.loc[df_mb['Year'] == year,'bw'].values[0]
-            mbs_measured = mba - mbw
+            mbsa = df_mb.loc[df_mb['Year'] == year,'summer_accumulation'].values[0]
+            mbs_measured = mba - mbw + mbsa
+
+            spring_date = df_mb.loc[df_mb['Year'] == year,'spring_date'].values[0]
+            fall_date = df_mb.loc[df_mb['Year'] == year,'fall_date'].values[0]
+            if fall_date not in ds.time.values:
+                fall_date = ds.time.values[-1]
+            if spring_date not in ds.time.values:
+                spring_date = ds.time.values[0]
 
             # Retrieve modeled summer MB
-            spring_date = str(year)+'-04-20 00:00'
-            fall_date = str(year)+'-08-20 00:00'
             melt_dates = pd.date_range(spring_date,fall_date,freq='h')
             ds_summer = ds.sel(time=melt_dates)
             mbs_ds = ds_summer.accum + ds_summer.refreeze - ds_summer.melt
@@ -432,12 +508,14 @@ def cumulative_mass_balance(ds,method='MAE',out_mbs=False):
         print('No data available to compare')
         return
 
-    if out_mbs:
+    if out == 'mbs':
         return mbs_modeled,mbs_measured
+    elif out == 'data':
+        return ds.time.values[idx_data], model, data
     else:
         return error
         
-def plot_2024_mass_balance(ds,plot_ax=False,label='Model'):
+def plot_2024_mass_balance(ds,plot_ax=False,label='Model',color='default'):
     # Determine the site
     site = ds.attrs['site']
 
@@ -460,6 +538,8 @@ def plot_2024_mass_balance(ds,plot_ax=False,label='Model'):
 
     # Retrieve the dates
     start = df_mb_dict[list(df_mb_dict.keys())[0]].index[0]
+    if start < ds.time.values[0]:
+        start = pd.to_datetime(ds.time.values[0])
     end = pd.to_datetime(ds.time.values[-1])
 
     # Get the summer mass balance
@@ -494,7 +574,12 @@ def plot_2024_mass_balance(ds,plot_ax=False,label='Model'):
         ax = plot_ax
     
     # Plot model
-    ax.plot(ds.time.values,ds.values,label=label,color=plt.cm.Dark2(0))
+    if color == 'default':
+        color = plt.cm.Dark2(0)
+    if label is None:
+        ax.plot(ds.time.values,ds.values,color=color)
+    else:
+        ax.plot(ds.time.values,ds.values,color=color,label=label)
     
     # Plot gnssir
     if 'GNSS_IR' in df_mb_dict:
@@ -646,6 +731,33 @@ def snow_temperature(ds,method='RMSE',plot=False,plot_heights=[0.5]):
         plt.show()
 
     return error
+
+# ========== 4. ALBEDO ==========
+def daily_albedo(bds,method='MAE',out=None):
+    df = pd.read_csv('/trace/home/cvwilson/research/climate_data/AWS/Preprocessed/gulkana2024_bothalbedo.csv',index_col=0)
+    df.index = pd.to_datetime(df.index) # - pd.Timedelta(hours=8)
+    
+    # Sample dataset to daily
+    bds = bds.resample(time='d').mean()
+
+    # Store albedo values
+    daily_albedo = []
+
+    # Manually specify summer dates and ice dates
+    dates = pd.date_range('2024-04-20','2024-08-20',freq='d')
+    for date in dates:
+        start = pd.to_datetime(str(date.date())+' 12:00')
+        end = pd.to_datetime(str(date.date())+' 16:00')
+        # print(df.loc[start:end,'albedo'].values)
+        daily_albedo.append(np.mean(df.loc[start:end,'albedo']))
+    
+    model = bds['albedo'].sel(time=dates).values
+    data = np.array(daily_albedo)
+    
+    if out == 'data':
+        return dates, model, data
+    else:
+        return objective(model, data, method)
 
 def grid_plot(params_dict,summer_result,winter_result):
     """

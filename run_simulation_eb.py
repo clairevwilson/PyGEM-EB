@@ -9,9 +9,8 @@ from multiprocessing import Pool
 # Internal libraries
 import pygem_eb.input as eb_prms
 import pygem_eb.massbalance as mb
-import pygem.pygem_modelsetup as modelsetup
 import pygem_eb.climate as climutils
-# import shading.shading as shading
+# from shading.shading import Shading
 
 # Start timer
 start_time = time.time()
@@ -26,6 +25,14 @@ def get_args(parse=True):
                         help='Elevation in m a.s.l.')
     parser.add_argument('-site',action='store',default='',type=str,
                         help='Site name')
+    parser.add_argument('-lat',action='store',default=eb_prms.lat,type=float,
+                        help='Site latitude')
+    parser.add_argument('-lon',action='store',default=eb_prms.lon,type=float,
+                        help='Site latitude')
+    parser.add_argument('-slope',action='store',default=eb_prms.slope,type=float,
+                        help='Site latitude')
+    parser.add_argument('-aspect',action='store',default=eb_prms.aspect,type=float,
+                        help='Site latitude')
     
     # MODEL TIME
     parser.add_argument('-start','--startdate', action='store', type=str, 
@@ -44,7 +51,7 @@ def get_args(parse=True):
                         help='store the model output?')
     parser.add_argument('-out',action='store',type=str,default=eb_prms.output_name,
                         help='Output file name EXCLUDING extension (.nc)')
-    parser.add_argument('--new_file', action='store_true',
+    parser.add_argument('-new_file', action='store_true',
                         default=eb_prms.new_file, help='')
     parser.add_argument('-debug', action='store_true', 
                         default=eb_prms.debug, help='')
@@ -70,6 +77,8 @@ def get_args(parse=True):
                         help='Multiplicative precipitation factor')
     parser.add_argument('-Boone_c5',default=eb_prms.Boone_c5,action='store',type=float,
                         help='Parameter for Boone densification scheme')
+    parser.add_argument('-roughness_ice',default=eb_prms.roughness_ice,action='store',type=float,
+                        help='Surface roughness of ice')
     
     # PARALLELIZATION
     parser.add_argument('-n','--n_simultaneous_processes',default=1,type=int,
@@ -93,7 +102,18 @@ def get_args(parse=True):
         return parser
     
 def check_inputs(dem_fp,args):
-    # model = shading.Shading()
+    """
+    *** UNUSED FOR GULKANA RUNS***
+    Checks that the glacier point has all required inputs.
+    If any are missing, the shading model is run to create 
+    the site_constants file containing:
+    - Elevation                     From DEM
+    - Slope/aspect                  Calc from DEM in Shading
+    - Sky-view factor               Calc from DEM in Shading
+    - Initial snow, firn and ice depth      (Figure out from the elev. distribution of the glacier?***)
+    and the '_shade.csv' file containing shaded hours.
+    """
+    # model = Shading()
 
     name = eb_prms.glac_name
     if len(args.site) > 0:
@@ -117,7 +137,6 @@ def check_inputs(dem_fp,args):
     
     return
 
-
 def initialize_model(glac_no,args):
     """
     Loads glacier table and climate dataset for one glacier to initialize
@@ -140,11 +159,13 @@ def initialize_model(glac_no,args):
         site_fp = os.path.join(data_fp,eb_prms.glac_name+'/site_constants.csv')
         site_df = pd.read_csv(site_fp,index_col='site')
         args.elev = site_df.loc[site]['elevation']
-        eb_prms.slope = site_df.loc[site]['slope']
-        eb_prms.aspect = site_df.loc[site]['aspect']
-        eb_prms.sky_view = site_df.loc[site]['sky_view']
+        args.slope = site_df.loc[site]['slope']
+        args.aspect = site_df.loc[site]['aspect']
+        args.sky_view = site_df.loc[site]['sky_view']
         args.initial_snow_depth = site_df.loc[site]['snowdepth']
         args.initial_firn_depth = site_df.loc[site]['firndepth']
+        args.lat = site_df.loc[args.site]['lat']
+        args.lon = site_df.loc[args.site]['lon']
 
         # Set scaling albedo
         slope = (0.485 - 0.315)/(site_df.loc['B','elevation'] - site_df.loc['A','elevation'])
@@ -181,10 +202,8 @@ def initialize_model(glac_no,args):
             args.a_ice = a_ice
 
     # ===== GET GLACIER CLIMATE =====
-    # get glacier properties and initialize the climate class
-    glacier_table = modelsetup.selectglaciersrgitable(np.array([glac_no]),
-                    rgi_regionsO1=eb_prms.rgi_regionsO1)
-    climate = climutils.Climate(args,glacier_table)
+    # Initialize the climate class
+    climate = climutils.Climate(args)
 
     # load in available AWS data, then reanalysis
     if args.use_AWS:
@@ -195,7 +214,7 @@ def initialize_model(glac_no,args):
     # Check the dataset is ready to go
     climate.check_ds()
 
-    # Check shading
+    # Check inputs are all there
     # check_inputs(eb_prms.dem_fp,args,climate)
 
     # Print out model start line
@@ -203,7 +222,7 @@ def initialize_model(glac_no,args):
     end = pd.to_datetime(args.enddate)
     n_months = np.round((end-start)/pd.Timedelta(days=30))
     start_fmtd = start.month_name()+', '+str(start.year)
-    print(f'Running {eb_prms.glac_name} Glacier at {args.elev} m a.s.l. for {n_months} months starting in {start_fmtd}')
+    print(f'Running {args.glac_no[0]} at {args.elev} m a.s.l. for {n_months} months starting in {start_fmtd}')
 
     return climate
 

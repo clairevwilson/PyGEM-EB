@@ -46,6 +46,7 @@ varprops = {'surftemp':{'label':'Temperature','type':'Temperature','units':'C'},
            'layerdensity':{'label':'Density','type':'Layers','units':'kg m$^{-3}$'},
            'layerwater':{'label':'Water content','type':'Layers','units':'kg m$^{-2}$'},
            'layerBC':{'label':'Black carbon','type':'Layers','units':'ppb'},
+           'layerOC':{'label':'Organic carbon','type':'Layers','units':'ppb'},
            'layerdust':{'label':'Dust','type':'Layers','units':'ppm'},
            'layergrainsize':{'label':'Grain size','type':'Layers','units':'um'},
            'layerheight':{'label':'Layer height','type':'Layers','units':'m'},
@@ -67,7 +68,7 @@ def getds(file):
     return ds,start,end
 
 def simple_plot(ds,time,vars,res='d',t='',cumMB=True,
-                skinny=True,save_fig=False,new_y=['None']):
+                skinny=True,save_fig=False,new_y=['None'],date_form=None):
     """
     Returns a simple timeseries plot of the variables as lumped in the input.
 
@@ -134,7 +135,10 @@ def simple_plot(ds,time,vars,res='d',t='',cumMB=True,
                 axis.set_ylabel(varprops[var]['label'])
         axis.tick_params(length=5)
         axis.legend(bbox_to_anchor=(1.01,1),loc='upper left')
-    date_form = mpl.dates.DateFormatter('%d %b')
+    if date_form is None:
+        date_form = mpl.dates.DateFormatter('%d %b')
+    elif type(date_form) == str:
+        date_form = mpl.dates.DateFormatter(date_form)
     axis.xaxis.set_major_formatter(date_form)
     fig.suptitle(t)
     axis.set_xlim(start,end)
@@ -1109,7 +1113,6 @@ def visualize_layers(ds,dates,vars,force_layers=False,
     """
     # plt.style.use('bmh')
     # mpl.style.use('seaborn-v0_8-whitegrid')
-
     diff = dates[1] - dates[0]
 
     # Custom color function based on concentrations
@@ -1131,8 +1134,10 @@ def visualize_layers(ds,dates,vars,force_layers=False,
     for i,var in enumerate(vars):
         if var in ['layerBC']:
             bounds = [-5,30]
-        if var in ['layerdust']:
-            bounds = [-5,30]
+        elif var in ['layerOC']:
+            bounds = [-5,100]
+        elif var in ['layerdust']:
+            bounds = [0,2]
         elif var in ['layerdensity']:
             bounds = [50,800] if plot_firn else [0,500]
         elif var in ['layerwater']:
@@ -1176,9 +1181,9 @@ def visualize_layers(ds,dates,vars,force_layers=False,
             #     height = np.log(height)
 
             bottom = 0
-            ctypes = {'layerBC':'Greys','layerdust':'Oranges','layertemp':'plasma',
-                'layerdensity':'Greens','layerwater':'Blues','layergrainsize':'Purples',
-                'layerrefreeze':'Reds'}
+            ctypes = {'layerBC':'Greys','layerOC':'Oranges','layerdust':'Reds',
+                      'layertemp':'plasma','layerdensity':'Greens','layerwater':'Blues',
+                      'layergrainsize':'PuRd','layerrefreeze':'Purples'}
             ctype = ctypes[var]
             if np.sum(height) < 0.05 and first and not last and step.month<9:
                 last = step
@@ -1196,7 +1201,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
             # if np.abs(step.day_of_year-244) < 6:
             #     ax.axvline(step,lw=0.7,color='red')
         # Add colorbar
-        units = {'layerBC':'ppb','layerdust':'ppm','layertemp':'$^{\circ}$C',
+        units = {'layerBC':'ppb','layerdust':'ppm','layerOC':'ppb','layertemp':'$^{\circ}$C',
                 'layerdensity':'kg m$^{-3}$','layerwater':'%','layergrainsize':'um',
                 'layerrefreeze':'kg m-2'}
         if colorbar:
@@ -1208,29 +1213,32 @@ def visualize_layers(ds,dates,vars,force_layers=False,
                 leg.ax.set_yticks([0,15,30])
             
             # leg.set_label(units[var],loc='top',rotation=0)
-            ax.yaxis.set_label_position('right')
-            ax.yaxis.set_label_coords(1.2,0)
+            # leg.yaxis.set_label_position('right')
+            # leg.yaxis.set_label_coords(1.2,0)
             label = varprops[var]['label']+' ('+units[var]+')'
             # ax.set_ylabel(label,fontsize=10)
-            leg.set_label(label,rotation=270,labelpad=15,fontsize=12)
+            leg.set_label('Modeled\nt'+label[1:],rotation=270,labelpad=27,fontsize=12)
         ax.grid(axis='y')
         ax.tick_params(length=5)
         if ylim:
             ax.set_ylim(ylim)
     # Customize plot     
     ylabel = 'Height above ice (m)'
-    fig.supylabel(ylabel,)
+    if len(axes) > 1:
+        fig.supylabel(ylabel,)
+    else:
+        ax.set_ylabel(ylabel,)
     fig.suptitle(t,fontsize=14)
     # melt_out = last.strftime('%b %d')
     # axes[0].set_title(f'Max snowdepth of {max_snowdepth:.2f}m melted out on {melt_out}',fontsize=10)
     ax.set_xticks(dates)
-    date_form = mpl.dates.DateFormatter('%d-%b')
+    date_form = mpl.dates.DateFormatter('%b %d')
     ax.xaxis.set_major_formatter(date_form)
     ax.set_xticks(pd.date_range(dates[0],dates[len(dates)-1],freq='2MS'))
     ax.set_xlim([dates[0],dates[len(dates)-1]])
 
     if dates[-1] - dates[1] < pd.Timedelta(days=5):
-        date_form = mpl.dates.DateFormatter('%d-%b %H')
+        date_form = mpl.dates.DateFormatter('%m/%d %H:00')
         ax.xaxis.set_major_formatter(date_form)
         ax.set_xticks(pd.date_range(dates[0],dates[len(dates)-1],5))
 
@@ -1239,6 +1247,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
     if not plot_ax:
         return fig,ax
     else:
+        plt.close()
         return axes
 
 def plot_single_layer(ds,layer,vars,time,cumMB=False,t='',vline=None,res='h',resample=False):

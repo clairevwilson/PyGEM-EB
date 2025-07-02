@@ -2,7 +2,7 @@
 Created on Tue Mar 19 11:32:50 2024
 
 Shading model for PyGEM-EB
-Requirements: - DEM, slope and aspect rasters surrounding glacier
+Requirements: - DEM which contains glacier and surrounding ridges
               - Coordinates for point to perform calculations
 
 1. Input site coordinates and time zone
@@ -11,13 +11,17 @@ Requirements: - DEM, slope and aspect rasters surrounding glacier
         Optional: plot horizon search
 4. Calculate sky-view factor
 5. Calculate direct clear-sky slope-corrected irradiance and
-                           shading for each hour of the year
+   shading for each hour of the year
 6. Store .csv of Icorr and shade 
         Optional: plot results
 7. Optional: calculate diffuse fraction from measured solar
 
 @author: clairevwilson
 """
+# Built-in libraries
+import os
+import argparse
+# External libraries
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -25,9 +29,7 @@ import rioxarray as rxr
 import xarray as xr
 import pandas as pd
 import geopandas as gpd
-import argparse
 import suncalc
-import os
 from pyproj import Transformer
 from numpy import pi, cos, sin, arctan
 
@@ -162,7 +164,7 @@ class Shading():
                 df['shaded'].astype(bool).to_csv(self.shade_fp,
                                                 header=f'skyview={self.sky_view}')
             if get_direct:
-                df['dirirrslope'].astype(bool).to_csv(self.irr_fp,
+                df['dirirrslope'].astype(float).to_csv(self.irr_fp,
                                                 header=f'skyview={self.sky_view}')
 
         # get diffuse fraction from incoming solar data
@@ -277,7 +279,7 @@ class Shading():
 
         # get UTM coordinates from lat/lon
         transformer = Transformer.from_crs('EPSG:4326', dem.rio.crs, always_xy=True)
-        xx, yy = transformer.transform(args.lon, args.lat)
+        xx, yy = transformer.transform(self.args.lon, self.args.lat)
         # check point is in bounds
         bounds = np.array(dem.rio.bounds())
         x_in = xx >= bounds[0] and xx <= bounds[2]
@@ -561,10 +563,10 @@ class Shading():
             plt.show()
 
     def store_site_info(self):
-        self.site_df.loc[args.site,'sky_view'] = self.sky_view
-        self.site_df.loc[args.site,'slope'] = self.point_slope*180/pi
-        self.site_df.loc[args.site,'aspect'] = self.point_aspect*180/pi
-        self.site_df.loc[args.site,'elevation'] = int(self.point_elev)
+        self.site_df.loc[self.args.site,'sky_view'] = self.sky_view
+        self.site_df.loc[self.args.site,'slope'] = self.point_slope*180/pi
+        self.site_df.loc[self.args.site,'aspect'] = self.point_aspect*180/pi
+        self.site_df.loc[self.args.site,'elevation'] = int(self.point_elev)
         self.site_df.to_csv(site_fp)
         print(f'Saved sky view, slope, aspect and elevation to {site_fp}')
 

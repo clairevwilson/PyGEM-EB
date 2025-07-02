@@ -2,6 +2,7 @@
 import os
 import time
 import copy
+import warnings
 # External libraries
 import pandas as pd
 import xarray as xr
@@ -12,9 +13,12 @@ import run_simulation_eb as sim
 import pygem_eb.massbalance as mb
 from objectives import *
 
+# Suppress UserWarning messages
+warnings.filterwarnings('ignore', category=UserWarning)
+
 # OPTIONS
 run_type = 'long'   # 'long' or '2024'
-date = '01_09'
+date = '01_22'
 idx = '0'
 
 # Create output directory
@@ -28,14 +32,14 @@ failed = np.genfromtxt(missing_fn,delimiter=',',dtype=str)
 if len(failed) < 1:
     print('Successfully finished all runs!')
     quit()
-if '__iter__' not in failed[0]:
+if '__iter__' not in dir(failed[0]):
     failed = [failed]
 
 # Define sites
 if run_type == '2024':
     sites = ['AB','ABB','B','BD','D','T'] # 
 else:
-    sites = ['AU'] # 'A','AU','B','D'
+    sites = ['A','AU','B','D']
 
 # Read command line args
 args = sim.get_args()
@@ -54,7 +58,7 @@ else:
     n_process_with_extra = n_runs % n_processes    # Number of CPUs with one extra run
 
 # Force some args
-args.store_data = True              # Ensures output is stored
+args.store_data = True  # Ensures output is stored
 if run_type == '2024': # Short AWS run
     args.use_AWS = True
     eb_prms.AWS_fn = '../climate_data/AWS/Preprocessed/gulkana2024.csv'
@@ -81,10 +85,11 @@ for site in sites:
     args_site.site = site
 
     # Special dates for low sites
-    if site == 'A':
-        args_site.enddate = pd.to_datetime('2015-05-20 00:00:00')
-    elif site == 'AU':
-        args_site.startdate = pd.to_datetime('2012-04-20 00:00:00')
+    if run_type != '2024':
+        if site == 'A':
+            args_site.enddate = pd.to_datetime('2015-05-20 00:00:00')
+        elif site == 'AU':
+            args_site.startdate = pd.to_datetime('2012-04-20 00:00:00')
 
     # Get the climate
     climate = sim.initialize_model(args.glac_no[0],args_site)
@@ -96,7 +101,7 @@ for site in sites:
 # Loop through the failed runs
 for param in failed:
     # Unpack the parameters 
-    site, kw, c5, kp, out = param
+    site, c5, kp, out = param
 
     # Get args for the current run
     args_run = copy.deepcopy(site_dict[site]['args'])
@@ -104,7 +109,6 @@ for param in failed:
 
     # Set parameters
     args_run.k_snow = 'VanDusen'
-    args_run.kw = kw
     args_run.site = site
     args_run.Boone_c5 = c5
     args_run.kp = kp
@@ -113,7 +117,9 @@ for param in failed:
     args_run.out = out
 
     # Specify attributes for output file
-    store_attrs = {'kw':kw,'c5':c5,'kp':kp,'site':site}
+    store_attrs = {'c5':c5,'kp':kp,'site':site}
+    # print(store_attrs)
+    # assert 1==0
 
     # Set task ID for SNICAR input file
     args_run.task_id = set_no

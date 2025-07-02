@@ -20,7 +20,7 @@ mb_threshold = 0.1       # Threshold to consider not conserving mass (kg m-2 = m
 # ========== GLACIER INFO ========== 
 glac_props = {'01.00570':{'name':'Gulkana',
                             'site_elev':1693,
-                            'AWS_fn':'Preprocessed/gulkana2024_walbedo.csv'}, 
+                            'AWS_fn':'Preprocessed/gulkana2024.csv'}, 
             '01.01104':{'name':'Lemon Creek',
                             'site_elev':1285,
                             'AWS_fn':'LemonCreek1285_hourly.csv'},
@@ -76,6 +76,7 @@ glac_no_str = str(glac_no[0]).replace('.','_')
 grainsize_fp = 'data/grainsize/drygrainsize(SSAin=##).nc'
 # SNICAR inputs
 snicar_input_fp = 'biosnicar-py/biosnicar/inputs.yaml'
+clean_ice_fp = 'biosnicar-py/Data/OP_data/480band/r_sfc/gulkana_cleanice_avg_bba3732.csv'
 # Initial conditions
 initial_temp_fp = 'data/sample_initial_temp.csv'
 initial_density_fp = 'data/sample_initial_density.csv'
@@ -83,21 +84,28 @@ initial_grains_fp = 'data/sample_initial_grains.csv'
 initial_LAP_fp = 'data/sample_initial_laps.csv' # f'/../Data/Nagorski/May_Mend-2_BC.csv'
 # Shading
 shading_fp = f'shading/out/{glac_name}{site}_shade.csv'
+# Bias adjustment 
+bias_fp = 'data/METHOD_VAR.csv'
 # Output filepaths
 albedo_out_fp = '../Output/EB/albedo.csv'
 output_name = f'{glac_name}_{model_run_date}_'
 
 # ========== CLIMATE AND TIME INPUTS ========== 
-reanalysis = 'MERRA2' # 'MERRA2' (or 'ERA5-hourly' -- BROKEN)
-temp_bias_adjust = True   # adjust MERRA-2 temperatures according to bias?
+reanalysis = 'MERRA2' # 'MERRA2' (or 'ERA5-hourly' -- ***BROKEN)
 MERRA2_filetag = False    # False or string to follow 'MERRA2_VAR_' in MERRA2 filename
 AWS_fp = '../climate_data/AWS/'
 AWS_fn = AWS_fp+glac_props[glac_no[0]]['AWS_fn']
-glac_name = glac_props[glac_no[0]]['name']
-wind_ref_height = 10 if reanalysis in ['ERA5-hourly'] else 2
 if use_AWS:
     assert os.path.exists(AWS_fn), 'Check AWS filepath or glac_no in input.py'
+wind_ref_height = 10 if reanalysis in ['ERA5-hourly'] else 2
 
+# MERRA-2 BIAS ADJUSTMENT
+bias_vars = ['wind','SWin','temp','rh']         # Vars to correct by quantile mapping
+temp_bias_adjust = False             # Adjust MERRA-2 temperature linearly?
+temp_bias_slope = 0.57596           # Slope of MERRA-2 --> ON-ICE AWS
+temp_bias_intercept = 1.799         # Intercept of MERRA-2 --> ON-ICE AWS
+
+# DATES
 dates_from_data = False
 if dates_from_data:
     cdf = pd.read_csv(AWS_fn,index_col=0)
@@ -110,8 +118,8 @@ if dates_from_data:
         startdate += pd.Timedelta(minutes=30)
         enddate -= pd.Timedelta(minutes=30)
 else:
-    startdate = pd.to_datetime('2023-04-20 00:00:00') 
-    enddate = pd.to_datetime('2024-08-20 00:00:00')
+    startdate = pd.to_datetime('2024-04-20 00:00:00') 
+    enddate = pd.to_datetime('2024-06-20 00:00:00')
     # enddate = pd.to_datetime('2019-04-25 23:00')
     # startdate = pd.to_datetime('2023-04-20 00:30')    # Gulkana AWS dates
     # enddate = pd.to_datetime('2023-08-10 00:30')
@@ -128,7 +136,7 @@ surftemp_guess =  -10               # guess for surface temperature of first tim
 initial_snow = True                 # initialize with or without snow
 
 # OUTPUT
-store_vars = ['MB','EB','temp','layers']  # Variables to store of the possible set: ['MB','EB','Temp','Layers']
+store_vars = ['MB','EB','climate','layers']  # Variables to store of the possible set: ['MB','EB','climate','layers']
 store_bands = False     # Store spectral albedo .csv
 store_climate = False   # Store climate dataset .nc
 
@@ -139,11 +147,12 @@ dt_heateq = 3600/5          # Time resolution of heat eq [s], should be integer 
 
 # METHODS
 method_turbulent = 'BulkRichardson'     # 'MO-similarity' or 'BulkRichardson' 
+method_diffuse = 'Wohlfahrt'            # 'Wohlfahrt', 'none'
 method_heateq = 'Crank-Nicholson'       # 'Crank-Nicholson'
 method_densification = 'Boone'          # 'Boone', 'HerronLangway', 'Kojima'
-method_cooling = 'iterative'            # 'minimize' (slow) or 'iterative' (fast)
+method_cooling = 'iterative'            # 'minimize','iterative' (fast)
 method_ground = 'MolgHardy'             # 'MolgHardy'
-method_conductivity = 'VanDusen'        # 'Sauter', 'Douville','Jansson','OstinAndersson','VanDusen'
+method_conductivity = 'Douville'        # 'Sauter', 'Douville','Jansson','OstinAndersson','VanDusen'
 
 # CONSTANT SWITCHES
 constant_snowfall_density = False       # False or density in kg m-3
@@ -167,20 +176,24 @@ grainsize_ds = xr.open_dataset(grainsize_fp.replace('##',str(initSSA)))
 # <<<<<< Climate downscaling >>>>>
 sky_view = 0.936            # Sky-view factor [-]
 wind_factor = 1             # Wind factor [-]
-kp = 3                      # Precipitation factor [-]
-precgrad = 0.0001           # Precipitation gradient on glacier [m-1]
+kp = 2                      # Precipitation factor [-]
+precgrad = 0.000130         # Precipitation gradient on glacier [m-1]
 lapserate = -0.0065         # Temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
-dep_factor = 1              # Multiplicative factor to adjust MERRA-2 deposition
 albedo_ice = 0.47           # Ice albedo [-] 
 snow_threshold_low = 0.2    # Lower threshold for linear snow-rain scaling [C]
 snow_threshold_high = 2.2   # Upper threshold for linear snow-rain scaling [C]
+# <<<<<< Slope/aspect >>>>>
+slope = 0                   # Point slope (degrees)
+aspect = 0                  # Point aspect (degrees; 0 = North)
+lat = 63.3                  # Point latitude
+lon = -142.2                # Point longitude
 # <<<<<< Discretization >>>>>
-dz_toplayer = 0.05          # Thickness of the uppermost layer [m]
-layer_growth = 0.4          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
+dz_toplayer = 0.03          # Thickness of the uppermost layer [m]
+layer_growth = 0.5          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
 max_nlayers = 80            # Maximum number of vertical layers allowed (defines output file size)
 max_dz = 2                  # Max layer height
 # <<<<<< Boundary conditions >>>>>
-temp_temp = -0.5            # temperature of temperate ice [C]
+temp_temp = 0               # temperature of temperate ice [C]
 temp_depth = 10             # depth of temperate ice [m]
 # <<<<<< Physical properties of snow, ice, water and air >>>>>
 density_ice = 900           # Density of ice [kg m-3]
@@ -210,7 +223,7 @@ pressure_std = 101325       # Standard pressure [Pa]
 temp_std = 293.15           # Standard temperature [K]
 density_std = 1.225         # Air density at sea level [kg m-3]
 # <<<<<< Model parameterizations >>>>>
-Boone_c5 = 0.018            # Densification parameter [m3 kg-1]
+Boone_c5 = 0.022            # Densification parameter [m3 kg-1]
 roughness_fresh_snow = 0.24 # Surface roughness length for fresh snow [mm] (Moelg et al. 2012, TC)
 roughness_aged_snow = 10    # Surface roughness length for aged snow [mm]
 roughness_firn = 4          # Surface roughness length for firn [mm] (Moelg et al. 2012, TC)
@@ -222,34 +235,36 @@ albedo_ground = 0.2         # Albedo of ground [-]
 # <<<<<< SNICAR things >>>>>
 albedo_TOD = [14]           # List of time(s) of day to calculate albedo [hr] 
 diffuse_cloud_limit = 0.6   # Threshold to consider cloudy vs clear-sky in SNICAR [-]
-include_LWC_SNICAR = True   # Include liquid water in SNICAR?
+include_LWC_SNICAR = False  # Include liquid water in SNICAR? (slush)
 grainshape_SNICAR = 0       # 0: sphere, 1: spheroid, 2: hexagonal plate, 3: koch snowflake, 4: hexagonal prisms
+snicar_snow_limit = 0.003   # Cutoff for snow depth to run SNICAR
 # <<<<<< Constants for switch runs >>>>>
 albedo_deg_rate = 15        # Rate of exponential decay of albedo
 average_grainsize = 1000    # Grainsize to treat as constant if switch_melt is 0 [um]
-albedo_fresh_snow = 0.85    # Albedo of fresh snow [-] (Moelg et al. 2012, TC)
+albedo_fresh_snow = 0.85    # Albedo of fresh snow for exponential method [-] (Moelg et al. 2012, TC)
 albedo_firn = 0.5           # Albedo of firn [-]
 # <<<<<< BC and dust >>>>>
 # 1 kg m-3 = 1e6 ppb = ng g-1 = ug L-1
-ksp_BC = 0.5                # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
-ksp_dust = 0.2              # Meltwater scavenging efficiency of dust (0.015 from CLM5)
+ksp_BC = 1                  # Meltwater scavenging efficiency of BC (0.1-0.2 from CLM5)
+ksp_OC = 1                  # Meltwater scavenging efficiency of OC (0.1-0.2 from CLM5)
+ksp_dust = 0.01             # Meltwater scavenging efficiency of dust (0.015 from CLM5)
 BC_freshsnow = 0            # Concentration of BC in fresh snow for initialization [kg m-3]
-dust_freshsnow = 0          # Concentration of dust in fresh snow for initilization [kg m-3] 
+OC_freshsnow = 0            # Concentration of OC in fresh snow for initialization [kg m-3]
+dust_freshsnow = 0          # Concentration of dust in fresh snow for initilization [kg m-3]
+adjust_deposition = False   # Adjust deposition according to preprocessed 
 # <<<<<< MERRA-2: LAP binning >>>>>
 ratio_BC2_BCtot = 2.08      # Ratio to transform BC bin 2 deposition to total BC
+ratio_OC2_OCtot = 1.54      # Ratio to transform OC bin 2 deposition to total OC
 ratio_DU3_DUtot = 3         # Ratio to transform dust bin 3 deposition to total dust
 ratio_DU_bin1 = 0.0751      # Ratio to transform total dust to SNICAR Bin 1 (0.05-0.5um)
 ratio_DU_bin2 = 0.20535     # " SNICAR Bin 2 (0.5-1.25um)
 ratio_DU_bin3 = 0.481675    # " SNICAR Bin 3 (1.25-2.5um)
 ratio_DU_bin4 = 0.203775    # " SNICAR Bin 4 (2.5-5um)
 ratio_DU_bin5 = 0.034       # " SNICAR Bin 5 (5-50um)
-# <<<<<< MERRA-2: temperature bias >>>>>
-temp_bias_slope = 0.57596   # Slope of MERRA-2 --> ON-ICE AWS
-temp_bias_intercept = 1.799 # Intercept of MERRA-2 --> ON-ICE AWS
 # <<<<<< End-of-summer >>>>>
 end_summer_doy = 228        # Day of year to starting checking for end of summer (snow -> firn)
 new_snow_threshold = 0.05   # Threshold for new snow to consider the start of winter (m w.e.)
-new_snow_timing = 7         # Number of days to check for start of winter
+new_snow_days = 10          # Number of days to sum snow over and compare against threshold
 
 # ========== OTHER PYGEM INPUTS ========== 
 rgi_regionsO1 = [1]
