@@ -1377,7 +1377,7 @@ class Output():
                                  switch_LAPs=str(args.switch_LAPs),
                                  time_elapsed=time_elapsed,
                                  run_by=eb_prms.machine,
-                                 glacier=eb_prms.glac_name,
+                                 glacier=args.glac_name,
                                  task_id=str(args.task_id))
 
         # save NetCDF

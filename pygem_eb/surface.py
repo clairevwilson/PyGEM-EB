@@ -56,7 +56,7 @@ class Surface():
         albedo_string = eb_prms.clean_ice_fp.split('bba')[-1].split('.')[0]
         bba = int(albedo_string) / (10 ** len(albedo_string))
         # scale the new spectrum by the ice albedo
-        ice_point_spectrum = clean_ice * args.a_ice / bba
+        ice_point_spectrum = clean_ice * eb_prms.albedo_ice / bba
         # name file for ice spectrum
         clean_ice_fn = eb_prms.clean_ice_fp.split('/')[-1]
         self.ice_spectrum_fp = eb_prms.clean_ice_fp.replace(clean_ice_fn,f'gulkana{args.site}_ice_spectrum_{args.task_id}.csv')

@@ -49,7 +49,7 @@ result_vars = ['dirirrslope','shaded']      # variables to include in plot
 
 # model options 
 get_shade = True    # run shade model?
-get_direct = True   # run slope-corrected irradiance model?
+get_direct = False  # run slope-corrected irradiance model? (unused)
 assert get_shade or get_direct, 'Why are you running this?'
 
 # model parameters (shouldn't need to change anything here)

@@ -17,11 +17,10 @@ import os
 import numpy as np
 import xarray as xr
 import pandas as pd
-from multiprocessing import Pool
 # Internal libraries
 import pygem_eb.input as eb_prms
-import pygem_eb.massbalance as mb
 import pygem_eb.climate as climutils
+import pygem_eb.massbalance as mb
 from shading.shading import Shading
 
 # start timer
@@ -33,8 +32,8 @@ def get_args(parse=True):
     Defines command line arguments and has
     the option to parse the command line
     (returns args) or not (returns parser)
-    """
-    parser = argparse.ArgumentParser(description='pygem-eb model runs')
+    """    
+    parser = argparse.ArgumentParser(description='energy balance model runs')
     
     # GLACIER INFORMATION
     parser.add_argument('-glac_no', action='store', default=eb_prms.glac_no,
@@ -346,8 +345,8 @@ def run_model(climate,args,store_attrs=None):
     
     # print the final mass balance
     if isinstance(out, xr.Dataset):
-        mb = out.accum + out.refreeze - out.melt
-        print(f'Net mass balance: {mb.sum().values:.3f} m w.e.')
+        mb_out = out.accum + out.refreeze - out.melt
+        print(f'Net mass balance: {mb_out.sum().values:.3f} m w.e.')
     
     return out
 
