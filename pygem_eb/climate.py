@@ -25,10 +25,13 @@ class Climate():
         Initializes glacier information and creates the dataset where 
         climate data will be stored.
         """
+        # start timer
+        self.start_time = time.time()
+
         # load args and run information
         self.args = args
         self.dates = pd.date_range(args.startdate,args.enddate,freq='h')
-        self.dates_UTC = self.dates - eb_prms.timezone
+        self.dates_UTC = self.dates - args.timezone
         n_time = len(self.dates)
         self.elev = args.elev
 
@@ -109,7 +112,7 @@ class Climate():
         vwind_measured = 'vwind' in AWS_vars
         if uwind_measured ^ vwind_measured:
             self.wind_direction = False
-            print('WARNING: Wind speed was input as a scalar. Wind shading is not handled')
+            print('WARNING! Wind speed was input as a scalar. Wind shading is not handled')
         
         # extract and store data
         for var in self.measured_vars:
@@ -121,6 +124,7 @@ class Climate():
         # if net radiation was measured, don't need LWin
         if 'NR' in self.measured_vars:
             need_vars.remove('LWin')
+            need_vars.remove('SWin')
 
         # if wind was input as a scalar, don't need the other direction of wind
         if not self.wind_direction:
@@ -228,7 +232,7 @@ class Climate():
         # TEMPERATURE: correct according to lapserate
         temp_elev = self.AWS_elev if 'temp' in self.measured_vars else self.reanalysis_elev
         new_temp = self.cds.temp.values + LAPSE_RATE*(self.elev - temp_elev)
-        if 'gulkana_22yrs' in eb_prms.AWS_fn and 'temp' in self.measured_vars:
+        if 'gulkana_22yrs' in self.args.AWS_fn and 'temp' in self.measured_vars:
             new_temp -= 1
             print('Reducing temperature for on-ice weather station')
             
@@ -259,10 +263,6 @@ class Climate():
         self.cds['winddir'].values = winddir
 
         if eb_prms.reanalysis == 'MERRA2':
-            # Correct MERRA-2 temperature bias
-            temp_filled = True if not self.args.use_AWS else 'temp' in self.need_vars
-            if eb_prms.temp_bias_adjust and temp_filled:
-                self.adjust_temp_bias()
             # Correct other MERRA-2 variables
             for var in eb_prms.bias_vars:
                 from_MERRA = True if not self.args.use_AWS else var in self.need_vars
@@ -285,7 +285,7 @@ class Climate():
             data = self.cds[var].values
             if np.any(np.isnan(data)):
                 failed.append(var)
-        # Can input net radiation instead of incoming longwave
+        # Can input net radiation instead of incoming LW radiation
         if 'LWin' in failed and 'NR' in self.measured_vars:
             failed.remove('LWin')
         if len(failed) > 0:
@@ -297,13 +297,16 @@ class Climate():
             out_fp = eb_prms.output_filepath + self.args.out + self.args.site + '_climate'
             self.cds.to_netcdf(out_fp+'.nc')
             print('Climate dataset saved to',out_fp+'.nc')
+        
+        time_elapsed = time.time()-self.start_time
+        print(f'~ Loaded climate dataset in {time_elapsed:.1f} seconds ~')
         return
     
     def check_units(self,var,ds):
         # Define the units the model needs
         model_units = {'temp':'C','uwind':'m s-1','vwind':'m s-1',
                        'rh':'%','sp':'Pa','tp':'m s-1','elev':'m',
-                       'SWin':'J m-2', 'LWin':'J m-2', 'tcc':'-',
+                       'SWin':'J m-2', 'LWin':'J m-2', 'NR':'J m-2', 'tcc':'-',
                        'bcdry':'kg m-2 s-1', 'bcwet':'kg m-2 s-1',
                        'ocdry':'kg m-2 s-1', 'ocwet':'kg m-2 s-1',
                        'dustdry':'kg m-2 s-1', 'dustwet':'kg m-2 s-1'}
@@ -323,14 +326,12 @@ class Climate():
                     ds = ds / 1000 * 3600
                 elif units_in == 'm':
                     ds = ds / 3600
-            elif var == 'SWin' and units_in == 'W m-2':
-                ds = ds * 3600
-            elif var == 'LWin' and units_in == 'W m-2':
+            elif var in ['SWin','LWin','NR'] and units_in == 'W m-2':
                 ds = ds * 3600
             elif var == 'elev' and units_in in ['m+2 s-2','m2 s-2']:
                 ds = ds / eb_prms.gravity
             else:
-                print(f'WARNING: units did not match for {var} but were not updated')
+                print(f'WARNING! Units did not match for {var} but were not updated')
                 print(f'Previously {units_in}; should be {units_out}')
                 print('Make a manual change in check_units (climate.py)')
                 self.exit()
@@ -435,7 +436,7 @@ class Climate():
         tag = eb_prms.MERRA2_filetag if eb_prms.MERRA2_filetag else f'{flat}_{flon}'
 
         # Update filenames for MERRA-2 (need grid lat/lon)
-        self.reanalysis_fp = '../climate_data/'
+        self.reanalysis_fp = eb_prms.climate_fp
         self.var_dict = {'temp':{'fn':[],'vn':[]},
             'rh':{'fn':[],'vn':[]},'sp':{'fn':[],'vn':[]},
             'tp':{'fn':[],'vn':[]},'tcc':{'fn':[],'vn':[]},

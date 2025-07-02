@@ -52,7 +52,7 @@ class Layers():
         self.ldensity = ldensity            # LAYER DENSITY [kg m-3]
         self.lice = ldensity*lheight        # LAYER ICE (SOLID) MASS [kg m-2]
         self.lwater = lwater                # LAYER WATER (LIQUID) MASS [kg m-2]
-        self.lgrainsize = lgrainsize         # LAYER GRAIN SIZE [um]
+        self.lgrainsize = lgrainsize        # LAYER GRAIN SIZE [um]
 
         # Initialize LAPs (black carbon and dust)
         if eb_prms.switch_LAPs == 1:
@@ -184,14 +184,14 @@ class Layers():
         ice_idx = self.ice_idx
 
         # Read in depth profiles
-        temp_data = pd.read_csv(eb_prms.initial_temp_fp)
-        density_data = pd.read_csv(eb_prms.initial_density_fp)
-        grainsize_data = pd.read_csv(eb_prms.initial_grains_fp)
+        temp_data = pd.read_csv(self.args.initial_temp_fp)
+        density_data = pd.read_csv(self.args.initial_density_fp)
+        grainsize_data = pd.read_csv(self.args.initial_grains_fp)
 
         # TEMPERATURE [C]
-        if eb_prms.initialize_temp in ['interpolate']:
+        if eb_prms.initialize_temp == 'interpolate':
             ltemp = np.interp(self.ldepth,temp_data['depth'],temp_data['temp'])
-        elif eb_prms.initialize_temp in ['ripe']:
+        elif eb_prms.initialize_temp == 'ripe':
             ltemp = np.ones(self.nlayers)*0
         else:
             print('Choose between ripe and interpolate in initialize_temp')
@@ -204,17 +204,24 @@ class Layers():
         lgrainsize[self.ltype == 'ice'] = eb_prms.ice_grainsize
 
         # DENSITY [kg m-3]
-        # SNOW layers initialized by interpolation
-        ldensity = np.interp(self.ldepth[snow_idx],
-                             density_data['depth'],density_data['density'])
-        if len(firn_idx) > 0:
-            # Calculate firn density slope from snow --> ice
-            if snow_height > 0 and firn_height > 0:
-                pslope = (eb_prms.density_ice - ldensity[-1]) / (
-                    self.ldepth[ice_idx[0]]-self.ldepth[snow_idx[-1]])
-            # No snow: set boundary tp constant density_firn
-            elif firn_height > 0:
-                pslope = (eb_prms.density_ice - eb_prms.density_firn)/(firn_height)
+        if eb_prms.initialize_density == 'interpolate':
+            # SNOW layers initialized by interpolation
+            ldensity = np.interp(self.ldepth[snow_idx],
+                                density_data['depth'],density_data['density'])
+            if len(firn_idx) > 0:
+                # Calculate firn density slope from snow --> ice
+                if snow_height > 0 and firn_height > 0:
+                    pslope = (eb_prms.density_ice - ldensity[-1]) / (
+                        self.ldepth[ice_idx[0]]-self.ldepth[snow_idx[-1]])
+                # No snow: set boundary tp constant density_firn
+                elif firn_height > 0:
+                    pslope = (eb_prms.density_ice - eb_prms.density_firn)/(firn_height)
+        elif eb_prms.initialize_density == 'constant':
+            ldensity = np.ones_like(snow_idx) * eb_prms.density_snow
+        else:
+            print('Choose between constant and interpolate in initialize_density')
+            self.exit()
+            
         # Append firn and ice layer densities
         for (type,depth) in zip(self.ltype,self.ldepth):
             if type in ['firn']: 
@@ -224,7 +231,14 @@ class Layers():
                 ldensity = np.append(ldensity,eb_prms.density_ice)
 
         # WATER CONTENT [kg m-2]
-        lwater = np.zeros(self.nlayers) # Always dry to start
+        if eb_prms.initialize_water == 'dry':
+            lwater = np.zeros(self.nlayers)
+        elif eb_prms.initialize_water == 'saturated':
+            porosity = 1 - ldensity / eb_prms.density_ice
+            lwater = porosity * eb_prms.Sr * self.lheight * eb_prms.density_water
+        else:
+            print('Choose between dry and saturated in initialize_water')
+            self.exit()
 
         return ltemp,ldensity,lwater,lgrainsize
     
@@ -237,7 +251,7 @@ class Layers():
             lOC = np.ones(n)*eb_prms.OC_freshsnow*lheight
             ldust = np.ones(n)*eb_prms.dust_freshsnow*lheight 
         elif eb_prms.initialize_LAPs in ['interpolate']:
-            lap_data = pd.read_csv(eb_prms.initial_LAP_fp,index_col=0)
+            lap_data = pd.read_csv(self.args.initial_LAP_fp,index_col=0)
 
             # add boundaries for interpolation
             lap_data.loc[0,'BC'] = eb_prms.BC_freshsnow
