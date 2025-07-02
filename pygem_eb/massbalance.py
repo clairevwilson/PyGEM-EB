@@ -3,10 +3,13 @@ Mass balance class and main functions for PyGEM Energy Balance
 
 @author: clairevwilson
 """
+# Built-in libraries
 import os, sys
+# External libraries
 import numpy as np
 import pandas as pd
 import xarray as xr
+# Local libraries
 import pygem_eb.input as eb_prms
 import pygem_eb.energybalance as eb
 import pygem_eb.layers as eb_layers

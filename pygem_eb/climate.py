@@ -3,12 +3,14 @@ Climate class for PyGEM Energy Balance
 
 @author: clairevwilson
 """
-import numpy as np
-import xarray as xr
-import pandas as pd
+# Built-in libraries
 import threading
 import os,sys
-import time
+# External libraries
+import pandas as pd
+import numpy as np
+import xarray as xr
+# Local libraries
 import pygem_eb.input as eb_prms
 
 class Climate():
@@ -339,7 +341,7 @@ class Climate():
         """
         Updates deposition based on preprocessed reduction coefficients
         """
-        print('Hard-coded MERRA-2 to UK-ESM filepath')
+        print('Hard-coded MERRA-2 to UK-ESM filepath for deposition adjustment')
         fn = self.reanalysis_fp + 'merra2_to_ukesm_conversion_map_MERRAgrid.nc'
         ds_f = xr.open_dataarray(fn)
         ds_f = ds_f.sel({self.lat_vn:self.lat,self.lon_vn:self.lon},method='nearest')

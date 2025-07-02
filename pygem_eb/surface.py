@@ -3,14 +3,16 @@ Surface class for PyGEM Energy Balance
 
 @author: cvwilson
 """
-
-import pygem_eb.input as eb_prms
+# Built-in libraries
+import sys, os
+import yaml
+# External libraries
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
-import sys, os
-import yaml
 import suncalc
+# Local libraries
+import pygem_eb.input as eb_prms
 sys.path.append(os.getcwd()+'/biosnicar-py/')
 
 class Surface():

@@ -54,86 +54,88 @@ def model_run(name):
     # Store the mass balance
     ds = massbal.output.get_output()
     internal_acc = ds.isel(time=-2).cumrefreeze.values
-    summer_mb = ds.accum + ds.refreeze - ds.melt - internal_acc
+    summer_mb = ds.accum + ds.refreeze - ds.melt 
     # plt.plot(summer_mb.time, ds.accum.cumsum().values,label=name+percent)
-    result_dict[var][percent] = summer_mb.sum().values
+    result_dict[var][percent] = summer_mb.sum().values - internal_acc
     # os.remove(eb_prms.output_filepath + args.out + '0.nc')
 
     # Print time
     timer = time.time() - start
     print(f'Time elapsed: {timer:.0f} seconds')
 
-model_run('base_')
+# model_run('base_')
 
-# SENSITIVITY
-args.kp = 1
-model_run('kp_-20_')
-args.kp = 3
-model_run('kp_+20_')
+# # SENSITIVITY
+# args.kp = 1
+# model_run('kp_-20_')
+# args.kp = 3
+# model_run('kp_+20_')
+# args.kp = 2
+
+# # plt.legend()
+# # plt.savefig('/trace/group/rounce/cvwilson/Output/TEST_FIG.png')
+# # assert 1==0
+# args.Boone_c5 = 0.018
+# model_run('Boone-c5_-20_')
+# args.Boone_c5 = 0.03
+# model_run('Boone-c5_+20_')
+# args.Boone_c5 = 0.022
+
+# eb_prms.lapserate = -0.0055
+# climate = sim.initialize_model(args.glac_no[0],args)
+# model_run('lapserate_-20_')
+# print(np.mean(climate.cds.temp.values))
+# eb_prms.lapserate = -0.007
+# climate = sim.initialize_model(args.glac_no[0],args)
+# model_run('lapserate_+20_')
+# print(np.mean(climate.cds.temp.values))
+# eb_prms.lapserate = -0.0065
+# climate = sim.initialize_model(args.glac_no[0],args)
+# print('back to normal lapse rate',np.mean(climate.cds.temp.values))
+
+# eb_prms.roughness_fresh_snow = 0.1
+# model_run('roughness-fresh-snow_-20_')
+# eb_prms.roughness_fresh_snow = 2
+# model_run('roughness-fresh-snow_+20_')
+# eb_prms.roughness_fresh_snow = 0.24
+
+# eb_prms.roughness_aged_snow = 5
+# model_run('roughness-aged-snow_-20_')
+# eb_prms.roughness_aged_snow = 20
+# model_run('roughness-aged-snow_+20_')
+# eb_prms.roughness_aged_snow = 10
+
 args.kp = 2
-
-# plt.legend()
-# plt.savefig('/trace/group/rounce/cvwilson/Output/TEST_FIG.png')
-# assert 1==0
-args.Boone_c5 = 0.018
-model_run('Boone-c5_-20_')
-args.Boone_c5 = 0.03
-model_run('Boone-c5_+20_')
 args.Boone_c5 = 0.022
-
-eb_prms.lapserate = -0.0055
-climate = sim.initialize_model(args.glac_no[0],args)
-model_run('lapserate_-20_')
-print(np.mean(climate.cds.temp.values))
-eb_prms.lapserate = -0.007
-climate = sim.initialize_model(args.glac_no[0],args)
-model_run('lapserate_+20_')
-print(np.mean(climate.cds.temp.values))
-eb_prms.lapserate = -0.0065
-climate = sim.initialize_model(args.glac_no[0],args)
-print('back to normal lapse rate',np.mean(climate.cds.temp.values))
-
-eb_prms.roughness_fresh_snow = 0.1
-model_run('roughness-fresh-snow_-20_')
-eb_prms.roughness_fresh_snow = 2
-model_run('roughness-fresh-snow_+20_')
-eb_prms.roughness_fresh_snow = 0.24
-
-eb_prms.roughness_aged_snow = 5
-model_run('roughness-aged-snow_-20_')
-eb_prms.roughness_aged_snow = 20
-model_run('roughness-aged-snow_+20_')
-eb_prms.roughness_aged_snow = 10
-
-eb_prms.roughness_ice = 10
+args.roughness_ice = 10
 model_run('roughness-ice_-20_')
-eb_prms.roughness_ice = 50
+args.roughness_ice = 40
 model_run('roughness-ice_+20_')
-eb_prms.roughness_ice = 20
+args.roughness_ice = 20
 
-eb_prms.albedo_ground = 0.1
-model_run('albedo-ground_-20_')
-eb_prms.albedo_ground = 0.3
-model_run('albedo-ground_+20_')
-eb_prms.albedo_ground = 0.2
+# eb_prms.albedo_ground = 0.1
+# model_run('albedo-ground_-20_')
+# eb_prms.albedo_ground = 0.3
+# model_run('albedo-ground_+20_')
+# eb_prms.albedo_ground = 0.2
 
-eb_prms.ksp_BC = 0.1
-model_run('ksp-BC_-20_')
-eb_prms.ksp_BC = 1.2
-model_run('ksp-BC_+20_')
-eb_prms.ksp_BC = 0.9
+# eb_prms.ksp_BC = 0.1
+# model_run('ksp-BC_-20_')
+# eb_prms.ksp_BC = 1.2
+# model_run('ksp-BC_+20_')
+# eb_prms.ksp_BC = 0.9
 
-eb_prms.ksp_OC = 0.1
-model_run('ksp-OC_-20_')
-eb_prms.ksp_OC = 1.2
-model_run('ksp-OC_+20_')
-eb_prms.ksp_OC = 0.9
+# eb_prms.ksp_OC = 0.1
+# model_run('ksp-OC_-20_')
+# eb_prms.ksp_OC = 1.2
+# model_run('ksp-OC_+20_')
+# eb_prms.ksp_OC = 0.9
 
-eb_prms.ksp_dust = 0.001
-model_run('ksp-dust_-20_')
-eb_prms.ksp_dust = 0.1
-model_run('ksp-dust_+20_')
+# eb_prms.ksp_dust = 0.001
+# model_run('ksp-dust_-20_')
+# eb_prms.ksp_dust = 0.1
+# model_run('ksp-dust_+20_')
 
-with open(eb_prms.output_filepath+'sensitivity_test.pkl', 'wb') as f:
-    pickle.dump(result_dict, f)
-    print('Done! Saved to ',eb_prms.output_filepath+'sensitivity_test.pkl')
+# with open(eb_prms.output_filepath+'sensitivity_test.pkl', 'wb') as f:
+#     pickle.dump(result_dict, f)
+#     print('Done! Saved to ',eb_prms.output_filepath+'sensitivity_test.pkl')
