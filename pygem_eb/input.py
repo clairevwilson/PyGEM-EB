@@ -8,7 +8,7 @@ import xarray as xr
 
 # ========== USER OPTIONS ========== 
 glac_no = '00.00000'    # RGI glacier ID
-use_AWS = False         # Use AWS data?
+use_AWS = True          # Use AWS data?
 debug = False           # Print monthly model status?
 store_data = False      # Save data?
 

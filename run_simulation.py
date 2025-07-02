@@ -294,7 +294,8 @@ def initialize_model(glac_no,args):
     # load in available AWS data, then reanalysis
     if args.use_AWS:
         need_vars = climate.get_AWS(args.AWS_fn)
-        climate.get_reanalysis(need_vars)
+        if len(need_vars) > 1:
+            climate.get_reanalysis(need_vars)
     else:
         climate.get_reanalysis(climate.all_vars)
     # check the climate dataset is ready to go
