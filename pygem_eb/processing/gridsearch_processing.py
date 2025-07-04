@@ -4,7 +4,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pygem_eb.processing.plotting_fxns import *
 from objectives import *
-import process_outputs as po
 import pickle
 import os
 import copy
@@ -145,6 +144,12 @@ def process_runs(run_type, sites):
                     results['dates'] = dates
                     results['dh_mod'] = dhmod
                     results['dh_meas'] = dhmeas
+
+                    # 2024 mass balance for sites where it's measured
+                    if site not in ['ABB','BD']:
+                        mbmod,mbmeas = cumulative_mass_balance(ds, out='mbs')
+                        results['mb2024_mod'] = mbmod
+                        results['mb2024_meas'] = mbmeas
 
                     # Error
                     results['2024_MAE'] = cumulative_mass_balance(ds, method='MAE')

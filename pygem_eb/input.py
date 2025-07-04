@@ -7,7 +7,7 @@ import pandas as pd
 import xarray as xr
 
 # ========== USER OPTIONS ========== 
-glac_no = '00.00000'    # RGI glacier ID
+glac_no = '01.00570'    # RGI glacier ID
 use_AWS = False         # Use AWS data?
 debug = False           # Print monthly model status?
 store_data = False      # Save data?
@@ -115,7 +115,7 @@ layer_growth = 0.5          # Rate of exponential growth of layer size (smaller 
 max_nlayers = 80            # Maximum number of vertical layers allowed (more layers --> larger file size)
 max_dz = 2                  # Max layer height
 mb_threshold = 0.1          # Threshold to consider not conserving mass (kg m-2 = mm w.e.)
-min_glacier_depth = 2       # Minimum depth to consider a glacier [m] (when there is less ice, the run ends)
+min_glacier_depth = 2       # Minimum ice depth to end the model run [m]
 # <<<<<< Boundary conditions >>>>>
 temp_temp = 0               # Temperature of temperate ice [C]
 temp_depth = 10             # Depth of temperate ice [m]

@@ -9,7 +9,7 @@ single point.
 
 @author: clairevwilson
 """
-
+# Built-in libraries
 import argparse
 import time
 import os
@@ -23,7 +23,7 @@ import pygem_eb.climate as climutils
 import pygem_eb.massbalance as mb
 from shading.shading import Shading
 
-# start timer
+# START TIMER
 start_time = time.time()
 
 # ===== INITIALIZE UTILITIES =====
@@ -266,7 +266,8 @@ def check_inputs(glac_no, args):
         model_run_date = str(pd.Timestamp.today()).replace('-','_')[0:10]
         args.out = f'{args.glac_name}{args.site}_{model_run_date}_'
     
-    print('~ Inputs verified ~')
+    if args.debug:
+        print('~ Inputs verified ~')
     return args
 
 def initialize_model(glac_no,args):
@@ -330,8 +331,9 @@ def run_model(climate,args,store_attrs=None):
     # get final model run time
     end_time = time.time()
     time_elapsed = end_time-start_time
-    print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-    print(f'~ Model run complete in {time_elapsed:.1f} seconds ~')
+    if args.debug:
+        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+        print(f'~ Model run complete in {time_elapsed:.1f} seconds ~')
 
     # store metadata in netcdf and save result
     if args.store_data:
@@ -340,11 +342,12 @@ def run_model(climate,args,store_attrs=None):
         massbal.output.add_attrs(store_attrs)
         out = massbal.output.get_output()
     else:
-        print('~ Success: data was not saved ~')
+        if args.debug:
+            print('~ Success: data was not saved ~')
         out = None
     
     # print the final mass balance
-    if isinstance(out, xr.Dataset):
+    if isinstance(out, xr.Dataset) and args.debug:
         mb_out = out.accum + out.refreeze - out.melt
         print(f'Net mass balance: {mb_out.sum().values:.3f} m w.e.')
     

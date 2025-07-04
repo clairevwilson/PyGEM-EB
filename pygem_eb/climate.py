@@ -314,7 +314,8 @@ class Climate():
             print('Climate dataset saved to',out_fp+'.nc')
         
         time_elapsed = time.time()-self.start_time
-        print(f'~ Loaded climate dataset in {time_elapsed:.1f} seconds ~')
+        if self.args.debug:
+            print(f'~ Loaded climate dataset in {time_elapsed:.1f} seconds ~')
         return
     
     def check_units(self,var,ds):
