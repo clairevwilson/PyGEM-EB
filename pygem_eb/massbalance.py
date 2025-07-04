@@ -164,6 +164,9 @@ class massBalance():
         # optionally store spectral albedo
         if eb_prms.store_bands:
             surface.albedo_df.to_csv(eb_prms.albedo_out_fp.replace('.csv',f'_{self.args.elev}.csv'))
+        
+        # delete temporary files
+        self.delete_temp_files()
         return
     
     def get_precip(self,enbal):
@@ -1062,12 +1065,27 @@ class massBalance():
             # end the run
             self.exit(failed=False)
         return
+    
+    def delete_temp_files(self):
+        """
+        Deletes any temporary files that were created for parallel runs.
+        """
+        # delete inputs file
+        if os.path.exists(self.surface.snicar_fn):
+            if self.surface.snicar_fn.split('/')[-1] != 'inputs.yaml':
+                os.remove(self.surface.snicar_fn)
+
+        # delete ice spectrum file
+        if os.path.exists(self.surface.ice_spectrum_fp):
+            os.remove(self.surface.ice_spectrum_fp)
+        return
 
     def exit(self,failed=True):
         """
         Exit function. Default usage sends an error message if
         debug is on. Otherwise, exits the run.
         """
+        self.delete_temp_files()
         if self.args.debug and failed:
             print('Failed in mass balance')
             print('Current layers',self.ltype)
@@ -1304,6 +1322,7 @@ class Output():
 
         # save NetCDF
         ds.to_netcdf(self.out_fn)
+
         return ds
     
     def add_vars(self):
