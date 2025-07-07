@@ -1,5 +1,5 @@
 """
-This script executes parallel runs for the 2024 melt season
+This script executes parallel runs for 2000-2025
 across all sites for a single parameter combination.
 
 @author: clairevwilson

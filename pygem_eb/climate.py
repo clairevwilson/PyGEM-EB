@@ -250,6 +250,8 @@ class Climate():
             
         # PRECIP: correct according to precipitation gradient
         tp_elev = self.AWS_elev if 'tp' in self.measured_vars else self.reanalysis_elev
+        tp_elev = 1682
+        print('Using gulkana B elevation for precip gradient')
         new_tp = self.cds.tp.values*(1+PREC_GRAD*(self.elev-tp_elev))
 
         # SURFACE PRESSURE: correct according to barometric law
