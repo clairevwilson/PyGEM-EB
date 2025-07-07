@@ -1365,18 +1365,23 @@ class Output():
         model_run_date
         switch_melt, switch_LAPs, switch_snow
         """
-        time_elapsed = str(time_elapsed) + ' s'
+        time_elapsed = f'{time_elapsed:.1f} s'
         elev = str(args.elev)+' m a.s.l.'
 
         # get information on variable sources
-        re_str = eb_prms.reanalysis+': '
+        which_re = eb_prms.reanalysis
+        re_str = ''
         if args.use_AWS:
             measured = climate.measured_vars
             AWS_name = args.glac_name
             AWS_elev = climate.AWS_elev
-            AWS_str = f'{AWS_name} {AWS_elev}: '
-            AWS_str += ', '.join(measured)
+            which_AWS = f'{AWS_name} {AWS_elev}'
+            AWS_str = ', '.join(measured)
             re_vars = [e for e in climate.all_vars if e not in measured]
+            if 'vwind' in re_vars and not 'uwind' in re_vars:
+                re_vars.remove('vwind')
+            if 'uwind' in re_vars and not 'vwind' in re_vars:
+                re_vars.remove('uwind')
             re_str += ', '.join(re_vars)
         else:
             re_str += 'all'
@@ -1385,20 +1390,20 @@ class Output():
         # store new attributes
         with xr.open_dataset(self.out_fn) as dataset:
             ds = dataset.load()
-            ds = ds.assign_attrs(from_AWS=AWS_str,
-                                 from_reanalysis=re_str,
-                                 run_start=str(args.startdate),
-                                 run_end=str(args.enddate),
+            ds = ds.assign_attrs(glacier=args.glac_name,
                                  elevation=elev,
                                  site=str(args.site),
+                                 from_AWS=AWS_str,
+                                 which_AWS=which_AWS,
+                                 from_reanalysis=re_str,
+                                 which_re=which_re,
+                                 run_start=str(args.startdate),
+                                 run_end=str(args.enddate),
                                  model_run_date=str(pd.Timestamp.today()),
-                                 switch_melt=str(args.switch_melt),
-                                 switch_snow=str(args.switch_snow),
-                                 switch_LAPs=str(args.switch_LAPs),
                                  time_elapsed=time_elapsed,
-                                 run_by=eb_prms.machine,
-                                 glacier=args.glac_name,
-                                 task_id=str(args.task_id))
+                                 run_by=eb_prms.machine)
+            if args.n_simultaneous_processes > 1:
+                ds = ds.assign_attrs(task_id=str(args.task_id))
 
         # save NetCDF
         ds.to_netcdf(self.out_fn)

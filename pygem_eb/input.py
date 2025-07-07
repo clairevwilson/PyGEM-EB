@@ -50,10 +50,10 @@ bias_vars = ['wind','SWin','temp','rh']     # Vars to correct by quantile mappin
     
 # ========== MODEL OPTIONS ========== 
 # INITIALIATION
-initialize_temp = 'ripe'            # 'interpolate' or 'ripe'
-initialize_density = 'constant'     # 'interpolate' or 'constant'
+initialize_temp = 'interpolate'     # 'interpolate' or 'ripe'
+initialize_density = 'interpolate'  # 'interpolate' or 'constant'
 initialize_LAPs = 'clean'           # 'interpolate' or 'clean' 
-initialize_water = 'saturated'      # 'dry' or 'saturated'
+initialize_water = 'dry'            # 'dry' or 'saturated'
 surftemp_guess =  -10               # guess for surface temperature of first timestep [C]
 initial_snow_depth = 1              # default amount of initial snow [m]
 initial_firn_depth = 0              # default amount of initial firn [m]
@@ -164,7 +164,7 @@ include_LWC_SNICAR = False  # Include liquid water in SNICAR? (slush)
 grainshape_SNICAR = 0       # 0: sphere, 1: spheroid, 2: hexagonal plate, 3: koch snowflake, 4: hexagonal prisms
 # <<<<<< Constants for switch runs >>>>>
 albedo_deg_rate = 15        # Rate of exponential decay of albedo
-average_grainsize = 1000    # Grainsize to treat as constant if switch_melt is 0 [um]
+average_grainsize = 300     # Grainsize to treat as constant if switch_melt is 0 [um]
 albedo_fresh_snow = 0.85    # Albedo of fresh snow for exponential method [-] (Moelg et al. 2012, TC)
 albedo_firn = 0.5           # Albedo of firn [-]
 # <<<<<< BC and dust >>>>>

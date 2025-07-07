@@ -266,7 +266,8 @@ def check_inputs(glac_no, args):
         model_run_date = str(pd.Timestamp.today()).replace('-','_')[0:10]
         args.out = f'{args.glac_name}{args.site}_{model_run_date}_'
     
-    print('~ Inputs verified ~')
+    if args.debug:
+        print('~ Inputs verified ~')
     return args
 
 def initialize_model(glac_no,args):
