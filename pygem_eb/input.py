@@ -10,7 +10,7 @@ import xarray as xr
 glac_no = '00.00000'    # RGI glacier ID
 use_AWS = True          # Use AWS data?
 debug = False           # Print monthly model status?
-store_data = False      # Save data?
+store_data = True       # Save data?
 
 # ========== DIRECTORIES AND FILEPATHS ========== 
 machine = socket.gethostname()
@@ -22,7 +22,7 @@ AWS_fp = '../climate_data/AWS/'                             # Weather station da
 # SNICAR
 grainsize_fp = 'data/grainsize/drygrainsize(SSAin=##).nc'   # Grain size evolution lookup table filepath
 snicar_input_fp = 'biosnicar-py/biosnicar/inputs.yaml'      # SNICAR input filepath
-clean_ice_fp = 'biosnicar-py/Data/OP_data/480band/r_sfc/gulkana_cleanice_avg_bba3732.csv' # Ice spectra filepath
+clean_ice_fp = 'biosnicar-py/Data/OP_data/480band/r_sfc/gulkana_cleanice_avg_bba3732.csv' # Ice spectrum filepath
 # INITIAL CONDITIONS
 initial_temp_fp = 'data/sample_initial_temp.csv'            # Initial temperature profile filepath
 initial_density_fp = 'data/sample_initial_density.csv'      # Initial density profile filepath
@@ -35,7 +35,7 @@ shading_fp = 'data/by_glacier/GLACIER/shade/GLACIERSITE_shade.csv'# Generalized 
 bias_fp = 'data/bias_adjustment/METHOD_VAR.csv'             # Generalized bias adjustment filepath
 climate_fp = '../climate_data/'                             # Climate data filepath
 # OUTPUT
-output_filepath = '../Output/'                           # Output filepath
+output_filepath = '../Output/'                              # Output filepath
 albedo_out_fp = '../Output/EB/albedo.csv'                   # Output spectral albedo filepath
 
 # ========== CLIMATE AND TIME INPUTS ========== 

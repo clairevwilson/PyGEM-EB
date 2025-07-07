@@ -1101,7 +1101,7 @@ def plot_layers(ds,vars,dates):
     return
 
 def visualize_layers(ds,dates,vars,force_layers=False,
-                     t='Visualization of Snow ',plot_ax=False,
+                     t='',plot_ax=False,
                      plot_firn=True,plot_ice=False,ylim=False,
                      colorbar=True):
     """
@@ -1217,7 +1217,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
             # leg.yaxis.set_label_coords(1.2,0)
             label = varprops[var]['label']+' ('+units[var]+')'
             # ax.set_ylabel(label,fontsize=10)
-            leg.set_label('Modeled\nt'+label[1:],rotation=270,labelpad=27,fontsize=12)
+            leg.set_label('Modeled'+label,rotation=270,labelpad=27,fontsize=12)
         ax.grid(axis='y')
         ax.tick_params(length=5)
         if ylim:

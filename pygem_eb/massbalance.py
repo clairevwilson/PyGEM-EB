@@ -1170,6 +1170,7 @@ class Output():
         
         # create the netcdf file to store output
         if args.store_data:
+            assert os.path.exists(eb_prms.output_filepath), f'Create output folder at {eb_prms.output_filepath}'
             all_variables[self.vars_list].to_netcdf(self.out_fn)
 
         # ENERGY BALANCE OUTPUTS
