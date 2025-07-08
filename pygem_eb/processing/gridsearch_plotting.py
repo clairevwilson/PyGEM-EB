@@ -1740,9 +1740,8 @@ def plot_sensitivity(sens_dict,savefig=False):
                     'roughness_fresh_snow':{'label':'Fresh snow\nroughness (mm)','high':2,'low':0.1},
                     'roughness_aged_snow':{'label':'Aged snow\nroughness (mm)','high':20,'low':5}}
     base = sens_dict['base']['base']
-    base_low = sens_dict['kp']['-20']
 
-    fig, ax = plt.subplots(figsize=(5,3))
+    fig, axes = plt.subplots(2,1,figsize=(5,3))
     # colors = mpl.colormaps['Set3']
     colors = all_colors
 
@@ -1752,22 +1751,24 @@ def plot_sensitivity(sens_dict,savefig=False):
     for v, var in enumerate(sens_dict):
         if var in label_dict:
             vv += 1
-            compare = base # _low if var == 'roughness_ice' else base
-            point_50 = sens_dict[var]['-20'] - compare
-            point_200 = sens_dict[var]['+20'] - compare
-            x_50 = v - 0.2 -1
-            x_200 = v + 0.2 - 1
-            ax.bar(x_50, point_50, 0.4, align='center', color=colors[vv], hatch='///')
-            ax.bar(x_200, point_200, 0.4, align='center', color=colors[vv])
-            label = label_dict[var]['label'].replace('\n',' ')
-            all_names.append(label)
-            ax.axvline(x_200+0.3, color='k', linewidth=0.1)
-            high = label_dict[var]['high']
-            low = label_dict[var]['low']
-            ax.text(v-1, 0.27, str(high),ha='center',va='center')
-            ax.text(v-1, -0.27, str(low),ha='center',va='center')
+            for c,compare in enumerate(['mb','density']):
+                ax = axes[c] 
+                point_50 = sens_dict[var]['-20'][compare] - base[compare]
+                point_200 = sens_dict[var]['+20'][compare] - base[compare]
+                x_50 = v - 0.2 -1
+                x_200 = v + 0.2 - 1
+                ax.bar(x_50, point_50, 0.4, align='center', color=colors[vv], hatch='///')
+                ax.bar(x_200, point_200, 0.4, align='center', color=colors[vv])
+                label = label_dict[var]['label'].replace('\n',' ')
+                all_names.append(label)
+                ax.axvline(x_200+0.3, color='k', linewidth=0.1)
+                high = label_dict[var]['high']
+                low = label_dict[var]['low']
+                ax.text(v-1, 0.27, str(high),ha='center',va='center')
+                ax.text(v-1, -0.27, str(low),ha='center',va='center')
 
-    ax.set_ylim(-0.3,0.3)
+    axes[0].set_ylim(-0.3,0.3)
+    axes[1].set_ylim(-100,100)
     ax.set_xticks(np.arange(len(sens_dict)-1)+0.3)
     ax.set_xticklabels(all_names, rotation=45, ha='right')
     ax.tick_params(axis='y',length=5)
@@ -1866,13 +1867,22 @@ def find_precip_gradient():
             year_data = data.loc[data['Year'] == year]
             year_elev = year_data['elevation'].values[~np.isnan(year_data['bw'].values)]
             year_bw = year_data['bw'].values[~np.isnan(year_data['bw'].values)]
+            try:
+                year_B_bw = year_data.loc[year_data['site_name'] == 'B']['bw'].values
+                winter_abl_B =  year_data.loc[year_data['site_name'] == 'B']['winter_ablation'].values
+                winter_abl_B = 0 if np.isnan(winter_abl_B) else 0
+                year_acc_B = year_B_bw - winter_abl_B
+            except:
+                print('no site B for',year)
+                continue
             winter_abl = year_data['winter_ablation'].values[~np.isnan(year_data['bw'].values)]
             winter_abl[np.isnan(winter_abl)] = 0
             year_acc = year_bw - winter_abl
+            percentage_acc = year_acc / year_acc_B
             # gradient = np.sum(year_elev * year_acc) / np.sum(year_elev**2)
-            gradient ,b = np.polyfit(year_elev, year_acc, 1)
+            gradient ,b = np.polyfit(year_elev, percentage_acc , 1)
             if gradient > 0:
                 grads.append(gradient)
-                plt.scatter(year_elev, year_acc, color=colors(norm(year)))
+                plt.scatter(year_elev, percentage_acc, color=colors(norm(year)))
                 plt.plot(year_elev, year_elev * gradient+b, color=colors(norm(year)))
     return np.nanmean(grads)

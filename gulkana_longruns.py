@@ -29,7 +29,7 @@ args = sim.get_args()
 args.startdate = '2000-04-20 00:00'
 args.enddate = '2024-08-20 12:00'
 args.store_data = True              # Ensures output is stored
-args.glac_no = ['01.00570']
+args.glac_no = '01.00570'
 args.use_AWS = use_AWS
 eb_prms.AWS_fn = eb_prms.AWS_fp + 'Preprocessed/gulkana_22yrs.csv'
 if 'trace' in eb_prms.machine:
@@ -82,7 +82,7 @@ def pack_vars():
         args_run.task_id = run_no + n_runs_ahead*n_processes
 
         # Store model inputs
-        climate = sim.initialize_model(args_run.glac_no[0],args_run)
+        climate, args_run = sim.initialize_model(args_run.glac_no,args_run)
         packed_vars[run_no].append((args_run,climate,store_attrs))
 
         # Advance counter
