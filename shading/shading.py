@@ -1,7 +1,8 @@
 """
 Created on Tue Mar 19 11:32:50 2024
 
-Shading model for ****MODEL NAME****
+Shading model for PEBSI
+
 Requirements: - DEM which contains glacier and surrounding ridges
               - Coordinates for point to perform calculations
 
@@ -12,9 +13,8 @@ Requirements: - DEM which contains glacier and surrounding ridges
 4. Calculate sky-view factor
 5. Calculate direct clear-sky slope-corrected irradiance and
    shading for each hour of the year
-6. Store .csv of Icorr and shade 
+6. Store shade .csv
         Optional: plot results
-7. Optional: calculate diffuse fraction from measured solar
 
 @author: clairevwilson
 """
@@ -52,7 +52,7 @@ get_shade = True    # run shade model?
 get_direct = False  # run slope-corrected irradiance model? (unused)
 assert get_shade or get_direct, 'Why are you running this?'
 
-# model parameters (shouldn't need to change anything here)
+# model parameters
 time_freq = '30min'     # timestep in offset alias notation
 angle_step = 5          # step to calculate horizon angle (degrees)
 search_length = 5000    # distance to search from center point (m)

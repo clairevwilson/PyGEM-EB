@@ -1,10 +1,10 @@
 """
-Main script to execute ****MODEL NAME****
+Main script to execute PEBSI
 
-This script parses the command-line arguments, 
-checks the inputs of the model, runs the shading
-model if the inputs are incomplete, initializes
-the climate dataset, and runs the model for a
+Parses the command-line arguments, checks the 
+inputs of the model, runs the shading model if 
+the inputs are incomplete, initializes the
+climate dataset, and runs the model for a
 single point.
 
 @author: clairevwilson
@@ -19,19 +19,22 @@ import xarray as xr
 import pandas as pd
 # Internal libraries
 import pebsi.input as eb_prms
-import pebsi.climate as climutils
-import pebsi.massbalance as mb
+from pebsi.climate import Climate
+from pebsi.massbalance import massBalance
 from shading.shading import Shading
 
 # START TIMER
 start_time = time.time()
 
-# ===== INITIALIZE UTILITIES =====
 def get_args(parse=True):
     """
-    Defines command line arguments and has
-    the option to parse the command line
-    (returns args) or not (returns parser)
+    Defines command line arguments
+
+    Parameters
+    ==========
+    parse : Bool
+        If True, parses the command line (returns args)
+        If False, returns the parser
     """    
     parser = argparse.ArgumentParser(description='energy balance model runs')
     
@@ -110,6 +113,12 @@ def get_site_table(site_df, args):
     """
     Loads the table for site locations on the
     glacier of interest and stores them in args
+
+    Parameters
+    ==========
+    site_df : pd.DataFrame
+        Table containing the glacier point information
+    args : command line arguments
     """
     # get site-specific variables
     site = args.site
@@ -150,19 +159,16 @@ def get_site_table(site_df, args):
 
 def get_shading(args):
     """
-    Runs the shading model for a given lat/lon on the glacier
-    which produces two .csv files and two plots which can be
-    inspected in shading/plots. If no lat/lon is provided, 
-    the model defaults to the RGI CenLat and CenLon.
+    Runs the shading model for a given lat/lon on the 
+    glacier which produces the shading file and two plots 
+    which can be inspected in shading/plots. 
+    
+    If no lat/lon is provided, the model defaults to 
+    the RGI CenLat and CenLon.
 
     Parameters
     ==========
-    climate
-        Class object with climate data from initialize_model
-    args
-        Command line arguments from get_args
-    store_attrs : dict
-        Dictionary of additional metadata to store in the .nc
+    args : command line arguments
     """
     # shading file does not exist: warn the user
     print(f'! Shading file was not found for {args.glac_name} {args.site}')
@@ -199,11 +205,11 @@ def get_shading(args):
     # run the shading model
     print(f'~ Running shading model at [{args.lat:.5f}, {args.lon:.5f}] ...')
     start_shading = time.time()
-    model = Shading(args)
-    model.main()
+    shading_model = Shading(args)
+    shading_model.main()
 
     # store the data and print the time to run the shading model
-    model.store_site_info()
+    shading_model.store_site_info()
     shading_elapsed_time = time.time() - start_shading
     print(f'~ Calculated shading for {args.glac_name} {args.site} in {shading_elapsed_time:.1f} seconds ~')
     return args
@@ -211,10 +217,10 @@ def get_shading(args):
 def check_inputs(glac_no, args):
     """
     Checks that the glacier point has all required inputs.
-    - Shading file: if not found, executes the shading model
-        which requires a DEM under data/by_glacier/{NAME}/dem
-    - Loads site_constants (created by shading) and finds the
-        lat/lon/elevation/slope/aspect for the point.
+    - Shading file: if not found, executes the shading 
+        model which requires a DEM 
+    - Loads site_constants (created by shading) and finds
+        the lat/lon/elevation/slope/aspect for the point
     - Specifies the model start and end date
     - Names the output filepath
     
@@ -222,8 +228,7 @@ def check_inputs(glac_no, args):
     ==========
     glac_no : str
         Individual glacier RGI ID
-    args
-        Command line arguments from get_args
+    args : command line arguments
     """
     # check if the RGI ID is in the metadata file
     all_df = pd.read_csv(eb_prms.metadata_fp,index_col=0,converters={0: str})
@@ -279,8 +284,8 @@ def check_inputs(glac_no, args):
 
 def initialize_model(glac_no,args):
     """
-    Loads glacier table and climate dataset for one glacier to initialize
-    the model inputs.
+    Loads glacier table and climate dataset for one
+    glacier to initialize the model inputs.
 
     Parameters
     ==========
@@ -298,7 +303,7 @@ def initialize_model(glac_no,args):
 
     # ===== GET GLACIER CLIMATE =====
     # initialize the climate class
-    climate = climutils.Climate(args)
+    climate = Climate(args)
 
     # load in available AWS data, then reanalysis
     if args.use_AWS:
@@ -327,15 +332,15 @@ def run_model(climate,args,store_attrs=None):
     Parameters
     ==========
     climate
-        Class object with climate data from initialize_model
-    args
-        Command line arguments from get_args
+        Class object from pebsi.climate
+    args : command line arguments
     store_attrs : dict
-        Dictionary of additional metadata to store in the .nc
+        Dictionary of additional metadata to store 
+        in the model output .nc
     """
     # ===== RUN ENERGY BALANCE =====
-    massbal = mb.massBalance(args,climate)
-    massbal.main()
+    model = massBalance(args,climate)
+    model.main()
     # ==============================
 
     # get final model run time
@@ -347,13 +352,12 @@ def run_model(climate,args,store_attrs=None):
 
     # store metadata in netcdf and save result
     if args.store_data:
-        massbal.output.add_vars()
-        massbal.output.add_basic_attrs(args,time_elapsed,climate)
-        massbal.output.add_attrs(store_attrs)
-        out = massbal.output.get_output()
+        model.output.add_vars()
+        model.output.add_basic_attrs(args,time_elapsed,climate)
+        model.output.add_attrs(store_attrs)
+        out = model.output.get_output()
     else:
-        if args.debug:
-            print('~ Success: data was not saved ~')
+        print('~ Success: data was not saved ~')
         out = None
     
     # print the final mass balance
@@ -363,6 +367,7 @@ def run_model(climate,args,store_attrs=None):
     
     return out
 
+# execute the model if this script is called from command line
 if __name__ == '__main__':
     # get command line arguments
     args = get_args()
@@ -371,4 +376,4 @@ if __name__ == '__main__':
     climate, args = initialize_model(args.glac_no,args)
     
     # run the model
-    out = run_model(climate,args)
+    run_model(climate,args)

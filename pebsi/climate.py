@@ -2,7 +2,8 @@
 Climate class for PEBSI
 
 Handles generation of climate dataset for
-the model run duration and 
+the model run duration and adjusts to
+the site elevation
 
 @author: clairevwilson
 """
@@ -19,19 +20,25 @@ import pebsi.input as prms
 
 class Climate():
     """
-    Climate-related functions which build the climate dataset
-    for a single simulation.
+    Climate-related functions which build the 
+    climate dataset for a single simulation.
 
-    If use_AWS = True in the input, the climate dataset will be 
-    filled with as many AWS variables as exist before turning 
-    to reanalysis data to fill the necessary variables.
+    If use_AWS = True in the input, the climate 
+    dataset will be filled with all variables in
+    the AWS dataset before turning to reanalysis 
+    data to fill the remaining variables.
 
-    If use_AWS = False, only reanalysis data will be used.
+    If use_AWS = False, only reanalysis data will 
+    be used.
     """
     def __init__(self,args):
         """
-        Initializes glacier information and creates the dataset where 
-        climate data will be stored.
+        Initializes glacier information and creates
+        the dataset where climate data will be stored.
+
+        Parameters
+        ==========
+        args : command line arguments
         """
         # start timer
         self.start_time = time.time()
@@ -100,8 +107,13 @@ class Climate():
     
     def get_AWS(self,fp):
         """
-        Loads available AWS data and determines which variables
-        are missing and need come from reanalysis.
+        Loads available AWS data and determines which
+        variables need come from reanalysis data.
+
+        Parameters
+        ==========
+        fp : str
+            Filepath to the AWS dataset
         """
         # load data
         df = pd.read_csv(fp,index_col=0)
@@ -159,6 +171,11 @@ class Climate():
     def get_reanalysis(self,vars):
         """
         Fetches reanalysis climate data variables.
+
+        Parameters
+        ==========
+        vars : list-like
+            Variables to be fetched from reanalysis data
         """
         # load time and point data
         dates = self.dates_UTC
@@ -243,11 +260,8 @@ class Climate():
 
     def adjust_to_elevation(self):
         """
-        Adjusts elevation-dependent climate variables (temperature, precip,
-        surface pressure).
-
-        Parameters
-        =========
+        Adjusts elevation-dependent climate variables 
+        (temperature, precip, surface pressure).
         """
         # CONSTANTS
         LAPSE_RATE = prms.lapserate
@@ -260,9 +274,6 @@ class Climate():
         # TEMPERATURE: correct according to lapserate
         temp_elev = self.AWS_elev if 'temp' in self.measured_vars else self.reanalysis_elev
         new_temp = self.cds.temp.values + LAPSE_RATE*(self.elev - temp_elev)
-        if 'gulkana_22yrs' in self.args.AWS_fn and 'temp' in self.measured_vars:
-            new_temp -= 1
-            print('Reducing temperature for on-ice weather station')
             
         # PRECIP: correct according to precipitation gradient
         tp_elev = self.median_elev
@@ -281,6 +292,12 @@ class Climate():
         return
     
     def check_ds(self):
+        """
+        Calculates wind speed and direction from u and v,
+        bias-corrects reanalysis data with quantile mapping,
+        adjusts elevation-dependent variables, and
+        checks that all required variables are filled.
+        """
         # calculate wind speed and direction from u and v components
         # ***WINDMAPPER GOES HERE***
         uwind = self.cds['uwind'].values
@@ -296,9 +313,6 @@ class Climate():
                 from_MERRA = True if not self.args.use_AWS else var in self.need_vars
                 if from_MERRA:
                     self.bias_adjust_quantile(var)
-                    #  and prms.bias_vars[var] == 'binned':
-                    #     self.bias_adjust_binned(var)
-                    # elif from_MERRA and prms.bias_vars[var] == 'quantile':
 
         # adjust elevation dependent variables
         self.adjust_to_elevation()
@@ -335,6 +349,22 @@ class Climate():
         return
     
     def check_units(self,var,ds):
+        """
+        Checks the units for a meteorological
+        variable and puts them in the correct units.
+
+        Parameters
+        ==========
+        var : str
+            Variable to check
+        ds : xr.Dataset
+            Climate dataset
+
+        Returns
+        -------
+        ds : xr.Dataset
+            Updated climate dataset
+        """
         # define the units the model needs
         model_units = {'temp':'C','uwind':'m s-1','vwind':'m s-1',
                        'rh':'%','sp':'Pa','tp':'m s-1','elev':'m',
@@ -371,7 +401,8 @@ class Climate():
     
     def adjust_dep(self):
         """
-        Updates deposition based on preprocessed reduction coefficients
+        Updates deposition based on preprocessed 
+        reduction coefficients
         """
         print('***Hard-coded MERRA-2 to UK-ESM filepath for deposition adjustment***')
         fn = self.reanalysis_fp + 'merra2_to_ukesm_conversion_map_MERRAgrid.nc'
@@ -395,41 +426,15 @@ class Climate():
         self.cds['bcwet'].values *= f
         return
     
-    def adjust_temp_bias(self):
-        """
-        Updates air temperature according to preprocessed bias adjustments
-        """
-        old_T = self.cds['temp'].values
-        new_T = prms.temp_bias_slope * old_T + prms.temp_bias_intercept
-        self.cds['temp'].values = new_T 
-        return
-    
-    def bias_adjust_binned(self,var):
-        """
-        Updated variables according to preprocessed bias adjustments
-        """
-        # open .csv with binned correction factors
-        bias_fp = prms.bias_fp.replace('METHOD','binned').replace('VAR',var)
-        assert os.path.exists(bias_fp), f'Binned data does not exist for {var}'
-        bias_df = pd.read_csv(bias_fp)
-
-        # define bins and values
-        bins = np.append(np.zeros(1), bias_df['bins'])
-        values = self.cds[var].values
-        scale = np.ones_like(self.cds[var].values)
-
-        # loop through bins and assign scale factor
-        for i in range(1,len(bins)):
-            index = np.where((values >= bins[i-1]) & (values < bins[i]))[0]
-            scale[index] = bias_df['factor'][i-1]
-
-        # update values with scale factor
-        self.cds[var].values = values * scale
-        return
-    
     def bias_adjust_quantile(self,var):
         """
-        Updates variables according to preprocessed quantile mapping
+        Applies preprocessed quantile mapping to
+        a reanalysis climate variable.
+
+        Parameters
+        ==========
+        var : str
+            Variable to bias correct
         """
         # open .csv with quantile mapping
         bias_fp = prms.bias_fp.replace('METHOD','quantile_mapping').replace('VAR',var)
@@ -444,24 +449,34 @@ class Climate():
         self.cds[var].values = adjusted
         return
 
-    def getVaporPressure(self,tempC):
+    def getVaporPressure(self,airtemp):
         """
-        Returns vapor pressure in Pa from air temperature in Celsius
+        Returns vapor pressure from air temperature.
+
+        Parameters
+        ==========
+        airtemp : float
+            Air temperature [C]
         """
-        return 610.94*np.exp(17.625*tempC/(tempC+243.04))
+        return 610.94*np.exp(17.625*airtemp/(airtemp+243.04))
     
     def getDewTemp(self,vap):
         """
-        Returns dewpoint air temperature in C from vapor pressure in Pa
+        Returns dewpoint air temperature from 
+        vapor pressure.
+
+        Parameters
+        ==========
+        vap : float
+            Vapor pressure [Pa]
         """
         return 243.04*np.log(vap/610.94)/(17.625-np.log(vap/610.94))
 
-    def RMSE(self,y,pred):
-        N = len(y)
-        RMSE = np.sqrt(np.sum(np.square(pred-y))/N)
-        return RMSE
-
     def get_vardict(self):
+        """
+        Fills a dictionary with the reanalysis
+        file and variable names.
+        """
         # determine filetag for MERRA2 lat/lon gridded files
         flat = str(int(np.floor(self.lat/10)*10))
         flon = str(int(np.floor(self.lon/10)*10))
@@ -563,5 +578,4 @@ class Climate():
             self.var_dict['dustdry']['fn'] = f'./../../MERRA2/DUDP003/MERRA2_DUDP003_{tag}.nc'
 
     def exit(self):
-        """Exits model if there is a problem"""
         sys.exit()

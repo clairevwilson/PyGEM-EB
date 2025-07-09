@@ -28,7 +28,7 @@ class Layers():
         density, water content, LAPs, etc.)
 
         Parameters
-        ----------
+        ==========
         climate
             Class object from pebsi.climate
         args : command line arguments
@@ -89,11 +89,11 @@ class Layers():
         and initial layer height. 
 
         Parameters
-        ----------
+        ==========
         snow_height : float
         firn_height : float
         ice_height : float
-            Total depth of snow, firn, and ice [m]
+            Initial depth of snow, firn, and ice [m]
 
         Returns
         -------
@@ -102,10 +102,11 @@ class Layers():
         ldepth : np.ndarray
             Depth of the middle of the layer [m]
         ltype : np.ndarray
-            Type of layer, 'snow' 'firn' or 'ice'
+            Layers types (snow, firn, ice)
         """
-        dz_toplayer = prms.dz_toplayer
-        layer_growth = prms.layer_growth
+        # CONSTANTS
+        DZ_TOP = prms.dz_toplayer
+        LAYER_GROWTH = prms.layer_growth
 
         # initialize variables to get looped
         lheight = []
@@ -115,7 +116,7 @@ class Layers():
 
         # make exponentially growing snow layers
         while current_depth < snow_height:
-            lheight.append(dz_toplayer * np.exp(layer*layer_growth))
+            lheight.append(DZ_TOP * np.exp(layer*LAYER_GROWTH))
             ltype.append('snow')
             layer += 1
             current_depth = np.sum(lheight)
@@ -140,7 +141,7 @@ class Layers():
         # add ice layers
         current_depth = 0
         while current_depth < ice_height:
-            lheight.append(dz_toplayer * np.exp(layer*layer_growth))
+            lheight.append(DZ_TOP * np.exp(layer*LAYER_GROWTH))
             ltype.append('ice')
             layer += 1
             ice_idx = np.where(np.array(ltype)=='ice')[0]
@@ -153,7 +154,7 @@ class Layers():
             assert nlayers <= prms.max_nlayers, f'Need >= {nlayers} in prms.max_nlayers'
         ldepth = [np.sum(lheight[:i+1])-(lheight[i]/2) for i in range(nlayers)]
 
-        # arrays
+        # make into arrays
         lheight = np.array(lheight)
         ldepth = np.array(ldepth)
         ltype = np.array(ltype)
@@ -170,9 +171,11 @@ class Layers():
         water content and grain size.
 
         Parameters:
-        -----------
-        initial_sfi : np.ndarray
-            Array containing depth of snow, firn and ice
+        ==========
+        snow_height : float
+        firn_height : float
+            Initial depth of snow and firn [m]
+        
         Returns:
         --------
         ltemp, ldensity, lwater, lgrainsize : np.ndarray
@@ -248,6 +251,11 @@ class Layers():
         Initializes light-absorbing particle content
         of the snow and firn layers.
         """
+        # CONSTANTS
+        BC_FRESH = prms.BC_freshsnow
+        OC_FRESH = prms.OC_freshsnow
+        DUST_FRESH = prms.dust_freshsnow
+
         # INPUTS
         n = self.nlayers
         lheight = self.lheight
@@ -255,20 +263,20 @@ class Layers():
 
         if prms.initialize_LAPs in ['clean']:
             # snowpack is clean; initialize as constant values
-            lBC = np.ones(n)*prms.BC_freshsnow*lheight
-            lOC = np.ones(n)*prms.OC_freshsnow*lheight
-            ldust = np.ones(n)*prms.dust_freshsnow*lheight 
+            lBC = np.ones(n)*BC_FRESH*lheight
+            lOC = np.ones(n)*OC_FRESH*lheight
+            ldust = np.ones(n)*DUST_FRESH*lheight 
         elif prms.initialize_LAPs in ['interpolate']:
             # read in LAP data
             lap_data = pd.read_csv(self.args.initial_LAP_fp,index_col=0)
 
             # add boundaries for interpolation
-            lap_data.loc[0,'BC'] = prms.BC_freshsnow
-            lap_data.loc[0,'OC'] = prms.OC_freshsnow
-            lap_data.loc[0,'dust'] = prms.dust_freshsnow
-            lap_data.loc[100,'BC'] = prms.BC_freshsnow
-            lap_data.loc[100,'OC'] = prms.OC_freshsnow
-            lap_data.loc[100,'dust'] = prms.dust_freshsnow
+            lap_data.loc[0,'BC'] = BC_FRESH
+            lap_data.loc[0,'OC'] = OC_FRESH
+            lap_data.loc[0,'dust'] = DUST_FRESH
+            lap_data.loc[100,'BC'] = BC_FRESH
+            lap_data.loc[100,'OC'] = OC_FRESH
+            lap_data.loc[100,'dust'] = DUST_FRESH
             lap_data = lap_data.sort_index()
 
             # interpolate concentration by depth
@@ -295,7 +303,7 @@ class Layers():
         Adds layers to layers class.
 
         Parameters
-        ----------
+        ==========
         layers_to_add : pd.Dataframe
             Contains temperature 'T', water mass 'w', 
             solid mass 'm', height 'h', type 't', 
@@ -327,7 +335,7 @@ class Layers():
         Removes a single layer from layers class.
 
         Parameters
-        ----------
+        ==========
         layer_to_remove : int
             index of layer to remove
         """
@@ -354,7 +362,7 @@ class Layers():
         are maintained.
 
         Parameters
-        ----------
+        ==========
         layer_to_split : int
             Index of the layer to split
         """
@@ -393,7 +401,7 @@ class Layers():
         are added and intensive properties are averaged.
 
         Parameters
-        ----------
+        ==========
         layer_to_merge : int
             Index of the layer to merge with the layer below
         """
@@ -424,7 +432,7 @@ class Layers():
         original size), they are split into two layers.
 
         Parameters
-        ----------
+        ==========
         out : str
             Output filename to raise in case of an error.
         """
@@ -475,7 +483,7 @@ class Layers():
         Can specify to only update certain properties.
 
         Parameters
-        ----------
+        ==========
         do : list-like
             List of any combination of depth, density and irrwater to be updated
         """
@@ -524,7 +532,7 @@ class Layers():
         otherwise it is merged with the top snow layer.
         
         Parameters
-        ----------
+        ==========
         snowfall : float
             Fresh snow mass in kg / m2
         enbal
@@ -623,7 +631,7 @@ class Layers():
         snow.
 
         Parameters
-        ----------
+        ==========
         airtemp : float
             Air temperature [C]
         surftemp : float

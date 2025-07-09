@@ -28,7 +28,7 @@ class energyBalance():
         to use in the surface energy balance.
 
         Parameters
-        ----------
+        ==========
         climateds : xr.Dataset
             Climate dataset containing meteorological
             inputs (temperature, wind speed, etc.)
@@ -95,7 +95,7 @@ class energyBalance():
         current timestep.
 
         Parameters
-        ----------
+        ==========
         surftemp : float
             Temperature of the surface snow [C]
         layers
@@ -175,7 +175,7 @@ class energyBalance():
         - Terrain-reflected diffuse radiation
         
         Parameters
-        ----------
+        ==========
         surface
             Class object from pebsi.surface
         """
@@ -269,9 +269,9 @@ class energyBalance():
         and cloud cover.
         
         Parameters
-        ----------
+        ==========
         surftemp : float
-            Surface temperature of snow/ice [C]
+            Surface temperature [C]
         """
         if self.nanLWout:
             # calculate LWout frmo surftemp
@@ -303,9 +303,9 @@ class energyBalance():
         precipitation that falls as rain.
         
         Parameters
-        ----------
+        ==========
         surftemp : float
-            Surface temperature of snowpack/ice [C]
+            Surface temperature [C]
         """
         # CONSTANTS
         SNOW_THRESHOLD_LOW = prms.snow_threshold_low
@@ -334,9 +334,9 @@ class energyBalance():
         by heat conduction from the temperate ice.
         
         Parameters
-        ----------
+        ==========
         surftemp : float
-            Surface temperature of snow/ice [C]
+            Surface temperature [C]
         """
         # calculate ground flux from surface temperature
         K_ICE = prms.k_ice
@@ -350,13 +350,12 @@ class energyBalance():
         """
         Calculates turbulent (sensible and latent heat)
         fluxes based on Monin-Obukhov Similarity Theory 
-        or Bulk Richardson number, both requiring 
-        iteration.
+        or Bulk Richardson number.
 
         Parameters
-        ----------
+        ==========
         surftemp : float
-            Surface temperature of snow/ice [C]
+            Surface temperature [C]
         roughness : float
             Surface roughness [m]
         """
@@ -459,7 +458,7 @@ class energyBalance():
         to the surface layer.
 
         Parameters
-        ----------
+        ==========
         layers
             Class object from pebsi.layers
         """
@@ -489,7 +488,7 @@ class energyBalance():
         of fresh snow to firn.
 
         Parameters
-        ----------
+        ==========
         days_since_snowfall : int
             Number of days since fresh snow occurred
         layers
@@ -512,24 +511,25 @@ class energyBalance():
             sigma = ROUGHNESS_ICE
         return sigma/1000
     
-    def vapor_pressure(self,T,method='ARM'):
+    def vapor_pressure(self,airtemp,method='ARM'):
         """
-        Calculates vapor pressure [Pa] from temperature 
+        Calculates vapor pressure [Pa] 
+        from air temperature 
 
         Parameters
-        ----------
-        T : float
-            Temperature [C]
+        ==========
+        airtemp : float
+            Air temperature [C]
         """
         if method in ['ARM']:
-            P = 0.61094*np.exp(17.625*T/(T+243.04)) # kPa
+            P = 0.61094*np.exp(17.625*airtemp/(airtemp+243.04)) # kPa
         elif method in ['Sonntag']:
             # follows COSIPY
-            T += 273.15
-            if T > 273.15: # over water
-                P = 0.6112*np.exp(17.67*(T-273.15)/(T-29.66))
+            airtemp += 273.15
+            if airtemp > 273.15: # over water
+                P = 0.6112*np.exp(17.67*(airtemp-273.15)/(airtemp-29.66))
             else: # over ice
-                P = 0.6112*np.exp(22.46*(T-273.15)/(T-0.55))
+                P = 0.6112*np.exp(22.46*(airtemp-273.15)/(airtemp-0.55))
         return P*1000
 
     def diffuse_fraction(self,rad_glob,solar_zenith):
@@ -544,7 +544,7 @@ class energyBalance():
         (10.1016/j.agrformet.2016.05.012)
 
         Parameters
-        ----------
+        ==========
         rad_glob : float
             Horizontal global (all-sky) radiation [W m-2]
         solar_zenith : float
@@ -572,6 +572,17 @@ class energyBalance():
         return diffuse_fraction
 
     def stable_PhiM(self,z,L):
+        """
+        Calculates stability correction factor
+        for the stable case.
+
+        Parameters
+        ==========
+        z : float
+            Reference height [m]
+        L : float
+            Obhukhov length [m]
+        """
         zeta = z/L
         if zeta > 1:
             phim = -4*(1+np.log(zeta)) - zeta
@@ -582,6 +593,18 @@ class energyBalance():
         return phim
 
     def PhiM(self,z,L):
+        """
+        Determines piecewise calculation of universal
+        function for momentum for the Monin-Obhukhov 
+        turbulent flux method
+
+        Parameters
+        ==========
+        z : float
+            Reference height [m]
+        L : float
+            Obhukhov length [m]
+        """
         if L < 0:
             X = np.power((1-16*z/L),0.25)
             phim = 2*np.log((1+X)/2) + np.log((1+X**2)/2) - 2*np.arctan(X) + np.pi/2
@@ -592,6 +615,18 @@ class energyBalance():
         return phim
 
     def PhiT(self,z,L):
+        """
+        Determines piecewise calculation of universal
+        function for heat for the Monin-Obhukhov 
+        turbulent flux method
+
+        Parameters
+        ==========
+        z : float
+            Reference height [m]
+        L : float
+            Obhukhov length [m]
+        """
         if L < 0:
             X = np.power((1-19.3*z/L),0.25)
             phit = 2*np.log((1+X**2)/2)

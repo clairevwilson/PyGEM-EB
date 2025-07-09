@@ -8,7 +8,7 @@ import xarray as xr
 
 # ========== USER OPTIONS ========== 
 glac_no = '01.00570'    # RGI glacier ID
-use_AWS = True          # Use AWS data?
+use_AWS = False         # Use AWS data?
 debug = False           # Print monthly model status?
 store_data = False      # Save data?
 
@@ -103,7 +103,7 @@ grainsize_ds = xr.open_dataset(grainsize_fp.replace('##',str(initSSA)))
 sky_view = 0.95             # Sky-view factor [-]
 wind_factor = 1             # Wind factor [-]
 kp = 2                      # Precipitation factor [-]
-precgrad = 0.000129         # Precipitation gradient with elevation [m-1]
+precgrad = 0.000129         # Precipitation gradient with elevation [% m-1]
 lapserate = -0.0065         # Temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 albedo_ice = 0.47           # Ice albedo [-] 
 snow_threshold_low = 0.2    # Lower threshold for linear snow-rain scaling [C]

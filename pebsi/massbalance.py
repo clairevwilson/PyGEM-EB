@@ -15,7 +15,7 @@ import pandas as pd
 import xarray as xr
 # Local libraries
 import pebsi.input as prms
-import pebsi.energybalance as eb
+from pebsi.energybalance import energyBalance
 from pebsi.layers import Layers
 from pebsi.surface import Surface
 
@@ -32,9 +32,10 @@ class massBalance():
         and model time for the mass balance scheme.
 
         Parameters
-        ----------
+        ==========
         args : command-line arguments
-        climate : climate 
+        climate
+            Class object frmo pebsi.climate
         """
         # set up model time
         self.dt = prms.dt
@@ -75,7 +76,7 @@ class massBalance():
             self.time = time
 
             # initiate the energy balance to unpack climate data
-            enbal = eb.energyBalance(self.climate,time,self.args)
+            enbal = energyBalance(self.climate,time,self.args)
             self.enbal = enbal 
 
             # get rain and snowfall amounts [kg m-2]
@@ -180,7 +181,7 @@ class massBalance():
         and outputs amounts.
 
         Parameters:
-        -----------
+        ==========
         enbal
             Class object from pebsi.energybalance
             
@@ -221,7 +222,7 @@ class massBalance():
         layer 0) due to penetrating shortwave radiation.
 
         Parameters
-        ----------
+        ==========
         layers
             Class object from pebsi.layers
         surface_SW : float
@@ -288,7 +289,7 @@ class massBalance():
         layers. That is done in percolation().
 
         Parameters
-        ----------
+        ==========
         layers
             Class object from pebsi.layers
         subsurf_melt : np.ndarray
@@ -370,7 +371,7 @@ class massBalance():
         mass from layer dry mass.
 
         Parameters
-        ----------
+        ==========
         enbal
             Class object from pebsi.energybalance
         layers
@@ -511,7 +512,7 @@ class massBalance():
         layers according to water flow from percolation.
 
         Parameters
-        ----------
+        ==========
         q_out : np.ndarray
             Water flowrate out of each layer [kg m-2 s-1]
         enbal
@@ -597,7 +598,7 @@ class massBalance():
         below freezing with liquid water content.
 
         Parameters:
-        -----------
+        ==========
         layers
             Class object from pebsi.layers
 
@@ -670,7 +671,7 @@ class massBalance():
         compression from overlying mass.
 
         Parameters:
-        -----------
+        ==========
         layers
             Class object from pebsi.layers
         """
@@ -774,7 +775,7 @@ class massBalance():
         or condensation).
 
         Parameters
-        ----------
+        ==========
         enbal
             Class object from pebsi.energybalance
         surface
@@ -854,8 +855,8 @@ class massBalance():
         heat conduction following the Forward-in-Time-
         Central-in-Space (FTCS) scheme
 
-        Parameters:
-        -----------
+        Parameters
+        ==========
         layers
             Class object from pebsi.layers
         surftemp : float
@@ -1003,10 +1004,17 @@ class massBalance():
             self.layers.cumrefreeze *= 0
             return
 
-    def current_state(self,time,airtemp):
+    def current_state(self,timestamp,airtemp):
         """
         Prints some useful information to keep track 
-        of a model run
+        of a model run.
+
+        Parameters
+        ==========
+        timestamp : pd.Datetime
+            Current timestep
+        airtemp : float
+            Air temperature [C]
         """
         # gather variables to print out
         layers = self.layers
@@ -1015,8 +1023,8 @@ class massBalance():
         melte = np.mean(self.output.meltenergy_output[-720:])
         melt = np.sum(self.output.melt_output[-720:])
         accum = np.sum(self.output.accum_output[-720:])
-        ended_month = (time - pd.Timedelta(days=1)).month_name()
-        year = time.year if ended_month != 'December' else time.year - 1
+        ended_month = (timestamp - pd.Timedelta(days=1)).month_name()
+        year = timestamp.year if ended_month != 'December' else timestamp.year - 1
 
         layers.update_layer_props()
         snowdepth = np.sum(layers.lheight[layers.snow_idx])
@@ -1046,9 +1054,11 @@ class massBalance():
         Checks mass was conserved within the last timestep
         
         Parameters
-        ----------
-        mass_in :    sum of precipitation (kg m-2)
-        mass_out :   sum of runoff (kg m-2)
+        ==========
+        mass_in : float
+            Sum of mass in (precipitation) (kg m-2)
+        mass_out : float
+            Sum of mass out (runoff) (kg m-2)
         """
         # difference in mass since the last timestep
         current_mass = np.sum(self.layers.lice + self.layers.lwater)
@@ -1118,6 +1128,12 @@ class massBalance():
         """
         Exit function. Default usage sends an error 
         message if debug is on. Otherwise, exits the run.
+
+        Parameters
+        ==========
+        failed : Bool
+            If True, prints some layer properties for
+            debugging. Else, ends the run with no prints.
         """
         self.delete_temp_files()
         if self.args.debug and failed:
@@ -1139,7 +1155,7 @@ class Output():
         will be saved.
 
         Parameters
-        ----------
+        ==========
         time : list-like
             List of times used in the simulation
         args : command-line args
@@ -1261,12 +1277,17 @@ class Output():
         Appends the current values to each output list.
 
         Parameters
-        ----------
-        massbal : class object from pebsi.massbalance
-        enbal : class object from pebsi.energybalance
-        surface : class object from pebsi.surface
-        layers : class object from pebsi.layers
-        step : current timestamp
+        ==========
+        massbal
+            Class object from pebsi.massbalance
+        enbal
+            Class object from pebsi.energybalance
+        surface
+            Class object from pebsi.surface
+        layers
+            Class object from pebsi.layers
+        step : pd.Datetime
+            Current timestamp
         """
         step = str(step)
         self.SWin_output.append(float(enbal.SWin))
@@ -1385,12 +1406,12 @@ class Output():
     
     def add_vars(self):
         """
-        Adds additional variables to the output dataset.
-        
-        Net shortwave radiation flux SWnet [W m-2]
-        Net longwave radiation flux LWnet [W m-2]
-        Net radiation NetRad [W m-2]
-        Net mass balance MB [m w.e.]
+        Calculates additional variables from other
+        existing variables in the output dataset.
+        - Net shortwave radiation flux SWnet [W m-2]
+        - Net longwave radiation flux LWnet [W m-2]
+        - Net radiation NetRad [W m-2]
+        - Net mass balance MB [m w.e.]
         """
         if 'SWin' in self.vars_list:
             with xr.open_dataset(self.out_fn) as dataset:
@@ -1415,14 +1436,21 @@ class Output():
     def add_basic_attrs(self,args,time_elapsed,climate):
         """
         Adds informational attributes to the output dataset.
-
-        glacier name, site, and elevation
-        time_elapsed
-        run_start and run_end
-        from_AWS and from_reanalysis list of variables
-        which_AWS and which_reanalysis 
-        model_run_date
-        machine that ran the simulation
+        - glacier name, site, and elevation
+        - length of the simulation (time_elapsed)
+        - simulation dates (run_start and run_end)
+        - list of variables from AWS/reanalysis
+        - AWS and reanalysis dataset names
+        - model run date
+        - machine that ran the simulation (machine) 
+        
+        Parameters
+        ==========
+        args : command line arguments
+        time_elapsed : float
+            Run time for the whole simulation
+        climate
+            Class object from pebsi.climate
         """
         time_elapsed = f'{time_elapsed:.1f} s'
         elev = str(args.elev)+' m a.s.l.'
@@ -1473,6 +1501,11 @@ class Output():
     def add_attrs(self,new_attrs):
         """
         Adds new attributes as a dict to the output dataset.
+
+        Parameters
+        ==========
+        new_attrs : dict
+            Attributes to store
         """
         with xr.open_dataset(self.out_fn) as dataset:
             ds = dataset.load()
