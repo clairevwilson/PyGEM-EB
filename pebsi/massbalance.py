@@ -1,5 +1,9 @@
 """
-Mass balance class and main functions for ****MODEL NAME****
+Mass balance and output class for PEBSI
+
+Contains main() function which executes
+all energy and mass balance calculations
+in an hourly time loop.
 
 @author: clairevwilson
 """
@@ -10,29 +14,30 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 # Local libraries
-import pygem_eb.input as eb_prms
-import pygem_eb.energybalance as eb
-import pygem_eb.layers as eb_layers
-import pygem_eb.surface as eb_surface
+import pebsi.input as prms
+import pebsi.energybalance as eb
+from pebsi.layers import Layers
+from pebsi.surface import Surface
 
 class massBalance():
     """
-    Mass balance scheme which calculates layer and mass balance 
-    from melt, refreeze and accumulation. main() executes the core 
-    of the model.
+    Mass balance scheme which contains the main()
+    model function with the core time loop. This
+    class handles all mass balance equations and 
+    terms.
     """
     def __init__(self,args,climate):
         """
-        Initializes the layers and surface classes and model 
-        time for the mass balance scheme.
+        Initializes the layers and surface classes 
+        and model time for the mass balance scheme.
 
         Parameters
         ----------
-        dates : array-like (pd.datetime)
-            List of local time dates
+        args : command-line arguments
+        climate : climate 
         """
         # set up model time
-        self.dt = eb_prms.dt
+        self.dt = prms.dt
         self.days_since_snowfall = 0
         self.time_list = climate.dates
         self.firn_converted = False
@@ -40,13 +45,13 @@ class massBalance():
         # initialize climate, layers and surface classes
         self.args = args
         self.climate = climate
-        self.layers = eb_layers.Layers(climate,args)
-        self.surface = eb_surface.Surface(self.layers,self.time_list,args,climate)
+        self.layers = Layers(climate,args)
+        self.surface = Surface(self.layers,self.time_list,args,climate)
 
         # initialize output class
         self.output = Output(self.time_list,args)
 
-        # initialize mass balance check variable
+        # initialize mass balance check variables
         self.previous_mass = np.sum(self.layers.lice + self.layers.lwater)
         self.lice_before = np.sum(self.layers.lice)
         self.lwater_before = np.sum(self.layers.lwater)
@@ -54,23 +59,23 @@ class massBalance():
     
     def main(self):
         """
-        Runs the time loop and mass balance scheme to solve for melt, refreeze, 
-        accumulation and runoff.
+        Core function which executes the time loop
+        for all mass balance and energy balance 
+        calculations.
         """
-        # get classes and time
+        # CONSTANTS
+        DENSITY_WATER = prms.density_water
+
+        # get classes
         layers = self.layers
         surface = self.surface
-        dt = self.dt
-
-        # CONSTANTS
-        DENSITY_WATER = eb_prms.density_water
 
         # ===== ENTER TIME LOOP =====
         for time in self.time_list:
             self.time = time
 
             # initiate the energy balance to unpack climate data
-            enbal = eb.energyBalance(self.climate,time,dt,self.args)
+            enbal = eb.energyBalance(self.climate,time,self.args)
             self.enbal = enbal 
 
             # get rain and snowfall amounts [kg m-2]
@@ -87,7 +92,7 @@ class massBalance():
                 surface.daily_updates(layers,enbal.tempC,surface.stemp,time)
                 self.days_since_snowfall = surface.days_since_snowfall
                 layers.lnewsnow = np.zeros(layers.nlayers)
-            if time.hour in eb_prms.albedo_TOD:
+            if time.hour in prms.albedo_TOD:
                 surface.get_albedo(layers,time)
 
             # calculate surface energy balance by updating surface temperature
@@ -124,7 +129,7 @@ class massBalance():
             layers.check_layers(self.output.out_fn)
             
             # if towards the end of summer, check if old snow should become firn
-            if time.day_of_year >= eb_prms.end_summer_doy and time.hour == 0:
+            if time.day_of_year >= prms.end_summer_doy and time.hour == 0:
                 if not self.firn_converted:
                     self.end_of_summer()
 
@@ -162,8 +167,8 @@ class massBalance():
             self.output.store_data()
 
         # optionally store spectral albedo
-        if eb_prms.store_bands:
-            surface.albedo_df.to_csv(eb_prms.albedo_out_fp.replace('.csv',f'_{self.args.elev}.csv'))
+        if prms.store_bands:
+            surface.albedo_df.to_csv(prms.albedo_out_fp.replace('.csv',f'_{self.args.elev}.csv'))
         
         # delete temporary files
         self.delete_temp_files()
@@ -171,26 +176,24 @@ class massBalance():
     
     def get_precip(self,enbal):
         """
-        Determines whether rain or snowfall occurred and outputs amounts.
+        Determines whether rain or snowfall occurred 
+        and outputs amounts.
 
         Parameters:
         -----------
         enbal
-            class object from pygem_eb.energybalance
-        surface
-            class object from pygem_eb.surface
-        time : pd.Datetime
-            Current timestep
+            Class object from pebsi.energybalance
             
         Returns:
         --------
-        rain, snowfall : float
-            Specific mass of liquid and solid precipitation [kg m-2]
+        rain, snow : float
+            Specific mass of liquid and solid 
+            precipitation [kg m-2]
         """
         # CONSTANTS
-        SNOW_THRESHOLD_LOW = eb_prms.snow_threshold_low
-        SNOW_THRESHOLD_HIGH = eb_prms.snow_threshold_high
-        DENSITY_WATER = eb_prms.density_water
+        SNOW_THRESHOLD_LOW = prms.snow_threshold_low
+        SNOW_THRESHOLD_HIGH = prms.snow_threshold_high
+        DENSITY_WATER = prms.density_water
 
         # define rain vs snow scaling 
         rain_scale = np.linspace(0,1,20)
@@ -214,26 +217,28 @@ class massBalance():
 
     def subsurface_heating(self,layers,surface_SW):
         """
-        Calculates melt in subsurface layers (excluding layer 0) 
-        due to penetrating shortwave radiation.
+        Calculates melt in subsurface layers (excluding
+        layer 0) due to penetrating shortwave radiation.
 
         Parameters
         ----------
+        layers
+            Class object from pebsi.layers
         surface_SW : float
             Incoming SW radiation [W m-2]
 
         Returns
         -------
         layermelt : np.ndarray
-            Array containing subsurface melt amounts [kg m-2]
+            Subsurface melt for each layer [kg m-2]
         """
         # do not need this function if only one layer
         if layers.nlayers == 1: 
             return [0.]
         
         # CONSTANTS
-        HEAT_CAPACITY_ICE = eb_prms.Cp_ice
-        LH_RF = eb_prms.Lh_rf
+        HEAT_CAPACITY_ICE = prms.Cp_ice
+        LH_RF = prms.Lh_rf
 
         # LAYERS IN
         lt = layers.ltype.copy()
@@ -273,25 +278,26 @@ class massBalance():
 
     def melting(self,layers,subsurf_melt):
         """
-        For cases when layers are melting. Can melt multiple surface layers
-        at once if Qm is sufficiently high. Otherwise, adds the surface
-        layer melt to the array containing subsurface melt to return the
-        total layer melt. (This function does NOT REMOVE MELTED MASS from 
-        layers. That is done in self.percolation.)
+        For cases when layers are melting. Can melt 
+        multiple surface layers at once if Qm is 
+        sufficiently high. Otherwise, adds the surface
+        layer melt to the array containing subsurface 
+        melt to return the total layer melt. 
+        
+        This function DOES NOT remove melted mass from 
+        layers. That is done in percolation().
 
         Parameters
         ----------
         layers
-            class object from pygem_eb.layers
-        surface
-            class object from pygem_eb.surface
+            Class object from pebsi.layers
         subsurf_melt : np.ndarray
-            Array containing melt of subsurface layers [kg m-2]
+            Subsurface melt for each layer [kg m-2]
+        
         Returns
         -------
         layermelt : np.ndarray
-            Array containing layer melt amounts [kg m-2]
-        
+            Melt for each layer [kg m-2]
         """
         # do not need this function if there is no heat for melting
         if self.surface.Qm <= 0:
@@ -301,7 +307,7 @@ class massBalance():
             return layermelt
         
         # CONSTANTS
-        LH_RF = eb_prms.Lh_rf
+        LH_RF = prms.Lh_rf
 
         # LAYERS IN
         lm = layers.lice.copy()
@@ -354,36 +360,36 @@ class massBalance():
         change = np.sum(layers.lice + layers.lwater) - initial_mass
         if len(fully_melted) > 0:
             change += np.sum(self.melted_layers.mass)
-        assert np.abs(change) < eb_prms.mb_threshold, f'melting failed mass conservation in {self.output.out_fn}'
+        assert np.abs(change) < prms.mb_threshold, f'melting failed mass conservation in {self.output.out_fn}'
         return layermelt
         
     def percolation(self,enbal,layers,layermelt,rainfall=0):
         """
-        Calculates the liquid water content in each layer by downward
-        percolation and applies melt.
+        Updates the liquid water content in each layer
+        with downward percolation and removes melted
+        mass from layer dry mass.
 
         Parameters
         ----------
         enbal
-            class object from pygem_eb.energybalance
+            Class object from pebsi.energybalance
         layers
-            class object from pygem_eb.layers
+            Class object from pebsi.layers
         layermelt: np.ndarray
             Array containing melt amount for each layer
         rainfall : float
-            Additional liquid water input from rainfall [kg m-2]
+            Additional liquid water input from 
+            rainfall [kg m-2]
 
         Returns
         -------
         runoff : float
             Runoff of liquid water lost to system [kg m-2]
-        melted_layers : list
-            List of layer indices that were fully melted
         """
         # CONSTANTS
-        DENSITY_WATER = eb_prms.density_water
-        DENSITY_ICE = eb_prms.density_ice
-        FRAC_IRREDUC = eb_prms.Sr
+        DENSITY_WATER = prms.density_water
+        DENSITY_ICE = prms.density_ice
+        FRAC_IRREDUC = prms.Sr
         dt = self.dt
 
         # get index of percolating (snow/firn) layers
@@ -475,9 +481,9 @@ class massBalance():
             for layer in layers.ice_idx:
                 layers.lice[layer] -= layermelt[layer]
 
-            # advect LAPs 
+            # move LAPs 
             if self.args.switch_LAPs == 1:
-                self.advect_LAPs(np.array(q_out_store),
+                self.move_LAPs(np.array(q_out_store),
                                   enbal,layers,rain_bool,
                                   snow_firn_idx)
         else:
@@ -490,35 +496,38 @@ class massBalance():
         ins = water_in
         outs = runoff
         change = np.sum(layers.lice + layers.lwater) - initial_mass
-        if np.abs(change - (ins-outs)) >= eb_prms.mb_threshold:
+        if np.abs(change - (ins-outs)) >= prms.mb_threshold:
             print(self.output.out_fn)
             print('percolation ins',water_in,'outs',runoff,'now',np.sum(layers.lice + layers.lwater),'initial',initial_mass)
             print('now',layers.lice,layers.lwater)
             print('initial',lmi,lwi)
-        assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, f'percolation failed mass conservation in {self.output.out_fn}'
+        assert np.abs(change - (ins-outs)) < prms.mb_threshold, f'percolation failed mass conservation in {self.output.out_fn}'
         return runoff
         
-    def advect_LAPs(self,q_out,enbal,layers,rain_bool,snow_firn_idx):
+    def move_LAPs(self,q_out,enbal,layers,
+                    rain_bool,snow_firn_idx):
         """
-        Advects LAPs vertically through the snow and firn layers based on
-        inter-layer water fluxes from percolation.
+        Moves LAPs vertically through the snow and firn
+        layers according to water flow from percolation.
 
         Parameters
         ----------
-        layers
-            class object from pygem_eb.layers
         q_out : np.ndarray
-            Array containing water flow out of a layer [kg m-2 s-1]
+            Water flowrate out of each layer [kg m-2 s-1]
         enbal
-            class object from pygem_eb.energybalance
+            Class object from pebsi.energybalance
+        layers
+            Class object from pebsi.layers      
         rain_bool : Bool
             Raining or not?
+        snow_firn_idx : np.ndarray
+            Indices of snow and firn layers
         """
         # CONSTANTS
-        PARTITION_COEF_BC = eb_prms.ksp_BC
-        PARTITION_COEF_OC = eb_prms.ksp_OC
-        PARTITION_COEF_DUST = eb_prms.ksp_dust
-        dt = eb_prms.dt
+        PARTITION_COEF_BC = prms.ksp_BC
+        PARTITION_COEF_OC = prms.ksp_OC
+        PARTITION_COEF_DUST = prms.ksp_dust
+        dt = prms.dt
 
         # LAYERS IN
         lw = layers.lwater[snow_firn_idx]
@@ -530,10 +539,10 @@ class massBalance():
         mdust = layers.ldust[snow_firn_idx]
 
         # get wet deposition into top layer if it's raining
-        if rain_bool and eb_prms.switch_LAPs == 1: # Switch runs have no BC
+        if rain_bool and prms.switch_LAPs == 1: # Switch runs have no BC
             mBC[0] += enbal.bcwet * dt
             mOC[0] += enbal.ocwet * dt
-            mdust[0] += enbal.dustwet * eb_prms.ratio_DU3_DUtot * dt
+            mdust[0] += enbal.dustwet * prms.ratio_DU3_DUtot * dt
 
         # layer mass mixing ratio in kg kg-1
         cBC = mBC / (lw + lm)
@@ -584,22 +593,23 @@ class massBalance():
     
     def refreezing(self,layers):
         """
-        Calculates refreeze in layers due to temperatures below freezing
-        with liquid water content.
+        Calculates refreeze in layers due to temperatures 
+        below freezing with liquid water content.
 
         Parameters:
         -----------
         layers
-            class object from pygem_eb.layers
+            Class object from pebsi.layers
+
         Returns:
         --------
         refreeze : float
             Total amount of refreeze [kg m-2]
         """
         # CONSTANTS
-        HEAT_CAPACITY_ICE = eb_prms.Cp_ice
-        DENSITY_ICE = eb_prms.density_ice
-        LH_RF = eb_prms.Lh_rf
+        HEAT_CAPACITY_ICE = prms.Cp_ice
+        DENSITY_ICE = prms.density_ice
+        LH_RF = prms.Lh_rf
 
         # LAYERS IN
         snow_firn_idx = np.concatenate([layers.snow_idx,layers.firn_idx])
@@ -649,28 +659,29 @@ class massBalance():
 
         # CHECK MASS CONSERVATION
         change = np.sum(layers.lice + layers.lwater) - initial_mass
-        if np.abs(change) >= eb_prms.mb_threshold:
+        if np.abs(change) >= prms.mb_threshold:
             print('rfz change',change, 'initial',initial_mass,'dry, water',layers.lice, layers.lwater)
-        assert np.abs(change) < eb_prms.mb_threshold, f'refreezing failed mass conservation in {self.output.out_fn}'
+        assert np.abs(change) < prms.mb_threshold, f'refreezing failed mass conservation in {self.output.out_fn}'
         return np.sum(refreeze)
     
     def densification(self,layers):
         """
-        Calculates densification of layers due to compression from overlying mass.
+        Calculates densification of layers due to 
+        compression from overlying mass.
 
         Parameters:
         -----------
         layers
-            class object from pygem_eb.layers
+            Class object from pebsi.layers
         """
         # CONSTANTS
-        GRAVITY = eb_prms.gravity
-        R = eb_prms.R_gas
-        VISCOSITY_SNOW = eb_prms.viscosity_snow
-        rho = eb_prms.constant_snowfall_density
+        GRAVITY = prms.gravity
+        R = prms.R_gas
+        VISCOSITY_SNOW = prms.viscosity_snow
+        rho = prms.constant_snowfall_density
         DENSITY_FRESH_SNOW = rho if rho else 50
-        DENSITY_ICE = eb_prms.density_ice
-        dt = eb_prms.daily_dt
+        DENSITY_ICE = prms.density_ice
+        dt = prms.daily_dt
 
         # LAYERS IN
         snowfirn_idx = np.append(layers.snow_idx,layers.firn_idx)
@@ -682,7 +693,7 @@ class massBalance():
         # define initial mass for conservation check
         initial_mass = np.sum(layers.lice + layers.lwater)
 
-        if eb_prms.method_densification in ['Boone']:
+        if prms.method_densification in ['Boone']:
             # EMPIRICAL PARAMETERS
             c1 = 2.7e-6     # s-1 (2.7e-6)
             c2 = 0.042      # K-1 (0.042)
@@ -707,7 +718,7 @@ class massBalance():
             layers.update_layer_props('depth')
 
         # Herron Langway (1980) method
-        elif eb_prms.method_densification in ['HerronLangway']:
+        elif prms.method_densification in ['HerronLangway']:
             # yearly accumulation is the maximum layer snow mass in mm w.e. yr-1
             a = layers.max_snow / (dt*365) # kg m-2 = mm w.e.
             k = np.zeros_like(lp)
@@ -729,7 +740,7 @@ class massBalance():
             layers.update_layer_props('depth')
 
         # Kojima (1967) method (JULES)
-        elif eb_prms.method_densification in ['Kojima']:
+        elif prms.method_densification in ['Kojima']:
             NU_0 = 1e7      # Pa s
             RHO_0 = 50      # kg m-3
             k_S = 4000      # K
@@ -753,14 +764,28 @@ class massBalance():
 
         # CHECK MASS CONSERVATION
         change = np.sum(layers.lice + layers.lwater) - initial_mass
-        assert np.abs(change) < eb_prms.mb_threshold, f'densification failed mass conservation in {self.output.out_fn}'
+        assert np.abs(change) < prms.mb_threshold, f'densification failed mass conservation in {self.output.out_fn}'
         return
     
     def phase_changes(self,enbal,surface,layers):
+        """
+        Calculates mass lost or gained from latent heat
+        exchange (sublimation, deposition, evaporation,
+        or condensation).
+
+        Parameters
+        ----------
+        enbal
+            Class object from pebsi.energybalance
+        surface
+            Class object from pebsi.surface
+        layers
+            Class object from pebsi.layers
+        """
         # CONSTANTS
-        DENSITY_WATER = eb_prms.density_water
-        LV_SUB = eb_prms.Lv_sub
-        LV_VAP = eb_prms.Lv_evap
+        DENSITY_WATER = prms.density_water
+        LV_SUB = prms.Lv_sub
+        LV_VAP = prms.Lv_evap
 
         # get initial mass for conservation check
         initial_mass = np.sum(layers.lice + layers.lwater)
@@ -820,36 +845,34 @@ class massBalance():
         ins = deposition + condensation
         outs = sublimation + evaporation
         change = np.sum(layers.lice + layers.lwater) - initial_mass
-        assert np.abs(change - (ins-outs)) < eb_prms.mb_threshold, f'phase change failed mass conservation in {self.output.out_fn}'
+        assert np.abs(change - (ins-outs)) < prms.mb_threshold, f'phase change failed mass conservation in {self.output.out_fn}'
         return
       
-    def thermal_conduction(self,layers,surftemp,dt_heat=eb_prms.dt_heateq):
+    def thermal_conduction(self,layers,surftemp):
         """
-        Resolves the temperature profile from conduction of heat using 
-        Forward-in-Time-Central-in-Space (FTCS) scheme
+        Resolves the temperature profile with vertical
+        heat conduction following the Forward-in-Time-
+        Central-in-Space (FTCS) scheme
 
         Parameters:
         -----------
         layers
-            class object from pygem_eb.layers
+            Class object from pebsi.layers
         surftemp : float
             Surface temperature [C]
-        dt_heat : int
-            Timestep to loop the heat equation solver [s]
-        Returns:
-        --------
-        new_T : np.ndarray
-            Array of new layer temperatures
         """        
         # CONSTANTS
-        CP_ICE = eb_prms.Cp_ice
-        DENSITY_ICE = eb_prms.density_ice
-        DENSITY_WATER = eb_prms.density_water
-        TEMP_TEMP = eb_prms.temp_temp
-        TEMP_DEPTH = eb_prms.temp_depth
-        K_ICE = eb_prms.k_ice
-        K_WATER = eb_prms.k_water
-        K_AIR = eb_prms.k_air
+        CP_ICE = prms.Cp_ice
+        DENSITY_ICE = prms.density_ice
+        DENSITY_WATER = prms.density_water
+        TEMP_TEMP = prms.temp_temp
+        TEMP_DEPTH = prms.temp_depth
+        K_ICE = prms.k_ice
+        K_WATER = prms.k_water
+        K_AIR = prms.k_air
+
+        # heat equation time loop
+        dt_heat = prms.dt_heateq
 
         # do not need this function if glacier is completely ripe
         if np.sum(layers.ltemp) == 0.:
@@ -876,19 +899,19 @@ class massBalance():
 
         # get snow/firn layer conductivity 
         ice_idx = layers.ice_idx
-        if eb_prms.method_conductivity in ['Sauter']:
+        if prms.method_conductivity in ['Sauter']:
             f_ice = (lm/DENSITY_ICE) / lh
             f_liq = (lw/DENSITY_WATER) / lh
             f_air = 1 - f_ice - f_liq
             f_air[f_air < 0] = 0
             lcond = f_ice*K_ICE + f_liq*K_WATER + f_air*K_AIR
-        elif eb_prms.method_conductivity in ['VanDusen']:
+        elif prms.method_conductivity in ['VanDusen']:
             lcond = 0.21e-01 + 0.42e-03*lp + 0.22e-08*lp**3
-        elif eb_prms.method_conductivity in ['Douville']:
+        elif prms.method_conductivity in ['Douville']:
             lcond = 2.2*np.power(lp/DENSITY_ICE,1.88)
-        elif eb_prms.method_conductivity in ['Jansson']:
+        elif prms.method_conductivity in ['Jansson']:
             lcond = 0.02093 + 0.7953e-3*lp + 1.512e-12*lp**4
-        elif eb_prms.method_conductivity in ['OstinAndersson']:
+        elif prms.method_conductivity in ['OstinAndersson']:
             lcond = -8.71e-3 + 0.439e-3*lp + 1.05e-6*lp**2
         # get ice conductivity (constant)
         diffusing_ice_idx = list(set(ice_idx)&set(diffusing_idx))
@@ -934,11 +957,18 @@ class massBalance():
         return 
     
     def end_of_summer(self):
+        """
+        Checks prognostically if enough snow will fall
+        in the upcoming days to constitute the start
+        of the accumulation season. If so, snow layers
+        are transformed to firn and cumulative refreeze
+        is reset to 0.
+        """
         # CONSTANTS
-        NDAYS = eb_prms.new_snow_days
-        SNOW_THRESHOLD = eb_prms.new_snow_threshold
-        T_LOW = eb_prms.snow_threshold_low
-        T_HIGH = eb_prms.snow_threshold_high
+        NDAYS = prms.new_snow_days
+        SNOW_THRESHOLD = prms.new_snow_threshold
+        T_LOW = prms.snow_threshold_low
+        T_HIGH = prms.snow_threshold_high
 
         # only merge firn if there is snow and firn below that snow
         if len(self.layers.snow_idx) > 0 and len(self.layers.firn_idx) > 0:
@@ -974,7 +1004,10 @@ class massBalance():
             return
 
     def current_state(self,time,airtemp):
-        """Prints some useful information to keep track of a model run"""
+        """
+        Prints some useful information to keep track 
+        of a model run
+        """
         # gather variables to print out
         layers = self.layers
         surftemp = self.surface.stemp
@@ -1011,20 +1044,23 @@ class massBalance():
     def check_mass_conservation(self,mass_in,mass_out):
         """
         Checks mass was conserved within the last timestep
-        mass_in:    sum of precipitation (kg m-2)
-        mass_out:   sum of runoff (kg m-2)
+        
+        Parameters
+        ----------
+        mass_in :    sum of precipitation (kg m-2)
+        mass_out :   sum of runoff (kg m-2)
         """
         # difference in mass since the last timestep
         current_mass = np.sum(self.layers.lice + self.layers.lwater)
         diff = current_mass - self.previous_mass
         in_out = mass_in - mass_out
-        if np.abs(diff - in_out) >= eb_prms.mb_threshold:
-            print(self.time,'discrepancy of',np.abs(diff - in_out) - eb_prms.mb_threshold,self.output.out_fn)
+        if np.abs(diff - in_out) >= prms.mb_threshold:
+            print(self.time,'discrepancy of',np.abs(diff - in_out) - prms.mb_threshold,self.output.out_fn)
             print('in',mass_in,'out',mass_out,'currently',current_mass,'was',self.previous_mass)
             print('ice before',self.lice_before,'ice after',np.sum(self.layers.lice))
             print('w before',self.lwater_before,'w after',np.sum(self.layers.lwater))
             print('melt',self.melt,'rfz',self.refreeze,'accum',self.accum)
-        assert np.abs(diff - in_out) < eb_prms.mb_threshold, f'Timestep {self.time} failed mass conservation in {self.output.out_fn}'
+        assert np.abs(diff - in_out) < prms.mb_threshold, f'Timestep {self.time} failed mass conservation in {self.output.out_fn}'
         
         # new initial mass
         self.previous_mass = current_mass
@@ -1034,12 +1070,12 @@ class massBalance():
     
     def check_glacier_exists(self):
         """
-        Checks there is still a glacier. If not, ends the run and
-        saves the output.
+        Checks there is still a glacier. If not, ends 
+        the run and saves the output.
         """
         # load layer height
         layerheight = np.sum(self.layers.lheight)
-        if layerheight < eb_prms.min_glacier_depth:
+        if layerheight < prms.min_glacier_depth:
             # new end date
             start = self.time_list[0]
             end = self.time
@@ -1065,7 +1101,8 @@ class massBalance():
     
     def delete_temp_files(self):
         """
-        Deletes any temporary files that were created for parallel runs.
+        Deletes any temporary files that were created
+        for parallel runs.
         """
         # delete inputs file
         if os.path.exists(self.surface.snicar_fn):
@@ -1079,8 +1116,8 @@ class massBalance():
 
     def exit(self,failed=True):
         """
-        Exit function. Default usage sends an error message if
-        debug is on. Otherwise, exits the run.
+        Exit function. Default usage sends an error 
+        message if debug is on. Otherwise, exits the run.
         """
         self.delete_temp_files()
         if self.args.debug and failed:
@@ -1091,15 +1128,24 @@ class massBalance():
         sys.exit()    
 
 class Output():
+    """
+    Output class which stores the data during the
+    simulation and saves it to a netcdf file upon
+    run completion.
+    """
     def __init__(self,time,args):
         """
-        Creates netcdf file where the model output will be saved.
+        Creates netcdf file where the model output 
+        will be saved.
 
         Parameters
         ----------
+        time : list-like
+            List of times used in the simulation
+        args : command-line args
         """
         # get unique filename
-        self.out_fn = eb_prms.output_filepath + args.out
+        self.out_fn = prms.output_filepath + args.out
         i = 0
         while os.path.exists(self.out_fn+f'{i}.nc'):
             i += 1
@@ -1108,7 +1154,7 @@ class Output():
 
         # info needed to create the output file
         self.n_timesteps = len(time)
-        zeros = np.zeros([self.n_timesteps,eb_prms.max_nlayers])
+        zeros = np.zeros([self.n_timesteps,prms.max_nlayers])
 
         # create variable name dict
         vn_dict = {'EB':['SWin','SWout','LWin','LWout','rain','ground',
@@ -1156,18 +1202,18 @@ class Output():
                 ),
                 coords=dict(
                     time=(['time'],time),
-                    layer=(['layer'],np.arange(eb_prms.max_nlayers))
+                    layer=(['layer'],np.arange(prms.max_nlayers))
                     ))
         # select variables from the specified input
-        vars_list = vn_dict[eb_prms.store_vars[0]]
-        for var in eb_prms.store_vars[1:]:
+        vars_list = vn_dict[prms.store_vars[0]]
+        for var in prms.store_vars[1:]:
             assert var in vn_dict, 'Choose store_vars from [MB,EB,climate,layers]'
             vars_list.extend(vn_dict[var])
         self.vars_list = vars_list
         
         # create the netcdf file to store output
         if args.store_data:
-            assert os.path.exists(eb_prms.output_filepath), f'Create output folder at {eb_prms.output_filepath}'
+            assert os.path.exists(prms.output_filepath), f'Create output folder at {prms.output_filepath}'
             all_variables[self.vars_list].to_netcdf(self.out_fn)
 
         # ENERGY BALANCE OUTPUTS
@@ -1207,10 +1253,21 @@ class Output():
         self.layerdust_output = dict()      # layer dust content [ppm]
         self.layergrainsize_output = dict() # layer grain size [um]
         self.layerrefreeze_output = dict()  # layer refreeze [kg m-2]
-        self.last_height = eb_prms.initial_ice_depth+eb_prms.initial_firn_depth+eb_prms.initial_snow_depth
+        self.last_height = prms.initial_ice_depth+prms.initial_firn_depth+prms.initial_snow_depth
         return
     
     def store_timestep(self,massbal,enbal,surface,layers,step):
+        """
+        Appends the current values to each output list.
+
+        Parameters
+        ----------
+        massbal : class object from pebsi.massbalance
+        enbal : class object from pebsi.energybalance
+        surface : class object from pebsi.surface
+        layers : class object from pebsi.layers
+        step : current timestamp
+        """
         step = str(step)
         self.SWin_output.append(float(enbal.SWin))
         self.SWout_output.append(float(enbal.SWout))
@@ -1231,7 +1288,7 @@ class Output():
 
         self.melt_output.append(float(massbal.melt))
         self.refreeze_output.append(float(massbal.refreeze))
-        self.cumrefreeze_output.append(float(np.sum(layers.cumrefreeze))/eb_prms.density_water)
+        self.cumrefreeze_output.append(float(np.sum(layers.cumrefreeze))/prms.density_water)
         self.runoff_output.append(float(massbal.runoff))
         self.accum_output.append(float(massbal.accum))
         self.snowdepth_output.append(np.sum(layers.lheight[layers.snow_idx]))
@@ -1249,11 +1306,14 @@ class Output():
         self.layerrefreeze_output[step] = layers.cumrefreeze.copy()
 
     def store_data(self):
+        """
+        Saves all data in the netcdf file.
+        """
         # load output dataset
         with xr.open_dataset(self.out_fn) as dataset:
             ds = dataset.load()
             # store variables
-            if 'EB' in eb_prms.store_vars:
+            if 'EB' in prms.store_vars:
                 ds['SWin'].values = self.SWin_output
                 ds['SWout'].values = self.SWout_output
                 ds['LWin'].values = self.LWin_output
@@ -1268,7 +1328,7 @@ class Output():
                 ds['albedo'].values = self.albedo_output
                 ds['vis_albedo'].values = self.vis_albedo_output
                 ds['surftemp'].values = self.surftemp_output
-            if 'MB' in eb_prms.store_vars:
+            if 'MB' in prms.store_vars:
                 ds['melt'].values = self.melt_output
                 ds['refreeze'].values = self.refreeze_output
                 ds['runoff'].values = self.runoff_output
@@ -1276,10 +1336,10 @@ class Output():
                 ds['snowdepth'].values = self.snowdepth_output
                 ds['dh'].values = self.dh_output
                 ds['cumrefreeze'].values = self.cumrefreeze_output
-            if 'climate' in eb_prms.store_vars:
+            if 'climate' in prms.store_vars:
                 ds['airtemp'].values = self.airtemp_output
                 ds['wind'].values = self.wind_output
-            if 'layers' in eb_prms.store_vars:
+            if 'layers' in prms.store_vars:
                 layertemp_output = pd.DataFrame.from_dict(self.layertemp_output,orient='index')
                 layerdensity_output = pd.DataFrame.from_dict(self.layerdensity_output,orient='index')
                 layerheight_output = pd.DataFrame.from_dict(self.layerheight_output,orient='index')
@@ -1290,9 +1350,9 @@ class Output():
                 layergrainsize_output = pd.DataFrame.from_dict(self.layergrainsize_output,orient='index')
                 layerrefreeze_output = pd.DataFrame.from_dict(self.layerrefreeze_output,orient='index')
                 
-                if len(layertemp_output.columns) < eb_prms.max_nlayers:
+                if len(layertemp_output.columns) < prms.max_nlayers:
                     n_columns = len(layertemp_output.columns)
-                    for i in range(n_columns,eb_prms.max_nlayers):
+                    for i in range(n_columns,prms.max_nlayers):
                         nans = np.zeros(self.n_timesteps)*np.nan
                         layertemp_output[str(i)] = nans
                         layerdensity_output[str(i)] = nans
@@ -1327,9 +1387,10 @@ class Output():
         """
         Adds additional variables to the output dataset.
         
-        SWnet: net shortwave radiation flux [W m-2]
-        LWnet: net longwave radiation flux [W m-2]
-        NetRad: net radiation flux (SW and LW) [W m-2]
+        Net shortwave radiation flux SWnet [W m-2]
+        Net longwave radiation flux LWnet [W m-2]
+        Net radiation NetRad [W m-2]
+        Net mass balance MB [m w.e.]
         """
         if 'SWin' in self.vars_list:
             with xr.open_dataset(self.out_fn) as dataset:
@@ -1355,18 +1416,19 @@ class Output():
         """
         Adds informational attributes to the output dataset.
 
+        glacier name, site, and elevation
         time_elapsed
         run_start and run_end
         from_AWS and from_reanalysis list of variables
-        elevation
+        which_AWS and which_reanalysis 
         model_run_date
-        switch_melt, switch_LAPs, switch_snow
+        machine that ran the simulation
         """
         time_elapsed = f'{time_elapsed:.1f} s'
         elev = str(args.elev)+' m a.s.l.'
 
         # get information on variable sources
-        which_re = eb_prms.reanalysis
+        which_re = prms.reanalysis
         re_str = ''
         if args.use_AWS:
             measured = climate.measured_vars
@@ -1383,6 +1445,7 @@ class Output():
         else:
             re_str += 'all'
             AWS_str = 'none'
+            which_AWS = 'none'
         
         # store new attributes
         with xr.open_dataset(self.out_fn) as dataset:
@@ -1398,7 +1461,7 @@ class Output():
                                  run_end=str(args.enddate),
                                  model_run_date=str(pd.Timestamp.today()),
                                  time_elapsed=time_elapsed,
-                                 run_by=eb_prms.machine)
+                                 run_by=prms.machine)
             if args.n_simultaneous_processes > 1:
                 ds = ds.assign_attrs(task_id=str(args.task_id))
 
@@ -1409,7 +1472,7 @@ class Output():
     
     def add_attrs(self,new_attrs):
         """
-        Adds new attributes as a dict to the output dataset
+        Adds new attributes as a dict to the output dataset.
         """
         with xr.open_dataset(self.out_fn) as dataset:
             ds = dataset.load()
@@ -1420,4 +1483,7 @@ class Output():
         return
     
     def get_output(self):
+        """
+        Returns the output dataset.
+        """
         return xr.open_dataset(self.out_fn)

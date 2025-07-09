@@ -1,5 +1,8 @@
 """
-Climate class for ****MODEL NAME****
+Climate class for PEBSI
+
+Handles generation of climate dataset for
+the model run duration and 
 
 @author: clairevwilson
 """
@@ -12,7 +15,7 @@ import pandas as pd
 import numpy as np
 import xarray as xr
 # Local libraries
-import pygem_eb.input as eb_prms
+import pebsi.input as prms
 
 class Climate():
     """
@@ -47,12 +50,15 @@ class Climate():
 
         # find median elevation of the glacier from RGI
         RGI_region = args.glac_no.split('.')[0]
-        for fn in os.listdir(eb_prms.RGI_fp):
-            # open the attributes .csv for the correct region
-            if fn[:2] == RGI_region and fn[-3:] == 'csv':
-                RGI_df = pd.read_csv(eb_prms.RGI_fp + fn)
-                RGI_df.index = [f.split('-')[-1] for f in RGI_df['RGIId']]
-        self.median_elev = RGI_df.loc[args.glac_no,'Zmed']
+        if float(RGI_region) > 0:
+            for fn in os.listdir(prms.RGI_fp):
+                # open the attributes .csv for the correct region
+                if fn[:2] == RGI_region and fn[-3:] == 'csv':
+                    RGI_df = pd.read_csv(prms.RGI_fp + fn)
+                    RGI_df.index = [f.split('-')[-1] for f in RGI_df['RGIId']]
+            self.median_elev = RGI_df.loc[args.glac_no,'Zmed']
+        else:
+            self.median_elev = self.elev
 
         # define reanalysis variables
         self.get_vardict()
@@ -161,7 +167,7 @@ class Climate():
         use_threads = self.args.use_threads
         
         # interpolate data if time was input on the hour instead of half-hour
-        interpolate = dates[0].minute != 30 and eb_prms.reanalysis == 'MERRA2'
+        interpolate = dates[0].minute != 30 and prms.reanalysis == 'MERRA2'
         
         # get reanalysis data geopotential
         z_fp = self.reanalysis_fp + self.var_dict['elev']['fn']
@@ -179,7 +185,7 @@ class Climate():
             vn = self.var_dict[var]['vn'] 
             lat_vn,lon_vn = [self.lat_vn,self.lon_vn]
             if 'bc' in var or 'oc' in var or 'dust' in var:
-                if eb_prms.reanalysis == 'ERA5-hourly':
+                if prms.reanalysis == 'ERA5-hourly':
                     lat_vn,lon_vn = ['lat','lon']
             ds = ds.sel({lat_vn:lat,lon_vn:lon}, method='nearest')[vn]
 
@@ -189,7 +195,7 @@ class Climate():
             # for time-varying variables, select/interpolate to the model time
             if var != 'elev':
                 dep_var = 'bc' in var or 'dust' in var or 'oc' in var
-                if not dep_var and eb_prms.reanalysis == 'ERA5-hourly':
+                if not dep_var and prms.reanalysis == 'ERA5-hourly':
                     assert dates[0] >= pd.to_datetime(ds.time.values[0])
                     assert dates[-1] <= pd.to_datetime(ds.time.values[-1])
                     ds = ds.interp(time=dates)
@@ -244,12 +250,12 @@ class Climate():
         =========
         """
         # CONSTANTS
-        LAPSE_RATE = eb_prms.lapserate
-        PREC_GRAD = eb_prms.precgrad
+        LAPSE_RATE = prms.lapserate
+        PREC_GRAD = prms.precgrad
         PREC_FACTOR = float(self.args.kp)
-        GRAVITY = eb_prms.gravity
-        R_GAS = eb_prms.R_gas
-        MM_AIR = eb_prms.molarmass_air
+        GRAVITY = prms.gravity
+        R_GAS = prms.R_gas
+        MM_AIR = prms.molarmass_air
 
         # TEMPERATURE: correct according to lapserate
         temp_elev = self.AWS_elev if 'temp' in self.measured_vars else self.reanalysis_elev
@@ -284,21 +290,21 @@ class Climate():
         self.cds['wind'].values = wind
         self.cds['winddir'].values = winddir
 
-        if eb_prms.reanalysis == 'MERRA2':
+        if prms.reanalysis == 'MERRA2':
             # correct other MERRA-2 variables
-            for var in eb_prms.bias_vars:
+            for var in prms.bias_vars:
                 from_MERRA = True if not self.args.use_AWS else var in self.need_vars
                 if from_MERRA:
                     self.bias_adjust_quantile(var)
-                    #  and eb_prms.bias_vars[var] == 'binned':
+                    #  and prms.bias_vars[var] == 'binned':
                     #     self.bias_adjust_binned(var)
-                    # elif from_MERRA and eb_prms.bias_vars[var] == 'quantile':
+                    # elif from_MERRA and prms.bias_vars[var] == 'quantile':
 
         # adjust elevation dependent variables
         self.adjust_to_elevation()
         
         # adjust MERRA-2 deposition by reduction coefficient
-        if eb_prms.reanalysis == 'MERRA2' and eb_prms.adjust_deposition:
+        if prms.reanalysis == 'MERRA2' and prms.adjust_deposition:
             self.adjust_dep()
 
         # check all variables are there
@@ -318,8 +324,8 @@ class Climate():
             self.exit()
 
         # store the dataset as a netCDF
-        if eb_prms.store_climate:
-            out_fp = eb_prms.output_filepath + self.args.out + self.args.site + '_climate'
+        if prms.store_climate:
+            out_fp = prms.output_filepath + self.args.out + self.args.site + '_climate'
             self.cds.to_netcdf(out_fp+'.nc')
             print('Climate dataset saved to',out_fp+'.nc')
         
@@ -355,7 +361,7 @@ class Climate():
             elif var in ['SWin','LWin','NR'] and units_in == 'W m-2':
                 ds = ds * 3600
             elif var == 'elev' and units_in in ['m+2 s-2','m2 s-2']:
-                ds = ds / eb_prms.gravity
+                ds = ds / prms.gravity
             else:
                 print(f'WARNING! Units did not match for {var} but were not updated')
                 print(f'Previously {units_in}; should be {units_out}')
@@ -394,7 +400,7 @@ class Climate():
         Updates air temperature according to preprocessed bias adjustments
         """
         old_T = self.cds['temp'].values
-        new_T = eb_prms.temp_bias_slope * old_T + eb_prms.temp_bias_intercept
+        new_T = prms.temp_bias_slope * old_T + prms.temp_bias_intercept
         self.cds['temp'].values = new_T 
         return
     
@@ -403,7 +409,7 @@ class Climate():
         Updated variables according to preprocessed bias adjustments
         """
         # open .csv with binned correction factors
-        bias_fp = eb_prms.bias_fp.replace('METHOD','binned').replace('VAR',var)
+        bias_fp = prms.bias_fp.replace('METHOD','binned').replace('VAR',var)
         assert os.path.exists(bias_fp), f'Binned data does not exist for {var}'
         bias_df = pd.read_csv(bias_fp)
 
@@ -426,7 +432,7 @@ class Climate():
         Updates variables according to preprocessed quantile mapping
         """
         # open .csv with quantile mapping
-        bias_fp = eb_prms.bias_fp.replace('METHOD','quantile_mapping').replace('VAR',var)
+        bias_fp = prms.bias_fp.replace('METHOD','quantile_mapping').replace('VAR',var)
         assert os.path.exists(bias_fp), f'Quantile mapping file does not exist for {var}'
         bias_df = pd.read_csv(bias_fp)
         
@@ -459,10 +465,10 @@ class Climate():
         # determine filetag for MERRA2 lat/lon gridded files
         flat = str(int(np.floor(self.lat/10)*10))
         flon = str(int(np.floor(self.lon/10)*10))
-        tag = eb_prms.MERRA2_filetag if eb_prms.MERRA2_filetag else f'{flat}_{flon}'
+        tag = prms.MERRA2_filetag if prms.MERRA2_filetag else f'{flat}_{flon}'
 
         # update filenames for MERRA-2 (need grid lat/lon)
-        self.reanalysis_fp = eb_prms.climate_fp
+        self.reanalysis_fp = prms.climate_fp
         self.var_dict = {'temp':{'fn':[],'vn':[]},
             'rh':{'fn':[],'vn':[]},'sp':{'fn':[],'vn':[]},
             'tp':{'fn':[],'vn':[]},'tcc':{'fn':[],'vn':[]},
@@ -473,7 +479,7 @@ class Climate():
             'dustdry':{'fn':[],'vn':[]},'dustwet':{'fn':[],'vn':[]},
             'elev':{'fn':[],'vn':[]},'time':{'fn':'','vn':''},
             'lat':{'fn':'','vn':''}, 'lon':{'fn':'','vn':''}}
-        if eb_prms.reanalysis == 'MERRA2':
+        if prms.reanalysis == 'MERRA2':
             self.reanalysis_fp += 'MERRA2/'
             self.var_dict['temp']['vn'] = 'T2M'
             self.var_dict['rh']['vn'] = 'RH2M'
@@ -513,7 +519,7 @@ class Climate():
             self.var_dict['ocdry']['fn'] = f'OCDP002/MERRA2_OCDP002_{tag}.nc'
             self.var_dict['dustwet']['fn'] = f'DUWT003/MERRA2_DUWT003_{tag}.nc'
             self.var_dict['dustdry']['fn'] = f'DUDP003/MERRA2_DUDP003_{tag}.nc'
-        elif eb_prms.reanalysis == 'ERA5-hourly':
+        elif prms.reanalysis == 'ERA5-hourly':
             self.reanalysis_fp += 'ERA5/ERA5_hourly/'
 
             # Variable names for energy balance

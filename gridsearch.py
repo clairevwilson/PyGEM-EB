@@ -20,9 +20,9 @@ from multiprocessing import Pool
 import pandas as pd
 import xarray as xr
 # Internal libraries
-import pygem_eb.input as eb_prms
 import run_simulation as sim
-import pygem_eb.massbalance as mb
+import pebsi.input as eb_prms
+import pebsi.massbalance as mb
 from objectives import *
 
 # OPTIONS

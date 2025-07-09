@@ -3,8 +3,7 @@ This script processes grid search outputs in parallel.
 
 @author: clairevwilson
 """
-
-import pygem_eb.processing.gridsearch_processing as gsproc
+import pebsi.processing.gridsearch_processing as gsproc
 from multiprocessing import Pool
 
 for run_type in ['long','2024']:
@@ -15,5 +14,4 @@ for run_type in ['long','2024']:
     with Pool(4) as processes_pool:
         processes_pool.starmap(gsproc.process_runs,packed_vars)
 
-# gsproc.process_runs('2024', all=True)
 print('Done!')

@@ -17,9 +17,9 @@ import pandas as pd
 import pickle
 from multiprocessing import Pool
 # Internal libraries
-import pygem_eb.input as eb_prms
+import pebsi.input as eb_prms
 import run_simulation as sim
-import pygem_eb.massbalance as mb
+import pebsi.massbalance as mb
 from objectives import *
 
 # Read command line args

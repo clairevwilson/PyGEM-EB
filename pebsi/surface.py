@@ -1,5 +1,8 @@
 """
-Surface class for ****MODEL NAME****
+Surface class for PEBSI
+
+Calculates the surface properties such
+as albedo and surface temperature.
 
 @author: clairevwilson
 """
@@ -12,13 +15,15 @@ import pandas as pd
 from scipy.optimize import minimize
 import suncalc
 # Local libraries
-import pygem_eb.input as eb_prms
+import pebsi.input as prms
+
+# Make SNICAR find-able
 sys.path.append(os.getcwd()+'/biosnicar-py/')
 
 class Surface():
     """
-    Surface scheme that tracks the accumulation of LAPs and calculates 
-    albedo based on several switches.
+    Tracks properties of the surface including
+    surface temperature, type, and albedo.
     """ 
     def __init__(self,layers,time,args,climate):
         # add args and climate to surface class
@@ -26,15 +31,15 @@ class Surface():
         self.climate = climate
 
         # initialize surface properties
-        self.stemp = eb_prms.surftemp_guess
+        self.stemp = prms.surftemp_guess
         self.days_since_snowfall = 0
         self.snow_timestamp = time[0]
         self.stype = layers.ltype[0]
 
         # set initial albedo based on surface type
-        self.albedo_dict = {'snow':eb_prms.albedo_fresh_snow,
-                            'firn':eb_prms.albedo_firn,
-                            'ice':eb_prms.albedo_ice}
+        self.albedo_dict = {'snow':prms.albedo_fresh_snow,
+                            'firn':prms.albedo_firn,
+                            'ice':prms.albedo_ice}
         self.bba = self.albedo_dict[self.stype]
         self.albedo = [self.bba]
         self.vis_a = 1
@@ -43,23 +48,23 @@ class Surface():
         # get shading df and initialize surrounding albedo
         self.shading_df = pd.read_csv(args.shading_fp,index_col=0)
         self.shading_df.index = pd.to_datetime(self.shading_df.index)
-        self.albedo_surr = eb_prms.albedo_fresh_snow
+        self.albedo_surr = prms.albedo_fresh_snow
 
         # output spectral albedo 
-        if eb_prms.store_bands:
+        if prms.store_bands:
             bands = np.arange(0,480).astype(str)
             self.albedo_df = pd.DataFrame(np.zeros((0,480)),columns=bands)
 
         # update the underlying ice spectrum
-        clean_ice = pd.read_csv(eb_prms.clean_ice_fp,names=[''])
+        clean_ice = pd.read_csv(prms.clean_ice_fp,names=[''])
         # albedo of the base spectrum is in the filename
-        albedo_string = eb_prms.clean_ice_fp.split('bba')[-1].split('.')[0]
+        albedo_string = prms.clean_ice_fp.split('bba')[-1].split('.')[0]
         bba = int(albedo_string) / (10 ** len(albedo_string))
         # scale the new spectrum by the ice albedo
-        ice_point_spectrum = clean_ice * eb_prms.albedo_ice / bba
+        ice_point_spectrum = clean_ice * prms.albedo_ice / bba
         # name file for ice spectrum
-        clean_ice_fn = eb_prms.clean_ice_fp.split('/')[-1]
-        self.ice_spectrum_fp = eb_prms.clean_ice_fp.replace(clean_ice_fn,f'gulkana{args.site}_ice_spectrum_{args.task_id}.csv')
+        clean_ice_fn = prms.clean_ice_fp.split('/')[-1]
+        self.ice_spectrum_fp = prms.clean_ice_fp.replace(clean_ice_fn,f'gulkana{args.site}_ice_spectrum_{args.task_id}.csv')
         # store new spectrum
         df_spectrum = pd.DataFrame(ice_point_spectrum)
         df_spectrum.to_csv(self.ice_spectrum_fp, index=False, header=False)
@@ -78,58 +83,62 @@ class Surface():
             except:
                 self.reset_SNICAR(self.snicar_fn)
         else:
-            self.snicar_fn = eb_prms.snicar_input_fp
+            self.snicar_fn = prms.snicar_input_fp
 
         # need some initial value for cloud cover
         self.tcc = 0.5
         return
     
-    def daily_updates(self,layers,airtemp,surftemp,time):
+    def daily_updates(self,layers,airtemp,surftemp,timestamp):
         """
-        Updates daily-evolving surface properties (grain size,
-        surface type and days since snowfall)
+        Updates daily-evolving surface properties (grain
+        size, surface type and days since snowfall)
 
         Parameters
         ----------
         layers
-            class object from pygem_eb.layers
-        time : pd.Datetime
-            current timestep
+            Class object from pebsi.layers
+        airtemp : float 
+            Air temperature [C]
+        surftemp : float
+            Surface temperature [C]
+        timestamp : pd.Datetime
+            Current timestep
         """
         self.stype = layers.ltype[0]
         if self.args.switch_melt == 2 and layers.nlayers > 2:
             layers.get_grain_size(airtemp,surftemp)
-        self.days_since_snowfall = (time - self.snow_timestamp)/pd.Timedelta(days=1)
-        self.get_surr_albedo(layers,time)
+        self.days_since_snowfall = (timestamp - self.snow_timestamp)/pd.Timedelta(days=1)
+        self.get_surr_albedo(layers,timestamp)
         return
     
     def get_surftemp(self,enbal,layers):
         """
-        Solves energy balance equation for surface temperature. 
-        Qm = SWnet + LWnet + Qs + Ql + Qp + Qg
+        Iteratively solves energy balance equation
+        for the surface temperature.
         
         There are three cases:
-        (1) LWout data is input : surftemp is derived from data
-        (2) Qm is positive with surftemp = 0. : excess Qm is used 
-                to warm layers to the melting point or melt layers,
-                depending on layer temperatures
-        (3) Qm is negative with surftemp = 0. : snowpack is cooling
-                and surftemp is lowered to balance Qm. Two methods 
-                are available (specified in input.py): 
-                        - iterative (fast)
-                        - minimization (slow) 
+        (1) LWout data is input
+                surftemp is derived from data
+        (2) Qm is positive with surftemp = 0. 
+                excess Qm is used to warm layers to the
+                melting point or melt layers, depending 
+                on layer temperatures
+        (3) Qm is negative with surftemp = 0.
+                snowpack is cooling and surftemp is 
+                lowered to balance Qm
         
         Parameters
         ----------
         enbal
-            class object from pygem_eb.energybalance
+            Class object from pebsi.energybalance
         layers
-            class object from pygem_eb.layers
+            Class object from pebsi.layers
         """
         # CONSTANTS
-        STEFAN_BOLTZMANN = eb_prms.sigma_SB
-        HEAT_CAPACITY_ICE = eb_prms.Cp_ice
-        dt = eb_prms.dt
+        STEFAN_BOLTZMANN = prms.sigma_SB
+        HEAT_CAPACITY_ICE = prms.Cp_ice
+        dt = prms.dt
 
         if not enbal.nanLWout:
             # CASE (1): surftemp from LW data
@@ -159,15 +168,15 @@ class Surface():
                         layers.ltemp[0] = 0.
 
                         # if that layer will be fully melted, warm the lower layer
-                        if Qm*dt/eb_prms.Lh_rf > layers.lice[0] and layers.ltemp[1] < 0.:
-                            leftover = Qm*dt/eb_prms.Lh_rf - layers.lice[0]
+                        if Qm*dt/prms.Lh_rf > layers.lice[0] and layers.ltemp[1] < 0.:
+                            leftover = Qm*dt/prms.Lh_rf - layers.lice[0]
                             layers.ltemp[1] += leftover*dt/(HEAT_CAPACITY_ICE*layers.lice[1])
                     else:
                         Qm = 0
 
             elif cooling:
                 # CASE (3): Energy away from surface
-                if eb_prms.method_cooling in ['minimize']:
+                if prms.method_cooling in ['minimize']:
                     # run minimization on EB function
                     result = minimize(enbal.surface_EB,self.stemp,
                                       method='L-BFGS-B',bounds=((-60,0),),tol=1e-3,
@@ -179,7 +188,7 @@ class Surface():
                     else:
                         self.stemp = result.x[0]
 
-                elif eb_prms.method_cooling in ['iterative']:
+                elif prms.method_cooling in ['iterative']:
                     # loop to iteratively calculate surftemp
                     loop = True
                     n_iters = 0
@@ -218,23 +227,26 @@ class Surface():
         self.tcc = enbal.tcc
         return
 
-    def get_albedo(self,layers,time):
+    def get_albedo(self,layers,timestamp):
         """
-        Checks switches and gets albedo from corresponding method. If LAPs or grain size
-        are tracked, albedo comes from SNICAR, otherwise it is parameterized by surface
-        type or surface age.
+        Checks switches and gets albedo with the correct
+        method. If LAPs or grain size are tracked, albedo
+        comes from SNICAR, otherwise it is parameterized 
+        by surface type or surface age.
         
         Parameters
         ----------
         layers
-            class object from pygem_eb.layers
+            Class object from pebsi.layers
+        timestamp : pd.Datetime
+            Current timestep
         """
         args = self.args
 
         # CONSTANTS
-        ALBEDO_FIRN = eb_prms.albedo_firn
-        ALBEDO_FRESH_SNOW = eb_prms.albedo_fresh_snow
-        DEG_RATE = eb_prms.albedo_deg_rate
+        ALBEDO_FIRN = prms.albedo_firn
+        ALBEDO_FRESH_SNOW = prms.albedo_fresh_snow
+        DEG_RATE = prms.albedo_deg_rate
         
         # update surface type
         self.stype = layers.ltype[0]
@@ -248,7 +260,7 @@ class Surface():
                     self.bba = self.albedo
                 elif args.switch_LAPs == 1:
                     # LAPs ON, GRAIN SIZE OFF
-                    albedo,sw = self.run_SNICAR(layers,time,override_grainsize=True)
+                    albedo,sw = self.run_SNICAR(layers,timestamp,override_grainsize=True)
                     self.albedo = albedo
                     self.spectral_weights = sw
             elif args.switch_melt == 1:
@@ -260,25 +272,25 @@ class Surface():
             elif args.switch_melt == 2:
                 if args.switch_LAPs == 0:
                     # LAPs OFF, GRAIN SIZE ON
-                    albedo,sw = self.run_SNICAR(layers,time,override_LAPs=True)
+                    albedo,sw = self.run_SNICAR(layers,timestamp,override_LAPs=True)
                     self.albedo = albedo
                     self.spectral_weights = sw
                 elif args.switch_LAPs == 1:
                     # LAPs ON, GRAIN SIZE ON
-                    self.albedo,self.spectral_weights = self.run_SNICAR(layers,time)
+                    self.albedo,self.spectral_weights = self.run_SNICAR(layers,timestamp)
         else:
             self.albedo = self.albedo_dict[self.stype]
             self.bba = self.albedo
         if '__iter__' not in dir(self.albedo):
             self.albedo = [self.albedo]
 
-        if eb_prms.store_bands:
+        if prms.store_bands:
             if '__iter__' not in dir(self.albedo):
                 self.albedo = np.ones(480) * self.albedo
-            self.albedo_df.loc[time] = self.albedo.copy()
+            self.albedo_df.loc[timestamp] = self.albedo.copy()
         return 
     
-    def run_SNICAR(self,layers,time,nlayers=None,max_depth=None,
+    def run_SNICAR(self,layers,timestamp,nlayers=None,max_depth=None,
                   override_grainsize=False,override_LAPs=False):
         """
         Runs SNICAR model to retrieve broadband albedo. 
@@ -286,35 +298,39 @@ class Surface():
         Parameters
         ----------
         layers
-            class object from pygem_eb.layers
+            Class object from pebsi.layers
         nlayers : int
-            Number of layers to include in the calculation
+            Number of layers to include in the 
+            calculation
         max_depth : float
-            Maximum depth of layers to include in the calculation
+            Maximum depth of layers to include 
+            in the calculation
             ** Specify nlayers OR max_depth **
         override_grainsize : Bool
-            If True, use constant average grainsize specified in input.py
+            If True, use constant average grainsize 
+            specified in input.py
         override_LAPs: Bool
-            If True, use constant LAP concentrations specified in input.py
+            If True, use constant LAP concentrations 
+            specified in input.py
 
         Returns
         -------
         albedo : np.ndarray
-            Array containing spectral albedo
+            Spectral albedo
         spectral_weights : np.ndarray
-            Array containing weights of each spectral band
+            Wights of each spectral band
         """
         with HiddenPrints():
             from biosnicar import get_albedo
         get_albedo.input_fp = self.snicar_fn
 
         # CONSTANTS
-        AVG_GRAINSIZE = eb_prms.average_grainsize
-        DIFFUSE_CLOUD_LIMIT = eb_prms.diffuse_cloud_limit
-        DENSITY_FIRN = eb_prms.density_firn
+        AVG_GRAINSIZE = prms.average_grainsize
+        DIFFUSE_CLOUD_LIMIT = prms.diffuse_cloud_limit
+        DENSITY_FIRN = prms.density_firn
 
         # determine if lighting conditions are diffuse
-        time_2024 = pd.to_datetime(str(time).replace(str(time.year),'2024'))
+        time_2024 = pd.to_datetime(str(timestamp).replace(str(timestamp.year),'2024'))
         point_shade = bool(self.shading_df.loc[time_2024,'shaded'])
         diffuse_conditions = self.tcc > DIFFUSE_CLOUD_LIMIT or point_shade
 
@@ -345,11 +361,11 @@ class Surface():
         # convert LAPs from mass to concentration in ppb
         BC = layers.lBC[idx] / layers.lheight[idx] * 1e6
         OC = layers.lOC[idx] / layers.lheight[idx] * 1e6
-        dust1 = layers.ldust[idx] / layers.lheight[idx] * 1e6 * eb_prms.ratio_DU_bin1
-        dust2 = layers.ldust[idx] / layers.lheight[idx] * 1e6 * eb_prms.ratio_DU_bin2
-        dust3 = layers.ldust[idx] / layers.lheight[idx] * 1e6 * eb_prms.ratio_DU_bin3
-        dust4 = layers.ldust[idx] / layers.lheight[idx] * 1e6 * eb_prms.ratio_DU_bin4
-        dust5 = layers.ldust[idx] / layers.lheight[idx] * 1e6 * eb_prms.ratio_DU_bin5
+        dust1 = layers.ldust[idx] / layers.lheight[idx] * 1e6 * prms.ratio_DU_bin1
+        dust2 = layers.ldust[idx] / layers.lheight[idx] * 1e6 * prms.ratio_DU_bin2
+        dust3 = layers.ldust[idx] / layers.lheight[idx] * 1e6 * prms.ratio_DU_bin3
+        dust4 = layers.ldust[idx] / layers.lheight[idx] * 1e6 * prms.ratio_DU_bin4
+        dust5 = layers.ldust[idx] / layers.lheight[idx] * 1e6 * prms.ratio_DU_bin5
 
         # convert arrays to lists for making input file
         lBC = (BC.astype(float)).tolist()
@@ -364,9 +380,9 @@ class Surface():
         if override_grainsize:
             lgrainsize = [AVG_GRAINSIZE for _ in idx]
         if override_LAPs:
-            lBC = [eb_prms.BC_freshsnow*1e6 for _ in idx]
-            lOC = [eb_prms.OC_freshsnow*1e6 for _ in idx]
-            ldust1 = np.array([eb_prms.dust_freshsnow*1e6 for _ in idx]).tolist()
+            lBC = [prms.BC_freshsnow*1e6 for _ in idx]
+            lOC = [prms.OC_freshsnow*1e6 for _ in idx]
+            ldust1 = np.array([prms.dust_freshsnow*1e6 for _ in idx]).tolist()
             ldust2 = ldust1.copy()
             ldust3 = ldust1.copy()
             ldust4 = ldust1.copy()
@@ -393,7 +409,7 @@ class Surface():
         list_doc['ICE']['DZ'] = lheight
         list_doc['ICE']['RHO'] = ldensity
         list_doc['ICE']['RDS'] = lgrainsize
-        if eb_prms.include_LWC_SNICAR:
+        if prms.include_LWC_SNICAR:
             list_doc['ICE']['LAYER_TYPE'][0] = 4
             list_doc['ICE']['LWC'] = lwater.tolist()
         else:
@@ -403,7 +419,7 @@ class Surface():
         ice_variables = ['LAYER_TYPE','SHP','HEX_SIDE','HEX_LENGTH',
                          'SHP_FCTR','WATER_COATING','AR','CDOM']
         # option to change shape in inputs
-        list_doc['ICE']['SHP'][0] = eb_prms.grainshape_SNICAR
+        list_doc['ICE']['SHP'][0] = prms.grainshape_SNICAR
         for var in ice_variables:
             list_doc['ICE'][var] = [list_doc['ICE'][var][0]] * nlayers
 
@@ -413,7 +429,7 @@ class Surface():
         # solar zenith angle
         lat = self.climate.lat
         lon = self.climate.lon
-        time_UTC = time - self.args.timezone
+        time_UTC = timestamp - self.args.timezone
         altitude_angle = suncalc.get_position(time_UTC,lon,lat)['altitude']
         zenith = 180/np.pi * (np.pi/2 - altitude_angle) if altitude_angle > 0 else 89
         # zenith = np.round(zenith / 10) * 10
@@ -432,27 +448,51 @@ class Surface():
         self.bba = np.sum(albedo * spectral_weights) / np.sum(spectral_weights)
         
         # calculate visible albedo
-        assert len(albedo) == len(eb_prms.wvs)
-        vis_idx = np.where((eb_prms.wvs <= 0.75) & (eb_prms.wvs >= 0.4))[0]
+        assert len(albedo) == len(prms.wvs)
+        vis_idx = np.where((prms.wvs <= 0.75) & (prms.wvs >= 0.4))[0]
         self.vis_a = np.sum(albedo[vis_idx] * spectral_weights[vis_idx]) / np.sum(spectral_weights[vis_idx])
         return albedo,spectral_weights
     
     def reset_SNICAR(self,fp):
+        """
+        Checks if SNICAR inputs file is functional.
+        If not, generates a new one from a default
+        file which is never updated.
+
+        Parameters
+        ----------
+        fp : str
+            Filepath to the inputs.yaml file
+        """
         # remove old file if it exists
         if os.path.exists(fp):
             os.remove(fp)
         # open the base inputs file
-        with open(eb_prms.snicar_input_fp, 'rb') as src_file:
+        with open(prms.snicar_input_fp, 'rb') as src_file:
             file_contents = src_file.read()
         # copy the base inputs file to fp
         with open(fp, 'wb') as dest_file:
             dest_file.write(file_contents)
+        return
     
-    def get_surr_albedo(self,layers,time):
-        ALBEDO_GROUND = eb_prms.albedo_ground
-        ALBEDO_SNOW = eb_prms.albedo_fresh_snow
+    def get_surr_albedo(self,layers,timestamp):
+        """
+        Calculates surrounding albedo by scaling between
+        ground albedo and fresh snow albedo using
+        the current percentage of the maximum annual 
+        snowfall as a proxy.
+
+        Parameters
+        ----------
+        layers
+            Class object from pebsi.layers
+        time : pd.Timestamp
+            Current timestep
+        """
+        ALBEDO_GROUND = prms.albedo_ground
+        ALBEDO_SNOW = prms.albedo_fresh_snow
         # reset max snowdepth yearly
-        if time.month + time.day + time.hour < 1:
+        if timestamp.month + timestamp.day + timestamp.hour < 1:
             layers.max_snow = 0
         # check if max_snow has been exceeded
         current_snow = np.sum(layers.lice[layers.snow_idx])

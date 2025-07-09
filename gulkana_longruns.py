@@ -13,8 +13,8 @@ from multiprocessing import Pool
 import pandas as pd
 # Internal libraries
 import run_simulation as sim
-import pygem_eb.massbalance as mb
-import pygem_eb.input as eb_prms
+import pebsi.massbalance as mb
+import pebsi.input as eb_prms
 
 # User info
 use_AWS = False

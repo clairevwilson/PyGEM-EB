@@ -8,9 +8,9 @@ import xarray as xr
 
 # ========== USER OPTIONS ========== 
 glac_no = '01.00570'    # RGI glacier ID
-use_AWS = False         # Use AWS data?
+use_AWS = True          # Use AWS data?
 debug = False           # Print monthly model status?
-store_data = True       # Save data?
+store_data = False      # Save data?
 
 # ========== DIRECTORIES AND FILEPATHS ========== 
 machine = socket.gethostname()

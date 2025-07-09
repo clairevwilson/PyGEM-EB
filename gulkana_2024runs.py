@@ -13,8 +13,8 @@ import pandas as pd
 from multiprocessing import Pool
 # Internal libraries
 import run_simulation as sim
-import pygem_eb.massbalance as mb
-import pygem_eb.input as eb_prms
+import pebsi.massbalance as mb
+import pebsi.input as eb_prms
 
 # User info
 sites = ['AB','ABB','B','BD','D','T'] # Sites to run in parallel     

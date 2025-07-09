@@ -18,9 +18,9 @@ import pickle
 import pandas as pd
 import xarray as xr
 # Internal libraries
-import pygem_eb.input as eb_prms
 import run_simulation as sim
-import pygem_eb.massbalance as mb
+import pebsi.input as eb_prms
+import pebsi.massbalance as mb
 from objectives import *
 
 # Read command line args
@@ -44,7 +44,7 @@ result_dict = {'base':{},'kp':{},'Boone_c5':{},'lapserate':{},
                'roughness_ice':{},'albedo_ground':{},
                'ksp_BC':{},'ksp_OC':{},'ksp_dust':{}}
 
-def model_run(name):
+def model_run(name,climate,args):
     # Name the run
     args.out = name
     print(name.split())
@@ -62,74 +62,69 @@ def model_run(name):
     timer = time.time() - start
     print(f'Time elapsed: {timer:.0f} seconds')
 
-# model_run('base_')
+model_run('base_',climate,args)
 
-# # SENSITIVITY
-# args.kp = 1
-# model_run('kp_-20_')
-# args.kp = 3
-# model_run('kp_+20_')
-# args.kp = 2
+# SENSITIVITY
+args.kp = 1
+model_run('kp_-20_',climate,args)
+args.kp = 3
+model_run('kp_+20_',climate,args)
+args.kp = 2
 
-# args.Boone_c5 = 0.018
-# model_run('Boone-c5_-20_')
-# args.Boone_c5 = 0.03
-# model_run('Boone-c5_+20_')
-# args.Boone_c5 = 0.022
+args.Boone_c5 = 0.018
+model_run('Boone-c5_-20_',climate,args)
+args.Boone_c5 = 0.03
+model_run('Boone-c5_+20_',climate,args)
+args.Boone_c5 = 0.022
 
 # eb_prms.lapserate = -0.0055
 climate,args = sim.initialize_model(args.glac_no,args)
-model_run('lapserate_-20_')
-print(np.mean(climate.cds.temp.values))
+model_run('lapserate_-20_',climate,args)
 eb_prms.lapserate = -0.007
 climate,args = sim.initialize_model(args.glac_no,args)
-model_run('lapserate_+20_')
-print(np.mean(climate.cds.temp.values))
+model_run('lapserate_+20_',climate,args)
 eb_prms.lapserate = -0.0065
 climate,args = sim.initialize_model(args.glac_no,args)
-print('back to normal lapse rate',np.mean(climate.cds.temp.values))
 
 eb_prms.roughness_fresh_snow = 0.1
-model_run('roughness-fresh-snow_-20_')
+model_run('roughness-fresh-snow_-20_',climate,args)
 eb_prms.roughness_fresh_snow = 2
-model_run('roughness-fresh-snow_+20_')
+model_run('roughness-fresh-snow_+20_',climate,args)
 eb_prms.roughness_fresh_snow = 0.24
 
 eb_prms.roughness_aged_snow = 5
-model_run('roughness-aged-snow_-20_')
+model_run('roughness-aged-snow_-20_',climate,args)
 eb_prms.roughness_aged_snow = 20
-model_run('roughness-aged-snow_+20_')
+model_run('roughness-aged-snow_+20_',climate,args)
 eb_prms.roughness_aged_snow = 10
 
 eb_prms.roughness_ice = 10
-model_run('roughness-ice_-20_')
+model_run('roughness-ice_-20_',climate,args)
 eb_prms.roughness_ice = 40
-model_run('roughness-ice_+20_')
+model_run('roughness-ice_+20_',climate,args)
 eb_prms.roughness_ice = 20
 
 eb_prms.albedo_ground = 0.1
-model_run('albedo-ground_-20_')
+model_run('albedo-ground_-20_',climate,args)
 eb_prms.albedo_ground = 0.3
-model_run('albedo-ground_+20_')
+model_run('albedo-ground_+20_',climate,args)
 eb_prms.albedo_ground = 0.2
 
 eb_prms.ksp_BC = 0.1
-model_run('ksp-BC_-20_')
+model_run('ksp-BC_-20_',climate,args)
 eb_prms.ksp_BC = 1.2
-model_run('ksp-BC_+20_')
+model_run('ksp-BC_+20_',climate,args)
 eb_prms.ksp_BC = 0.9
 
 eb_prms.ksp_OC = 0.1
-model_run('ksp-OC_-20_')
+model_run('ksp-OC_-20_',climate,args)
 eb_prms.ksp_OC = 1.2
-model_run('ksp-OC_+20_')
+model_run('ksp-OC_+20_',climate,args)
 eb_prms.ksp_OC = 0.9
 
 eb_prms.ksp_dust = 0.001
-model_run('ksp-dust_-20_')
+model_run('ksp-dust_-20_',climate,args)
 eb_prms.ksp_dust = 0.1
-model_run('ksp-dust_+20_')
+model_run('ksp-dust_+20_',climate,args)
 
-with open(eb_prms.output_filepath+'sensitivity_test.pkl', 'wb') as f:
-    pickle.dump(result_dict, f)
-    print('Done! Saved to ',eb_prms.output_filepath+'sensitivity_test.pkl')
+print('Done!')

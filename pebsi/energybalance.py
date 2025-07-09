@@ -1,5 +1,9 @@
 """
-Energy balance class for ****MODEL NAME****
+Energy balance class for PEBSI
+
+Loads climate variables for each timestep
+and calculates the surface energy balance
+from individual heat fluxes.
 
 @author: clairevwilson
 """
@@ -8,31 +12,32 @@ import pandas as pd
 import numpy as np
 import suncalc
 # Local libraries
-import pygem_eb.input as eb_prms
+import pebsi.input as prms
 
 class energyBalance():
     """
-    Energy balance scheme that calculates the surface energy balance
-    and penetrating shortwave radiation. This class is updated within
-    MassBalance every timestep, so it stores the current climate data and 
-    surface fluxes.
+    Energy balance scheme that calculates the surface 
+    energy balance and penetrating shortwave radiation. 
+    This class is updated within main() every timestep, 
+    so it stores the climate data and surface fluxes 
+    for a single timestep.
     """ 
-    def __init__(self,climate,time,dt,args):
+    def __init__(self,climate,timestamp,args):
         """
-        Loads in the climate data at a given timestep to use in the surface energy balance.
+        Loads in the climate data at a given timestep 
+        to use in the surface energy balance.
 
         Parameters
         ----------
         climateds : xr.Dataset
-            Climate dataset containing temperature, precipitation, pressure, wind speed,
-            shortwave radiation, and total cloud cover.
-        local_time : datetime
-            Time to index the climate dataset.
-        dt : float
-            Resolution for the time loop [s]
+            Climate dataset containing meteorological
+            inputs (temperature, wind speed, etc.)
+        timestamp : pd.Datetime
+            Timestamp to index the climate dataset.
+        args : command-line arguments
         """
         # unpack climate variables
-        climateds_now = climate.cds.sel(time=time)
+        climateds_now = climate.cds.sel(time=timestamp)
         self.tempC = climateds_now['temp'].values
         self.tp = climateds_now['tp'].values
         self.sp = climateds_now['sp'].values
@@ -52,9 +57,13 @@ class energyBalance():
         self.dustdry = climateds_now['dustdry'].values
         self.dustwet = climateds_now['dustwet'].values
 
+        # time
+        self.timestamp = timestamp
+        self.dt = prms.dt
+
         # store previous timestep incoming shortwave
-        if time != pd.to_datetime(climate.cds.time.values[0]):
-            self.last_SWin_ds = climate.cds.sel(time=time - pd.Timedelta(seconds=dt))['SWin'].values
+        if timestamp != pd.to_datetime(climate.cds.time.values[0]):
+            self.last_SWin_ds = climate.cds.sel(time=timestamp - pd.Timedelta(seconds=self.dt))['SWin'].values
         else:
             self.last_SWin_ds = self.SWin_ds
 
@@ -66,17 +75,12 @@ class energyBalance():
         self.tempK = self.tempC + 273.15
         self.prec =  self.tp / 3600     # tp is hourly total precip, prec is the rate in m/s
         self.rh = 100 if self.rh > 100 else self.rh
-        
-        # time
-        self.time = time
-        self.dt = dt
 
         # adjust wind speed
-        self.wind *= float(eb_prms.wind_factor)
+        self.wind *= float(prms.wind_factor)
 
         # radiation terms
         self.measured_SWin = 'SWin' in climate.measured_vars
-        self.nanSWin = True if np.isnan(self.SWin_ds) else False
         self.nanLWin = True if np.isnan(self.LWin_ds) else False
         self.nanSWout = True if np.isnan(self.SWout_ds) else False
         self.nanLWout = True if np.isnan(self.LWout_ds) else False
@@ -84,33 +88,36 @@ class energyBalance():
         self.nanalbedo = True if np.isnan(self.albedo_ds) else False
         return
 
-    def surface_EB(self,surftemp,layers,surface,days_since_snowfall,mode='sum'):
+    def surface_EB(self,surftemp,layers,surface,
+                   days_since_snowfall,mode='sum'):
         """
-        Calculates the surface heat fluxes for the current timestep.
+        Calculates the surface heat fluxes for the 
+        current timestep.
 
         Parameters
         ----------
         surftemp : float
-            Temperature of the surface snow in Celsius
+            Temperature of the surface snow [C]
         layers
-            class object from pygem_eb.layers
+            Class object from pebsi.layers
         surface : float
-            class object from pygem_eb.surface
+            Class object from pebsi.surface
         days_since_snowfall : int
             Number of days since fresh snowfall
-        method_turbulent : str
-            'MO-similarity', 'bulk-aerodynamic', or 'Richardson': 
-            determines method for calculating turbulent fluxes
         mode : str, default: 'sum'
-            'sum' to return sum of heat fluxes, 'list' to return separate fluxes,
-            'optim' to return absolute value of heat fluxes (needed for BFGS optimization)
+            Options: 'list', 'sum', or 'optim'
+            Return heat flux list, sum or absolute value
+            ('optim' is for BFGS optimization)
 
         Returns
         -------
         Qm : float OR np.ndarray
-            If mode is 'sum' or 'optim', returns the sum of heat fluxes
-            If mode is 'list', returns list in the order of 
-                    [SWin, SWout, LWin, LWout, sensible, latent, rain, ground]
+            Using mode 'sum' or 'optim':
+                Returns the sum of heat fluxes
+            Using mode 'list':
+                Returns list in the order of:
+                [SWin, SWout, LWin, LWout, 
+                 sensible, latent, rain, ground]
         """
         # SHORTWAVE RADIATION  (Snet)
         SWin,SWout = self.get_SW(surface)
@@ -125,7 +132,7 @@ class energyBalance():
         self.LWout = LWout[0] if '__iter__' in dir(LWout) else LWout
 
         # NET RADIATION
-        if self.nanNR and not self.nanSWin:
+        if self.nanNR:
             NR = Snet_surf + Lnet
             self.NR = NR
         else:
@@ -141,7 +148,7 @@ class energyBalance():
         self.ground = Qg[0] if '__iter__' in dir(Qg) else Qg
 
         # TURBULENT FLUXES (Qs and Ql)
-        roughness = self.get_roughness(days_since_snowfall,layers.ltype)
+        roughness = self.get_roughness(days_since_snowfall,layers)
         Qs, Ql = self.get_turbulent(surftemp,roughness)
         self.sens = Qs[0] if '__iter__' in dir(Qs) else Qs
         self.lat = Ql[0] if '__iter__' in dir(Qs) else Ql
@@ -160,14 +167,17 @@ class energyBalance():
     
     def get_SW(self,surface):
         """
-        Simplest parameterization for shortwave radiation which
-        adjusts it by modeled spectral albedo. Returns the shortwave
-        surface flux and the penetrating shortwave for each layer.
+        Calculates incoming and outgoing shortwave heat
+        flux accounting for:
+        - Slope factor for direct radiation
+        - Fraction of sky diffuse radiation
+        - Shading
+        - Terrain-reflected diffuse radiation
         
         Parameters
         ----------
         surface
-            class object from surface.py
+            Class object from pebsi.surface
         """
         # CONSTANTS
         SKY_VIEW = self.args.sky_view
@@ -182,7 +192,7 @@ class energyBalance():
         assert np.abs(1-np.sum(spectral_weights)) < 1e-5, 'Solar weights dont sum to 1'
 
         # get solar position
-        time_UTC = self.time - self.args.timezone
+        time_UTC = self.timestamp - self.args.timezone
         sunpos = suncalc.get_position(time_UTC,LON,LAT)
         # suncalc gives azimuth with 0 = South, we want 0 = North
         SUN_AZ = sunpos['azimuth'] + np.pi     # solar azimuth angle
@@ -221,7 +231,7 @@ class energyBalance():
             SWin_direct *= slope_correction
 
             # correct for shade
-            time_str = str(self.time).replace(str(self.time.year),'2024')
+            time_str = str(self.timestamp).replace(str(self.timestamp.year),'2024')
             time_2024 = pd.to_datetime(time_str)
             self.shade = bool(surface.shading_df.loc[time_2024,'shaded'])
 
@@ -252,19 +262,21 @@ class energyBalance():
 
     def get_LW(self,surftemp):
         """
-        If not input in climate data, scheme follows Klok and 
-        Oerlemans (2002) for calculating net longwave radiation 
-        from the air temperature and cloud cover.
+        Calculates incoming and outgoing longwave heat
+        flux. If not input in climate data, scheme follows 
+        Klok and Oerlemans (2002) for calculating net 
+        longwave radiation from the air temperature
+        and cloud cover.
         
         Parameters
         ----------
         surftemp : float
-            Surface temperature of snowpack/ice [C]
+            Surface temperature of snow/ice [C]
         """
         if self.nanLWout:
             # calculate LWout frmo surftemp
             surftempK = surftemp+273.15
-            LWout = -eb_prms.sigma_SB*surftempK**4
+            LWout = -prms.sigma_SB*surftempK**4
         else:
             # take LWout from data
             LWout = -self.LWout_ds/self.dt
@@ -275,7 +287,7 @@ class energyBalance():
             Ecs = .23+ .433*(ezt/self.tempK)**(1/8)  # clear-sky emissivity
             Ecl = 0.984               # cloud emissivity, Klok and Oerlemans, 2002
             Esky = Ecs*(1-self.tcc**2)+Ecl*self.tcc**2    # sky emissivity
-            LWin = eb_prms.sigma_SB*(Esky*self.tempK**4)
+            LWin = prms.sigma_SB*(Esky*self.tempK**4)
         elif not self.nanLWin:
             # take LWin from data
             LWin = self.LWin_ds/self.dt
@@ -287,7 +299,8 @@ class energyBalance():
     
     def get_rain(self,surftemp):
         """
-        Calculates amount of energy supplied by precipitation that falls as rain.
+        Calculates amount of energy supplied by
+        precipitation that falls as rain.
         
         Parameters
         ----------
@@ -295,10 +308,10 @@ class energyBalance():
             Surface temperature of snowpack/ice [C]
         """
         # CONSTANTS
-        SNOW_THRESHOLD_LOW = eb_prms.snow_threshold_low
-        SNOW_THRESHOLD_HIGH = eb_prms.snow_threshold_high
-        DENSITY_WATER = eb_prms.density_water
-        CP_WATER = eb_prms.Cp_water
+        SNOW_THRESHOLD_LOW = prms.snow_threshold_low
+        SNOW_THRESHOLD_HIGH = prms.snow_threshold_high
+        DENSITY_WATER = prms.density_water
+        CP_WATER = prms.Cp_water
 
         # define rain vs snow scaling
         rain_scale = np.linspace(0,1,20)
@@ -317,42 +330,43 @@ class energyBalance():
     
     def get_ground(self,surftemp):
         """
-        Calculates amount of energy supplied by heat conduction from the temperate ice.
+        Calculates amount of energy supplied to the surface
+        by heat conduction from the temperate ice.
         
         Parameters
         ----------
         surftemp : float
-            Surface temperature of snowpack/ice [C]
+            Surface temperature of snow/ice [C]
         """
         # calculate ground flux from surface temperature
-        K_ICE = eb_prms.k_ice
-        if eb_prms.method_ground in ['MolgHardy']:
-            Qg = -K_ICE * (surftemp - eb_prms.temp_temp) / eb_prms.temp_depth
+        K_ICE = prms.k_ice
+        if prms.method_ground in ['MolgHardy']:
+            Qg = -K_ICE * (surftemp - prms.temp_temp) / prms.temp_depth
         else:
             assert 1==0, 'Ground flux method not accepted; choose from [\'MolgHardy\']'
         return Qg
     
     def get_turbulent(self,surftemp,roughness):
         """
-        Calculates turbulent fluxes (sensible and latent heat) based on 
-        Monin-Obukhov Similarity Theory or Bulk Richardson number, 
-        both requiring iteration.
-        Follows COSIPY.
+        Calculates turbulent (sensible and latent heat)
+        fluxes based on Monin-Obukhov Similarity Theory 
+        or Bulk Richardson number, both requiring 
+        iteration.
 
         Parameters
         ----------
         surftemp : float
-            Surface temperature of snowpack/ice [C]
+            Surface temperature of snow/ice [C]
         roughness : float
             Surface roughness [m]
         """
         # CONSTANTS
-        KARMAN = eb_prms.karman
-        GRAVITY = eb_prms.gravity
-        R_GAS = eb_prms.R_gas
-        MM_AIR = eb_prms.molarmass_air
-        CP_AIR = eb_prms.Cp_air
-        WIND_REF_Z = eb_prms.wind_ref_height
+        KARMAN = prms.karman
+        GRAVITY = prms.gravity
+        R_GAS = prms.R_gas
+        MM_AIR = prms.molarmass_air
+        CP_AIR = prms.Cp_air
+        WIND_REF_Z = prms.wind_ref_height
         SLOPE = self.args.slope * np.pi/180
 
         # ROUGHNESS LENGTHS
@@ -362,7 +376,7 @@ class energyBalance():
 
         # adjust wind speed to reference height
         z = 2 # reference height in m
-        if eb_prms.wind_ref_height != 2:
+        if prms.wind_ref_height != 2:
             wind_2m *= np.log(2/roughness) / np.log(WIND_REF_Z/roughness)
         else:
             wind_2m = self.wind
@@ -378,16 +392,16 @@ class energyBalance():
 
         # latent heat term depends on direction of heat exchange
         if surftemp == 0. and (qz-q0) > 0:
-            Lv = eb_prms.Lv_evap
+            Lv = prms.Lv_evap
         else:
-            Lv = eb_prms.Lv_sub 
+            Lv = prms.Lv_sub 
 
         # initiate loop
         loop = True
         counter = 0
         L = 0
         Qs_last = np.inf
-        if eb_prms.method_turbulent in ['MO-similarity']:
+        if prms.method_turbulent in ['MO-similarity']:
             while loop:
                 # calculate stability terms
                 fric_vel = KARMAN*wind_2m / (np.log(z/z0)-self.PhiM(z,L))
@@ -414,7 +428,7 @@ class energyBalance():
                         print('Turbulent fluxes didnt converge; Qs still changing by',diff)
 
                 Qs_last = Qs
-        elif eb_prms.method_turbulent in ['BulkRichardson']:
+        elif prms.method_turbulent in ['BulkRichardson']:
             # calculate Richardson number
             if wind_2m != 0:
                 RICHARDSON = GRAVITY/self.tempK*(self.tempC-surftemp)*(z-z0)/wind_2m**2
@@ -440,13 +454,22 @@ class energyBalance():
         return Qs, Ql
     
     def get_dry_deposition(self, layers):
+        """
+        Adds dry deposition of light-absorbing particles
+        to the surface layer.
+
+        Parameters
+        ----------
+        layers
+            Class object from pebsi.layers
+        """
         # CONSTANTS
-        BC_RATIO = eb_prms.ratio_BC2_BCtot
-        OC_RATIO = eb_prms.ratio_OC2_OCtot
-        DUST_RATIO = eb_prms.ratio_DU3_DUtot
+        BC_RATIO = prms.ratio_BC2_BCtot
+        OC_RATIO = prms.ratio_OC2_OCtot
+        DUST_RATIO = prms.ratio_DU3_DUtot
         
         # switch runs have no LAPs
-        if eb_prms.switch_LAPs == 0:
+        if prms.switch_LAPs == 0:
             self.bcdry = 0
             self.ocdry = 0
             self.dustdry = 0
@@ -456,28 +479,31 @@ class energyBalance():
             layers.lBC[0] += self.bcdry * self.dt * BC_RATIO
             layers.lOC[0] += self.ocdry * self.dt * OC_RATIO
             layers.ldust[0] += self.dustdry * self.dt * DUST_RATIO
-        return 
+        return
     
-    def get_roughness(self,days_since_snowfall,layertype):
+    def get_roughness(self,days_since_snowfall,layers):
         """
-        Function to determine the roughness length of the surface. This assumes the roughness of snow
-        linearly degrades with time in 60 days from that of fresh snow to firn.
+        Function to determine the roughness length of the
+        surface. This assumes the roughness of snow
+        linearly degrades with time in 60 days from that 
+        of fresh snow to firn.
 
         Parameters
         ----------
         days_since_snowfall : int
             Number of days since fresh snow occurred
-        layertype : np.ndarray
-            List of layer types to determine surface roughness
+        layers
+            Class object from pebsi.layers
         """
         # CONSTANTS
-        ROUGHNESS_FRESH_SNOW = eb_prms.roughness_fresh_snow
-        ROUGHNESS_AGED_SNOW = eb_prms.roughness_aged_snow
-        ROUGHNESS_FIRN = eb_prms.roughness_firn
-        ROUGHNESS_ICE = eb_prms.roughness_ice
-        AGING_RATE = eb_prms.roughness_aging_rate
+        ROUGHNESS_FRESH_SNOW = prms.roughness_fresh_snow
+        ROUGHNESS_AGED_SNOW = prms.roughness_aged_snow
+        ROUGHNESS_FIRN = prms.roughness_firn
+        ROUGHNESS_ICE = prms.roughness_ice
+        AGING_RATE = prms.roughness_aging_rate
 
         # determine roughness from surface type
+        layertype = layers.ltype
         if layertype[0] in ['snow']:
             sigma = min(ROUGHNESS_FRESH_SNOW + AGING_RATE * days_since_snowfall, ROUGHNESS_AGED_SNOW)
         elif layertype[0] in ['firn']:
@@ -486,9 +512,9 @@ class energyBalance():
             sigma = ROUGHNESS_ICE
         return sigma/1000
     
-    def vapor_pressure(self,T,method = 'ARM'):
+    def vapor_pressure(self,T,method='ARM'):
         """
-        Returns vapor pressure in Pa from temperature in Celsius
+        Calculates vapor pressure [Pa] from temperature 
 
         Parameters
         ----------
@@ -508,14 +534,14 @@ class energyBalance():
 
     def diffuse_fraction(self,rad_glob,solar_zenith):
         """
-        Determines the fraction shortwave radiation that is diffuse 
-        using an empirical formulation from the clearness index, 
-        which is the ratio of horizontal global radiation to 
-        potential (extraterrestrial) radiation.
+        Determines the fraction shortwave radiation 
+        that is diffuse using an empirical formulation 
+        from the clearness index, which is the ratio of 
+        horizontal global radiation to potential 
+        (extraterrestrial) radiation.
 
-        Based on Wohlfahrt (2016) Appendix C (10.1016/j.agrformet.2016.05.012)
-
-        This approach uses data calibrated at Neustift station (Austria).
+        Based on Wohlfahrt (2016) Appendix C 
+        (10.1016/j.agrformet.2016.05.012)
 
         Parameters
         ----------
@@ -532,7 +558,7 @@ class energyBalance():
         P4 = 0.2465
 
         # calculate potential (extraterrestrial) shortwave radiation
-        doy = self.time.day_of_year
+        doy = self.timestamp.day_of_year
         rad_pot = SOLAR_CONSTANT*(1+0.033*np.cos(2*np.pi*doy/366))*np.cos(solar_zenith)
 
         # determine clearness index
@@ -545,7 +571,6 @@ class energyBalance():
             diffuse_fraction = np.exp(-np.exp(P1-(P2-P3*CI)))*(1-P4)+P4
         return diffuse_fraction
 
- 
     def stable_PhiM(self,z,L):
         zeta = z/L
         if zeta > 1:

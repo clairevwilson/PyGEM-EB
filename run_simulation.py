@@ -18,9 +18,9 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 # Internal libraries
-import pygem_eb.input as eb_prms
-import pygem_eb.climate as climutils
-import pygem_eb.massbalance as mb
+import pebsi.input as eb_prms
+import pebsi.climate as climutils
+import pebsi.massbalance as mb
 from shading.shading import Shading
 
 # START TIMER
@@ -232,7 +232,12 @@ def check_inputs(glac_no, args):
     # load the metadata for the glacier
     args.timezone = pd.Timedelta(hours=int(all_df.loc[glac_no,'timezone']))
     args.glac_name = all_df.loc[glac_no,'name']
-    args.AWS_fn = eb_prms.AWS_fp + all_df.loc[glac_no,'AWS_fn']
+    
+    # load AWS filepath for test glacier or general case
+    if args.glac_name == 'test':
+        args.AWS_fn = all_df.loc[glac_no,'AWS_fn']
+    else:
+        args.AWS_fn = eb_prms.AWS_fp + all_df.loc[glac_no,'AWS_fn']
 
     # specify filepaths to args
     args.shading_fp = eb_prms.shading_fp.replace('GLACIER',args.glac_name).replace('SITE',args.site)
@@ -253,9 +258,11 @@ def check_inputs(glac_no, args):
     if args.dates_from_data:
         cdf = pd.read_csv(args.AWS_fn,index_col=0)
         cdf.index = pd.to_datetime(cdf.index)
+
         # take start and end time from the climate dataframe
         startdate = pd.to_datetime(cdf.index[0])
         enddate = pd.to_datetime(cdf.index.to_numpy()[-1])
+
         # have to offset by 30 minutes for MERRA-2
         if eb_prms.reanalysis == 'MERRA2' and startdate.minute != 30:
             startdate += pd.Timedelta(minutes=30)
@@ -292,6 +299,7 @@ def initialize_model(glac_no,args):
     # ===== GET GLACIER CLIMATE =====
     # initialize the climate class
     climate = climutils.Climate(args)
+
     # load in available AWS data, then reanalysis
     if args.use_AWS:
         need_vars = climate.get_AWS(args.AWS_fn)
@@ -299,6 +307,7 @@ def initialize_model(glac_no,args):
             climate.get_reanalysis(need_vars)
     else:
         climate.get_reanalysis(climate.all_vars)
+
     # check the climate dataset is ready to go
     climate.check_ds()
 
