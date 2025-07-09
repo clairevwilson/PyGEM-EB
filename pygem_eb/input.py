@@ -10,7 +10,7 @@ import xarray as xr
 glac_no = '01.00570'    # RGI glacier ID
 use_AWS = False         # Use AWS data?
 debug = False           # Print monthly model status?
-store_data = False      # Save data?
+store_data = True       # Save data?
 
 # ========== DIRECTORIES AND FILEPATHS ========== 
 machine = socket.gethostname()
@@ -22,7 +22,7 @@ AWS_fp = '../climate_data/AWS/'                             # Weather station da
 # SNICAR
 grainsize_fp = 'data/grainsize/drygrainsize(SSAin=##).nc'   # Grain size evolution lookup table filepath
 snicar_input_fp = 'biosnicar-py/biosnicar/inputs.yaml'      # SNICAR input filepath
-clean_ice_fp = 'biosnicar-py/Data/OP_data/480band/r_sfc/gulkana_cleanice_avg_bba3732.csv' # Ice spectra filepath
+clean_ice_fp = 'biosnicar-py/Data/OP_data/480band/r_sfc/gulkana_cleanice_avg_bba3732.csv' # Ice spectrum filepath
 # INITIAL CONDITIONS
 initial_temp_fp = 'data/sample_initial_temp.csv'            # Initial temperature profile filepath
 initial_density_fp = 'data/sample_initial_density.csv'      # Initial density profile filepath
@@ -35,7 +35,7 @@ shading_fp = 'data/by_glacier/GLACIER/shade/GLACIERSITE_shade.csv'# Generalized 
 bias_fp = 'data/bias_adjustment/METHOD_VAR.csv'             # Generalized bias adjustment filepath
 climate_fp = '../climate_data/'                             # Climate data filepath
 # OUTPUT
-output_filepath = '../Output/'                           # Output filepath
+output_filepath = '../Output/'                              # Output filepath
 albedo_out_fp = '../Output/EB/albedo.csv'                   # Output spectral albedo filepath
 
 # ========== CLIMATE AND TIME INPUTS ========== 
@@ -50,10 +50,10 @@ bias_vars = ['wind','SWin','temp','rh']     # Vars to correct by quantile mappin
     
 # ========== MODEL OPTIONS ========== 
 # INITIALIATION
-initialize_temp = 'ripe'            # 'interpolate' or 'ripe'
-initialize_density = 'constant'     # 'interpolate' or 'constant'
+initialize_temp = 'interpolate'     # 'interpolate' or 'ripe'
+initialize_density = 'interpolate'  # 'interpolate' or 'constant'
 initialize_LAPs = 'clean'           # 'interpolate' or 'clean' 
-initialize_water = 'saturated'      # 'dry' or 'saturated'
+initialize_water = 'dry'            # 'dry' or 'saturated'
 surftemp_guess =  -10               # guess for surface temperature of first timestep [C]
 initial_snow_depth = 1              # default amount of initial snow [m]
 initial_firn_depth = 0              # default amount of initial firn [m]
@@ -164,7 +164,7 @@ include_LWC_SNICAR = False  # Include liquid water in SNICAR? (slush)
 grainshape_SNICAR = 0       # 0: sphere, 1: spheroid, 2: hexagonal plate, 3: koch snowflake, 4: hexagonal prisms
 # <<<<<< Constants for switch runs >>>>>
 albedo_deg_rate = 15        # Rate of exponential decay of albedo
-average_grainsize = 1000    # Grainsize to treat as constant if switch_melt is 0 [um]
+average_grainsize = 300     # Grainsize to treat as constant if switch_melt is 0 [um]
 albedo_fresh_snow = 0.85    # Albedo of fresh snow for exponential method [-] (Moelg et al. 2012, TC)
 albedo_firn = 0.5           # Albedo of firn [-]
 # <<<<<< BC and dust >>>>>

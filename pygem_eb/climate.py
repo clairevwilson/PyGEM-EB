@@ -147,6 +147,7 @@ class Climate():
             elif vwind_measured:
                 self.cds['uwind'].values = np.zeros(self.n_time)
                 need_vars.remove('uwind')
+        self.need_vars = need_vars
         return need_vars
     
     def get_reanalysis(self,vars):
@@ -157,7 +158,6 @@ class Climate():
         dates = self.dates_UTC
         lat = self.lat
         lon = self.lon
-        self.need_vars = vars
         use_threads = self.args.use_threads
         
         # interpolate data if time was input on the hour instead of half-hour

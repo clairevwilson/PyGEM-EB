@@ -8,6 +8,8 @@ mean_squared_error = lambda model,data: np.mean(np.square(model - data))
 
 mpl.style.use('seaborn-v0_8-white')
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color'] 
+all_colors = ['#63c4c7','#fcc02e','#4D559C','#60C252','#BF1F6A',
+              '#F77808','#298282','#999999','#FF89B0','#427801']
 glac_props = {'01.00570':{'name':'Gulkana',
                             'AWS_fn':'gulkana1725_hourly.csv'},
             '01.01104':{'name':'Lemon Creek',
@@ -146,28 +148,33 @@ def simple_plot(ds,time,vars,res='d',t='',cumMB=True,
         plt.savefig(save_fig,dpi=150)
     return fig, axes
 
-def plot_hours(ds,time,vars,skinny=True,t='Hourly EB Outputs'):
-    h = 1.5 if skinny else 3
+def plot_hours(ds,vars,skinny=False,time=False):
+    h = 1.5 if skinny else 2
     fig,axes = plt.subplots(len(vars),1,figsize=(7,h*len(vars)),sharex=True,layout='constrained')
     ds['hour'] = (['time'],pd.to_datetime(ds['time'].values).hour)
 
-    if len(time) == 2:
+    if not time:
+        start = ds.time.values[0]
+        end = ds.time.values[-1]
+        time = pd.date_range(start,end,freq='h')
+    elif len(time) == 2:
         start = pd.to_datetime(time[0])
         end = pd.to_datetime(time[1])
         time = pd.date_range(start,end,freq='h')
     ds = ds.sel(time=time)
-    c_iter = iter([plt.cm.Dark2(i) for i in range(8)])
+
     for i,v in enumerate(vars):
         if len(vars) > 1:
             axis = axes[i]
         else:
             axis = axes
         vararray = np.array(v)
-        for var in vararray:
+        c_iter = iter([all_colors[i] for i in range(8)])
+        for v,var in enumerate(vararray):
             try:
                 c = next(c_iter)
             except:
-                c_iter = iter([plt.cm.Dark2(i) for i in range(8)])
+                c_iter = iter([all_colors[v] for v in range(8)])
                 c = next(c_iter)
         
             var_hourly = []
@@ -178,11 +185,20 @@ def plot_hours(ds,time,vars,skinny=True,t='Hourly EB Outputs'):
                 else:
                     vardata = ds_hour[var].to_numpy()
                 hourly_mean = np.mean(vardata)
+                if 'melt' in vararray or 'MB' in vararray:
+                    hourly_mean *= 1000
                 var_hourly.append(hourly_mean)
-            axis.plot(np.arange(24),var_hourly,label=var)
-            axis.legend()
+            axis.plot(np.arange(24),var_hourly,label=var,color=c)
+            ncols = 2 if len(vararray) > 4 else 1
+            axis.legend(ncols=ncols)
+            axis.set_xlim(0,23)
+            if 'SWnet' in vararray or 'SWin' in vararray:
+                axis.set_ylabel('Flux (W m$^{-2}$)')
+            elif 'melt' in vararray or 'MB' in vararray:
+                axis.set_ylabel('Mass balance (mm w.e.)')
+            elif 'surftemp' in vararray or 'airtemp' in vararray:
+                axis.set_ylabel('Temperature ($^{\circ}$C)')
     axis.set_xlabel('Hour of Day')
-    fig.suptitle(t)
 
 def dh_vs_stake(stake_df,ds_list,time,labels=['Model'],t='Surface Height Change Comparison'):
     """
@@ -1101,7 +1117,7 @@ def plot_layers(ds,vars,dates):
     return
 
 def visualize_layers(ds,dates,vars,force_layers=False,
-                     t='Visualization of Snow ',plot_ax=False,
+                     t='',plot_ax=False,
                      plot_firn=True,plot_ice=False,ylim=False,
                      colorbar=True):
     """
@@ -1217,7 +1233,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
             # leg.yaxis.set_label_coords(1.2,0)
             label = varprops[var]['label']+' ('+units[var]+')'
             # ax.set_ylabel(label,fontsize=10)
-            leg.set_label('Modeled\nt'+label[1:],rotation=270,labelpad=27,fontsize=12)
+            leg.set_label(label,rotation=270,labelpad=27,fontsize=12)
         ax.grid(axis='y')
         ax.tick_params(length=5)
         if ylim:
