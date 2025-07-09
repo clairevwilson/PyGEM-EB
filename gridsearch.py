@@ -110,7 +110,7 @@ if args.run_type == 'long':
         args.startdate = pd.to_datetime('2012-04-20 00:00:00')
 
 # Get the climate
-climate = sim.initialize_model(args.glac_no[0],args)
+climate, args = sim.initialize_model(args.glac_no,args)
 
 # Loop through parameters
 for kp in params['kp']:
@@ -176,7 +176,7 @@ def run_model_parallel(list_inputs):
                 massbal.output.add_basic_attrs(args,time_elapsed,climate)
 
             except Exception as e:
-                print('An error occurred at site',args.site,'with kw =',args.kw,'c5 =',args.Boone_c5,'kp =',args.kp,' ... removing',args.out)
+                print('An error occurred at site',args.site,'with c5 =',args.Boone_c5,'kp =',args.kp,' ... removing',args.out)
                 traceback.print_exc()
                 os.remove(eb_prms.output_filepath + args.out + '0.nc')
 

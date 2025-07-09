@@ -210,9 +210,6 @@ class massBalance():
             rain = enbal.tp*DENSITY_WATER
             snow = 0
         
-        # adjust snowfall by precipitation factor
-        snow *= float(self.args.kp)
-        
         return rain,snow  # kg m-2
 
     def subsurface_heating(self,layers,surface_SW):

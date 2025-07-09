@@ -460,11 +460,13 @@ def plot_pareto_heatmap(pareto_fronts, result_dict, error_names, bootstrap=True,
 
     y_pos = 1.0 + 0.08 * n_rows
     # fig.suptitle(f'Heatmap of {methodlabels[metric]} for Pareto front solutions', y=y_pos)
-    fig.supylabel(param_labels['c5'],x=-0.01)
-    fig.supxlabel(param_labels['kp'])
+    fig.supylabel(param_labels['c5'],x=-0.01, fontsize=12)
+    if len(axes) > 1:
+        axes[-2].set_xlabel(param_labels['kp'], fontsize=12)
+    axes[-1].set_xlabel(param_labels['kp'], fontsize=12)
 
     if bootstrap and legend:
-        cax = fig.add_axes([0.25,-0.03,0.5,0.03])
+        cax = fig.add_axes([0.25,-0.1,0.5,0.03])
         cmap = mpl.colormaps['Grays']
         norm =  mpl.colors.Normalize(vmin=0,vmax=5)
         boundaries = [1,2,3,4,5]
@@ -478,6 +480,7 @@ def plot_pareto_heatmap(pareto_fronts, result_dict, error_names, bootstrap=True,
         cax.axis('off')
         cax.text(1.1, -2.7, 'Less frequent')
         cax.text(5.1, -2.7, 'More frequent')
+        cax.set_title('Pareto fronts')
 
     if savefig:
         plt.savefig(base_fp+f'pareto_params_heatmap_{metric}_site{site}_{error_names[-1]}.png',dpi=180,bbox_inches='tight')
@@ -1161,34 +1164,31 @@ def plot_best_2024(best, result_dict, savefig=False):
     elev = {'AB':1542,'ABB':1608,'B':1682,'BD':1742,'D':1843,'T':1877}
     ylim = (-5,1)
     fig,axes = plt.subplots(1,6,figsize=(8,4),sharey=True,sharex=True,gridspec_kw={'wspace':0.2})
-    date = run_info['2024']['date']
-    idx = run_info['2024']['idx']
-    best_setno = result_dict['0.03'][best[1]]['B']['set_no']
-    best_runno = result_dict['0.03'][best[1]]['B']['run_no']
+    c5 = best[0]
+    kp = best[1]
+    s = pd.to_datetime('2024-04-20')
+    e = pd.to_datetime('2024-08-20')
     for i,site in enumerate(sitedict['2024']):
-        ds,s,e = getds(base_fp + f'{date}_{site}_{idx}/grid_{date}_set{best_setno}_run{best_runno}_0.nc')
-
-        axes[i] = plot_2024_mass_balance(ds,plot_ax=axes[i])
+        dates = result_dict[c5][kp][site]['dates']
+        axes[i].plot(dates, result_dict[c5][kp][site]['dh_meas'],label='Stake',linestyle='--',color='k')
+        axes[i].plot(dates, result_dict[c5][kp][site]['dh_mod'],label='Model',color=all_colors[0])
         axes[i].set_title(f'Site {site}',fontsize=12,y=1.05)
-        axes[i].text(pd.to_datetime('2024-04-20'),1.15,str(elev[site])+' m a.s.l.',fontsize=10)
-        axes[i].set_ylabel('')
+        axes[i].text(pd.to_datetime('2024-04-20'),1.15,str(elev[site])+' m a.s.l.',fontsize=10,transform=axes[i].transAxes)
         # direction = '' if error < 0 else '+'
         # text = f'{direction}{error:.3f} m'
         # axes[i].text(enddate-pd.Timedelta(days=80),0.9,text,fontsize=10)
-        
-        axes[i].get_legend().remove()
-        axes[i].set_xlim(s,e)
-        axes[i].set_xticks(pd.date_range(s,e,freq='2MS'))
+        axes[i].set_xlim(dates[0],dates[-1])
+        axes[i].set_xticks(pd.date_range(s, e,freq='2MS'))
         axes[i].tick_params(labelsize=10,direction='inout',length=8)
         axes[i].minorticks_on()
         axes[i].tick_params(which='minor', direction='in', length=4)
         axes[i].set_xticklabels(['May 1','Jul 1'])
+        axes[i].xaxis.set_major_formatter(mpl.dates.DateFormatter('%b %d'))
         axes[i].xaxis.set_minor_locator(mpl.dates.MonthLocator(interval=1))
         twinax = axes[i].twinx()
         if site not in ['ABB','BD']:
-            mbmod,mbmeas = cumulative_mass_balance(ds,out='mbs')
-            mod = twinax.scatter(e,mbmod,color='red',marker='x',s=100)
-            meas = twinax.scatter(e,mbmeas,color='red',marker='o',facecolors='none',s=100)
+            mod = twinax.scatter(dates[-1],result_dict[c5][kp][site]['mb2024_mod'],color='red',marker='x',s=100)
+            meas = twinax.scatter(dates[-1],result_dict[c5][kp][site]['mb2024_meas'],color='red',marker='o',facecolors='none',s=100)
             meas.set_clip_on(False)
             mod.set_clip_on(False)
         twinax.set_ylim(ylim)
@@ -1214,6 +1214,113 @@ def plot_best_2024(best, result_dict, savefig=False):
     if savefig:
         plt.savefig(base_fp + f'best_2024_mb.png',bbox_inches='tight',dpi=300)
     plt.show()
+
+def plot_best_2024_dh(best, result_dict, savefig=False):
+    elev = {'AB':1542,'ABB':1608,'B':1682,'BD':1742,'D':1843,'T':1877}
+    ylim = (-5,1)
+    fig,axes = plt.subplots(1,6,figsize=(8,4),sharey=True,sharex=True,gridspec_kw={'wspace':0.2})
+    c5 = best[0]
+    kp = best[1]
+    s = pd.to_datetime('2024-04-20')
+    e = pd.to_datetime('2024-08-20')
+    for i,site in enumerate(sitedict['2024']):
+        # ds,s,e = getds(base_fp + f'{date}_{site}_{idx}/grid_{date}_set{best_setno}_run{best_runno}_0.nc')
+        # axes[i] = plot_2024_mass_balance(ds,plot_ax=axes[i])
+        dates = result_dict[c5][kp][site]['dates']
+        axes[i].plot(dates, result_dict[c5][kp][site]['dh_meas'],label='Stake',linestyle='--',color='k')
+        axes[i].plot(dates, result_dict[c5][kp][site]['dh_mod'],label='Model',color=all_colors[0])
+        axes[i].set_title(f'Site {site}',fontsize=12,y=1.05)
+        axes[i].text(pd.to_datetime('2024-04-20'),1.15,str(elev[site])+' m a.s.l.',fontsize=10)
+        
+        axes[i].set_xlim(s,e)
+        axes[i].set_xticks(pd.date_range(s,e,freq='2MS'))
+        axes[i].tick_params(labelsize=10,direction='inout',length=8)
+        axes[i].minorticks_on()
+        axes[i].tick_params(which='minor', direction='in', length=4)
+        axes[i].set_xticklabels(['May 1','Jul 1'])
+        axes[i].xaxis.set_minor_locator(mpl.dates.MonthLocator(interval=1))
+    for ax in axes:
+        ax.set_xlim(pd.to_datetime('2024-04-20'),pd.to_datetime('2024-08-20'))
+        ax.set_ylim((ylim))
+    axes[0].set_ylabel('Surface height change (m)',fontsize=12)
+    l1, = axes[-1].plot(np.nan,np.nan,color=all_colors[0])
+    l2, = axes[-1].plot(np.nan,np.nan,color='black',linestyle='--')
+    l3, = axes[-1].plot(np.nan,np.nan,color='gray',linestyle=':')
+    leg = fig.legend([l1,l2,l3],['Model','GNSS-IR','Banded Stake'],ncols=3,fontsize=10,bbox_to_anchor=(0.7,0.05))
+    leg.get_frame().set_facecolor('white')
+    leg.get_frame().set_alpha(1)
+    if savefig:
+        plt.savefig(base_fp + f'best_2024_dh.png',bbox_inches='tight',dpi=300)
+    plt.show()
+
+def plot_pareto_2024_dh(result_dict, all_pareto, best, savefig=False):
+    elev = {'AB':1542,'ABB':1608,'B':1682,'BD':1742,'D':1843,'T':1877}
+    ylim = (-5,1)
+    fig,all_axes = plt.subplots(2,6,figsize=(8,4),sharey='row',sharex='row',gridspec_kw={'wspace':0.2,'hspace':0.25},height_ratios=[1,0.3])
+    start = pd.to_datetime('2024-04-20')
+    end = pd.to_datetime('2024-08-20')
+    axes = all_axes[0, :]
+    axes_mb = all_axes[1, :]
+    for s,site in enumerate(sitedict['2024']):
+        ax = axes[s]
+        all_timeseries = {'dh':[], 'mb':[]}
+        for (c5,kp) in all_pareto:
+            dates_dh = result_dict[c5][kp][site]['dates']
+            dh_mod = result_dict[c5][kp][site]['dh_mod']
+            if site not in ['ABB','BD']:
+                mb_mod = result_dict[c5][kp][site]['mb2024_mod']
+                all_timeseries['mb'].append(mb_mod)
+            all_timeseries['dh'].append(dh_mod)
+        min_series = np.min(np.array(all_timeseries['dh']), axis=0)
+        max_series = np.max(np.array(all_timeseries['dh']), axis=0)
+        dh_best =  result_dict[best[0]][best[1]][site]['dh_mod']
+        dh_data = result_dict[best[0]][best[1]][site]['dh_meas']
+        ax.plot(dates_dh, dh_data, color='black',linestyle='--', linewidth=1.2,label='Observations')
+        ax.plot(dates_dh, dh_best, color='k', linewidth=1.5, label='Best parameters')
+        ax.fill_between(dates_dh, min_series, max_series, alpha=0.8, color='gray', label='Pareto fronts')
+        ax.tick_params(labelsize=10,direction='inout',length=8)
+        ax.set_xlim(start, end)
+        ax.set_title(site+'\n'+str(elev[site])+' m a.s.l.', y=1.01)
+        ax.set_ylim(-4,1)
+        ax.set_xticks(pd.date_range(start, end, freq='2MS'))
+        ax.tick_params(labelsize=10,direction='inout',length=8)
+        ax.minorticks_on()
+        ax.tick_params(which='minor', direction='in', length=4)
+        ax.set_xticklabels(['May 1','Jul 1'])
+        ax.xaxis.set_minor_locator(mpl.dates.MonthLocator(interval=1))
+
+        ax = axes_mb[s]
+        if site not in ['ABB','BD']:
+            mb_meas = result_dict[c5][kp][site]['mb2024_meas']
+            print(site,mb_meas)
+            ax.set_xlim(2,4)
+            # ax.set_ylim(-3,0)
+            ax.set_yticks([-4,-2,0])
+            ax.tick_params(length=5)
+            ax.fill_between([0,5], np.min(all_timeseries['mb']),  np.max(all_timeseries['mb']), alpha=0.8, color='gray', label='Pareto fronts')
+            # ax.boxplot(all_timeseries['mb'], positions=[3], widths=[1], notch=True, 
+            #                    boxprops=dict(facecolor='gray',alpha=0.8),patch_artist=True)
+            ax.axhline(mb_meas,0,5, color='black',linestyle='--', linewidth=1.2) 
+            ax.axhline(result_dict[best[0]][best[1]][site]['mb2024_mod'],0,5, color='black',linewidth=1.5) 
+
+    for ax in axes_mb:
+        ax.set_xticks([])
+        ax.set_xticklabels([])
+    fig.suptitle('Site name',y=1.04)
+    axes[0].set_ylabel('Surface height change (m)',fontsize=12)
+    l1, = axes[-1].plot(np.nan,np.nan,color='black')
+    l2, = axes[-1].plot(np.nan,np.nan,color='black',linestyle='--')
+    l3 = axes[-1].fill_between([start,end], np.nan, np.nan, alpha=0.8, color='gray')
+    leg = fig.legend([l2,l1,l3],['Observations','Best parameters','Pareto fronts'],ncols=3,fontsize=12,bbox_to_anchor=(0.8,0.1))
+    leg.get_frame().set_facecolor('white')
+    leg.get_frame().set_alpha(1)
+
+    axes_mb[0].set_ylabel('Mass balance\n(m w.e.)',fontsize=12)
+
+    if savefig:
+        plt.savefig(base_fp + f'pareto_2024_dh.png',bbox_inches='tight',dpi=300)
+    plt.show()
+
 
 def plot_best_snowpits(best, result_dict, years=range(2014,2019), 
                         plot_diff=True, savefig=False):
@@ -1619,15 +1726,22 @@ def compare_calib_valid(error_list, all_calib, all_valid, savefig=False):
     plt.show()
 
 def plot_sensitivity(sens_dict,savefig=False):
-    label_dict = {'kp':'Precipitation\nfactor (-)','Boone_c5':'Densification\nparameter (-)','lapserate':'Temperature lapse\nrate (K/km)',
-                'rfz_grainsize':'Refrozen\ngrain size ($\mu m$)','roughness_rate':'Roughness\ndecay rate (mm/day)',
-                'roughness_ice':'Ice\nroughness (mm)','albedo_ground':'Ground\nalbedo (-)', # 'diffuse_cloud_limit':'Cloudy\nthreshold (-)',
-                'ksp_BC':'Solubility\ncoefficient of BC (-)','ksp_OC':'Solubility\ncoefficient of OC (-)','ksp_dust':'Solubility\ncoefficient of dust (-)',
-                'roughness_fresh_snow':'Fresh snow\nroughness (mm)', 'roughness_aged_snow':'Aged snow\nroughness (mm)'}
+    label_dict = {'kp':{'label':'Precipitation\nfactor (-)','high':3,'low':1},
+                    'Boone_c5':{'label':'Densification\nparameter (-)','high':0.03,'low':0.018},
+                    'lapserate':{'label':'Temperature lapse\nrate (K/km)','high':-7,'low':-5.5},
+                    # 'rfz_grainsize':{'label':'Refrozen\ngrain size ($\mu m$)','high':val,'low':val},
+                    # 'roughness_rate':{'label':'Roughness\ndecay rate (mm/day)','high':val,'low':val},
+                    'roughness_ice':{'label':'Ice\nroughness (mm)','high':40,'low':10},
+                    'albedo_ground':{'label':'Ground\nalbedo (-)','high':0.3,'low':0.1}, 
+                    # 'diffuse_cloud_limit':'Cloudy\nthreshold (-)',
+                    'ksp_BC':{'label':'Solubility\ncoefficient of BC (-)','high':1.2,'low':0.1},
+                    'ksp_OC':{'label':'Solubility\ncoefficient of OC (-)','high':1.2,'low':0.1},
+                    'ksp_dust':{'label':'Solubility\ncoefficient of dust (-)','high':0.1,'low':0.01},
+                    'roughness_fresh_snow':{'label':'Fresh snow\nroughness (mm)','high':2,'low':0.1},
+                    'roughness_aged_snow':{'label':'Aged snow\nroughness (mm)','high':20,'low':5}}
     base = sens_dict['base']['base']
-    base_low = sens_dict['kp']['-20']
 
-    fig, ax = plt.subplots(figsize=(4,3))
+    fig, axes = plt.subplots(2,1,figsize=(5,3))
     # colors = mpl.colormaps['Set3']
     colors = all_colors
 
@@ -1637,17 +1751,24 @@ def plot_sensitivity(sens_dict,savefig=False):
     for v, var in enumerate(sens_dict):
         if var in label_dict:
             vv += 1
-            compare = base # _low if var == 'roughness_ice' else base
-            point_50 = sens_dict[var]['-20'] - compare
-            point_200 = sens_dict[var]['+20'] - compare
-            x_50 = v - 0.2 -1
-            x_200 = v + 0.2 - 1
-            ax.bar(x_50, point_50, 0.3, align='center', color=colors[vv], hatch='///')
-            ax.bar(x_200, point_200, 0.3, align='center', color=colors[vv])
-            label = label_dict[var].replace('\n',' ')
-            all_names.append(label)
-            ax.axvline(x_200+0.3, color='k', linewidth=0.1)
+            for c,compare in enumerate(['mb','density']):
+                ax = axes[c] 
+                point_50 = sens_dict[var]['-20'][compare] - base[compare]
+                point_200 = sens_dict[var]['+20'][compare] - base[compare]
+                x_50 = v - 0.2 -1
+                x_200 = v + 0.2 - 1
+                ax.bar(x_50, point_50, 0.4, align='center', color=colors[vv], hatch='///')
+                ax.bar(x_200, point_200, 0.4, align='center', color=colors[vv])
+                label = label_dict[var]['label'].replace('\n',' ')
+                all_names.append(label)
+                ax.axvline(x_200+0.3, color='k', linewidth=0.1)
+                high = label_dict[var]['high']
+                low = label_dict[var]['low']
+                ax.text(v-1, 0.27, str(high),ha='center',va='center')
+                ax.text(v-1, -0.27, str(low),ha='center',va='center')
 
+    axes[0].set_ylim(-0.3,0.3)
+    axes[1].set_ylim(-100,100)
     ax.set_xticks(np.arange(len(sens_dict)-1)+0.3)
     ax.set_xticklabels(all_names, rotation=45, ha='right')
     ax.tick_params(axis='y',length=5)
@@ -1657,7 +1778,7 @@ def plot_sensitivity(sens_dict,savefig=False):
 
     ax.bar(np.nan, np.nan, np.nan, color='lightgray',hatch='///',label='Lower end')
     ax.bar(np.nan, np.nan, np.nan, color='lightgray', label='Upper end')
-    ax.legend(facecolor='white',frameon=True)
+    ax.legend(facecolor='white',frameon=True,bbox_to_anchor=(0.6,0.6))
 
     if savefig:
         plt.savefig(base_fp + 'sensitivity_analysis.png', dpi=200, bbox_inches='tight')
@@ -1746,13 +1867,22 @@ def find_precip_gradient():
             year_data = data.loc[data['Year'] == year]
             year_elev = year_data['elevation'].values[~np.isnan(year_data['bw'].values)]
             year_bw = year_data['bw'].values[~np.isnan(year_data['bw'].values)]
+            try:
+                year_B_bw = year_data.loc[year_data['site_name'] == 'B']['bw'].values
+                winter_abl_B =  year_data.loc[year_data['site_name'] == 'B']['winter_ablation'].values
+                winter_abl_B = 0 if np.isnan(winter_abl_B) else 0
+                year_acc_B = year_B_bw - winter_abl_B
+            except:
+                print('no site B for',year)
+                continue
             winter_abl = year_data['winter_ablation'].values[~np.isnan(year_data['bw'].values)]
             winter_abl[np.isnan(winter_abl)] = 0
             year_acc = year_bw - winter_abl
+            percentage_acc = year_acc / year_acc_B
             # gradient = np.sum(year_elev * year_acc) / np.sum(year_elev**2)
-            gradient ,b = np.polyfit(year_elev, year_acc, 1)
+            gradient ,b = np.polyfit(year_elev, percentage_acc , 1)
             if gradient > 0:
                 grads.append(gradient)
-                plt.scatter(year_elev, year_acc, color=colors(norm(year)))
+                plt.scatter(year_elev, percentage_acc, color=colors(norm(year)))
                 plt.plot(year_elev, year_elev * gradient+b, color=colors(norm(year)))
     return np.nanmean(grads)

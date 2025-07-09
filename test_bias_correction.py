@@ -53,7 +53,7 @@ for site in results:
             eb_prms.bias_vars = ['wind','SWin','temp','rh']
 
         # Get climate
-        climate = sim.initialize_model(args.glac_no[0],args)
+        climate, args = sim.initialize_model(args.glac_no,args)
 
         name = f'{site}_{climate_option}_'
         args.out = name

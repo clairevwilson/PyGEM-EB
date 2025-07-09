@@ -7,8 +7,8 @@ import pandas as pd
 import xarray as xr
 
 # ========== USER OPTIONS ========== 
-glac_no = '00.00000'    # RGI glacier ID
-use_AWS = True          # Use AWS data?
+glac_no = '01.00570'    # RGI glacier ID
+use_AWS = False         # Use AWS data?
 debug = False           # Print monthly model status?
 store_data = True       # Save data?
 
@@ -103,7 +103,7 @@ grainsize_ds = xr.open_dataset(grainsize_fp.replace('##',str(initSSA)))
 sky_view = 0.95             # Sky-view factor [-]
 wind_factor = 1             # Wind factor [-]
 kp = 2                      # Precipitation factor [-]
-precgrad = 0.000130         # Precipitation gradient with elevation [m-1]
+precgrad = 0.000129         # Precipitation gradient with elevation [m-1]
 lapserate = -0.0065         # Temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 albedo_ice = 0.47           # Ice albedo [-] 
 snow_threshold_low = 0.2    # Lower threshold for linear snow-rain scaling [C]
@@ -115,7 +115,7 @@ layer_growth = 0.5          # Rate of exponential growth of layer size (smaller 
 max_nlayers = 80            # Maximum number of vertical layers allowed (more layers --> larger file size)
 max_dz = 2                  # Max layer height
 mb_threshold = 0.1          # Threshold to consider not conserving mass (kg m-2 = mm w.e.)
-min_glacier_depth = 2       # Minimum depth to consider a glacier [m] (when there is less ice, the run ends)
+min_glacier_depth = 2       # Minimum ice depth to end the model run [m]
 # <<<<<< Boundary conditions >>>>>
 temp_temp = 0               # Temperature of temperate ice [C]
 temp_depth = 10             # Depth of temperate ice [m]

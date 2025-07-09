@@ -79,7 +79,7 @@ def pack_vars():
         args_run.task_id = run_no + n_runs_ahead*n_processes
 
         # Store model inputs
-        climate = sim.initialize_model(args_run.glac_no[0],args_run)
+        climate, args_run = sim.initialize_model(args_run.glac_no,args_run)
         packed_vars[run_no].append((args_run,climate,store_attrs))
 
         # Advance counter

@@ -45,6 +45,15 @@ class Climate():
         self.n_time = n_time
         self.elev = args.elev
 
+        # find median elevation of the glacier from RGI
+        RGI_region = args.glac_no.split('.')[0]
+        for fn in os.listdir(eb_prms.RGI_fp):
+            # open the attributes .csv for the correct region
+            if fn[:2] == RGI_region and fn[-3:] == 'csv':
+                RGI_df = pd.read_csv(eb_prms.RGI_fp + fn)
+                RGI_df.index = [f.split('-')[-1] for f in RGI_df['RGIId']]
+        self.median_elev = RGI_df.loc[args.glac_no,'Zmed']
+
         # define reanalysis variables
         self.get_vardict()
         self.all_vars = ['temp','tp','rh','uwind','vwind','sp','SWin','LWin',
@@ -190,8 +199,8 @@ class Climate():
                     ds = ds.sel(time=dates)
             
             # make sure the gridcell corrected is close enough to the glacier
-            assert np.abs(ds.coords[lat_vn].values - float(lat)) <= 0.5, 'Wrong grid cell accessed'
-            assert np.abs(ds.coords[lon_vn].values - float(lon)) <= 0.5, 'Wrong grid cell accessed'
+            assert np.abs(ds.coords[lat_vn].values - float(lat)) <= 0.5, 'Wrong grid cell was accessed'
+            assert np.abs(ds.coords[lon_vn].values - float(lon)) <= 0.5, 'Wrong grid cell was accessed'
 
             # store result
             result_dict[var] = ds.values.ravel()
@@ -237,6 +246,7 @@ class Climate():
         # CONSTANTS
         LAPSE_RATE = eb_prms.lapserate
         PREC_GRAD = eb_prms.precgrad
+        PREC_FACTOR = float(self.args.kp)
         GRAVITY = eb_prms.gravity
         R_GAS = eb_prms.R_gas
         MM_AIR = eb_prms.molarmass_air
@@ -249,8 +259,8 @@ class Climate():
             print('Reducing temperature for on-ice weather station')
             
         # PRECIP: correct according to precipitation gradient
-        tp_elev = self.AWS_elev if 'tp' in self.measured_vars else self.reanalysis_elev
-        new_tp = self.cds.tp.values*(1+PREC_GRAD*(self.elev-tp_elev))
+        tp_elev = self.median_elev
+        new_tp = self.cds.tp.values*PREC_FACTOR*(1+PREC_GRAD*(self.elev-tp_elev))
 
         # SURFACE PRESSURE: correct according to barometric law
         sp_elev = self.AWS_elev if 'sp' in self.measured_vars else self.reanalysis_elev
