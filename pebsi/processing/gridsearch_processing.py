@@ -2,7 +2,7 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import matplotlib.pyplot as plt
-from pygem_eb.processing.plotting_fxns import *
+from pebsi.processing.plotting_fxns import *
 from objectives import *
 import pickle
 import os
@@ -64,6 +64,8 @@ def get_any(result_dict,c5='0.018',kp='2',site='B',run_type='long'):
     else:
         date = run_info['long']['date']
         idx = run_info['long']['idx']
+    site = 'AU'
+    print(setno, runno)
     ds,_,_ = getds(f'/trace/group/rounce/cvwilson/Output/{date}_{site}_{idx}/grid_{date}_set{setno}_run{runno}_0.nc')
     return ds
 
@@ -97,7 +99,7 @@ def process_runs(run_type, sites):
     for site in sites:
         start_time = time.time()
         fp = base_fp+f'{date}_{site}_{idx}/'
-        for f in os.listdir(fp):
+        for f in ['grid_07_01_set52_run0_0.nc']: #os.listdir(fp):
             results = {}
             if '.nc' in f:
                 ds = xr.open_dataset(fp + f)
@@ -170,7 +172,10 @@ def process_runs(run_type, sites):
                 for attr in ds.attrs:
                     results[attr] = ds.attrs[attr]
 
+                # Write to new pickle file
                 f_pickle = f.replace('.nc','.pkl')
+                if os.path.exists(fp + f_pickle):
+                    os.remove(fp + f_pickle)
                 with open(fp + f_pickle, 'wb') as file:
                     pickle.dump(results, file)
         print('Completed site',site,'in',time.time() - start_time,'s')
@@ -239,7 +244,10 @@ def add_site_means(result_dict):
                             sites_error_dict[error_type].append(result_dict[c5][kp][site][error_type])
                     else:
                         for site in sitedict['long']:
-                            sites_error_dict[error_type].append(result_dict[c5][kp][site][error_type])
+                            try:
+                                sites_error_dict[error_type].append(result_dict[c5][kp][site][error_type])
+                            except:
+                                print(site, kp, c5, error_type)
                     if len(sites_error_dict[error_type]) > 0:
                         result_dict[c5][kp]['mean'][error_type] = np.mean(sites_error_dict[error_type])
                         result_dict[c5][kp]['median'][error_type] = np.median(sites_error_dict[error_type])
@@ -291,7 +299,7 @@ def get_result_dict(force_redo=False):
                         result_dict[c5][kp][site] = {}
                     # Add the 2024 error stats
                     for var in both_dict['2024'][c5][kp][site]:
-                        result_dict[c5][kp][site][var] = both_dict['2024'][c5][kp][site][var]
+                            result_dict[c5][kp][site][var] = both_dict['2024'][c5][kp][site][var]
     
     result_dict = add_site_means(result_dict)
     return result_dict

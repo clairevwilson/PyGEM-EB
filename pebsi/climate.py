@@ -57,7 +57,9 @@ class Climate():
 
         # find median elevation of the glacier from RGI
         RGI_region = args.glac_no.split('.')[0]
-        if float(RGI_region) > 0:
+        if args.glac_name == 'gulkana':
+            self.median_elev = 1682
+        elif float(RGI_region) > 0:
             for fn in os.listdir(prms.RGI_fp):
                 # open the attributes .csv for the correct region
                 if fn[:2] == RGI_region and fn[-3:] == 'csv':
@@ -246,7 +248,7 @@ class Climate():
                 thread.start()
                 threads.append(thread)
             else:
-                # gather data in series
+                # no threads, gather data in series
                 all_data = access_cell(fn,var,all_data)
         if use_threads:
             # join threads
@@ -277,7 +279,7 @@ class Climate():
             
         # PRECIP: correct according to precipitation gradient
         tp_elev = self.median_elev
-        new_tp = self.cds.tp.values*PREC_FACTOR*(1+PREC_GRAD*(self.elev-tp_elev))
+        new_tp = self.cds.tp.values*(1+PREC_GRAD*(self.elev-tp_elev))*PREC_FACTOR
 
         # SURFACE PRESSURE: correct according to barometric law
         sp_elev = self.AWS_elev if 'sp' in self.measured_vars else self.reanalysis_elev
@@ -308,11 +310,13 @@ class Climate():
         self.cds['winddir'].values = winddir
 
         if prms.reanalysis == 'MERRA2':
-            # correct other MERRA-2 variables
+            # correct MERRA-2 variables in inputs list
+            if self.args.debug and len(prms.bias_vars) > 0:
+                print('~ Applying quantile mapping for:',prms.bias_vars)
             for var in prms.bias_vars:
                 from_MERRA = True if not self.args.use_AWS else var in self.need_vars
                 if from_MERRA:
-                    self.bias_adjust_quantile(var)
+                    self.bias_adjust_qm(var)
 
         # adjust elevation dependent variables
         self.adjust_to_elevation()
@@ -343,6 +347,7 @@ class Climate():
             self.cds.to_netcdf(out_fp+'.nc')
             print('Climate dataset saved to',out_fp+'.nc')
         
+        # done getting climate
         time_elapsed = time.time()-self.start_time
         if self.args.debug:
             print(f'~ Loaded climate dataset in {time_elapsed:.1f} seconds ~')
@@ -426,7 +431,7 @@ class Climate():
         self.cds['bcwet'].values *= f
         return
     
-    def bias_adjust_quantile(self,var):
+    def bias_adjust_qm(self,var):
         """
         Applies preprocessed quantile mapping to
         a reanalysis climate variable.

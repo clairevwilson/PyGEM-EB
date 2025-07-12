@@ -21,8 +21,8 @@ else:
     pygem_fp = '/home/claire/research/PyGEM-EB/'
 sys.path.append(pygem_fp)
 from objectives import *
-from pygem_eb.processing.plotting_fxns import *
-import pygem_eb.processing.gridsearch_processing as gsproc
+from pebsi.processing.plotting_fxns import *
+import pebsi.processing.gridsearch_processing as gsproc
 
 # Create some dictionaries with useful information
 labels = {'kp':'Precipitation factor','kw':'Wind factor','c5':'Densification c$_5$'}      # Labels for the different parameters we varied
@@ -1129,17 +1129,18 @@ def plot_best_seasonal(best, result_dict, savefig=False, include_B=False):
         sites.remove('B')
         colors = colors[[0,1,3]]
 
-    date = run_info['long']['date']
-    idx = run_info['long']['idx']
-    best_setno = result_dict[best[0]][best[1]]['B']['set_no']
-    best_runno = result_dict[best[0]][best[1]]['B']['run_no']
 
     for ss,site in enumerate(sites):   
-        ds,s,e = getds(base_fp + f'{date}_{site}_{idx}/grid_{date}_set{best_setno}_run{best_runno}_0.nc')
-
         color = colors[ss]
-        axes[0] = plot_seasonal_mass_balance(ds,plot_ax=axes[0],plot_var='bw',color=color)
-        axes[1] = plot_seasonal_mass_balance(ds,plot_ax=axes[1],plot_var='bs',color=color)
+        years = result_dict[best[0]][best[1]][site]['years']
+        wmod = result_dict[best[0]][best[1]][site]['winter_mod']
+        wmeas = result_dict[best[0]][best[1]][site]['winter_meas']
+        smod = result_dict[best[0]][best[1]][site]['summer_mod']
+        smeas = result_dict[best[0]][best[1]][site]['summer_meas']
+        axes[0].plot(years, wmeas, color=color, linestyle='--')
+        axes[0].plot(years, wmod, color=color)
+        axes[1].plot(years, smeas, color=color, linestyle='--')
+        axes[1].plot(years, smod, color=color)
         dummy_site, = axes[1].plot(np.nan,np.nan,color=color)
         list_plots.append(dummy_site)
     dummy_model, = axes[1].plot(np.nan,np.nan,color='gray')
@@ -1151,8 +1152,9 @@ def plot_best_seasonal(best, result_dict, savefig=False, include_B=False):
     axes[0].set_ylim(-0.5,2.5)
     axes[1].set_ylim(-7,1)
     axes[1].set_yticks([0,-2,-4,-6])
-    for i in range(2):
-        axes[i].get_legend().remove()
+    axes[0].set_xlim(2001,2024)
+    axes[1].set_xlim(2001,2024)
+
     labels = ['Site '+sss for sss in sites]+['Modeled','Measured']
     fig.legend(list_plots,labels,bbox_to_anchor=(1.12,0.8),fontsize=10)
     fig.suptitle('Seasonal mass balance (m w.e.)',fontsize=12,y=0.96)

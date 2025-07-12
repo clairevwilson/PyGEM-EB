@@ -109,19 +109,18 @@ if args.run_type == 'long':
     elif args.site == 'AU':
         args.startdate = pd.to_datetime('2012-04-20 00:00:00')
 
-# Get the climate
-climate, args = sim.initialize_model(args.glac_no,args)
-
 # Loop through parameters
 for kp in params['kp']:
     for c5 in params['Boone_c5']:
-        # Get args for the current run
+        # Copy over args
         args_run = copy.deepcopy(args)
-        climate_run = copy.deepcopy(climate)
 
         # Set parameters
         args_run.Boone_c5 = c5
         args_run.kp = kp
+
+        # Get the climate
+        climate_run, args_run = sim.initialize_model(args_run.glac_no,args_run)
 
         # Set identifying output filename
         args_run.out = out_fp + f'grid_{date}_set{set_no}_run{run_no}_'
@@ -230,7 +229,7 @@ with Pool(n_processes) as processes_pool:
 missing = []
 for run in all_runs:
     fn = run[-1]
-    if not os.path.exists(eb_prms.output_filepath + fn + '0.pkl'):
+    if not os.path.exists(eb_prms.output_filepath + fn + '0.nc'):
         missing.append(run)
 n_missing = len(missing)
 

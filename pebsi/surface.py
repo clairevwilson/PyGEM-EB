@@ -432,7 +432,6 @@ class Surface():
         time_UTC = timestamp - self.args.timezone
         altitude_angle = suncalc.get_position(time_UTC,lon,lat)['altitude']
         zenith = 180/np.pi * (np.pi/2 - altitude_angle) if altitude_angle > 0 else 89
-        # zenith = np.round(zenith / 10) * 10
         list_doc['RTM']['SOLZEN'] = int(zenith)
         list_doc['RTM']['DIRECT'] = 0 if diffuse_conditions else 1
 

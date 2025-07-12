@@ -716,7 +716,7 @@ class Layers():
                 # dry metamorphism
                 drdrydt = []
                 for r,t,k,g in zip(dr0,tau,kap,grainsize):
-                    if t + g < FRESH_GRAINSIZE:
+                    if t + g <= FRESH_GRAINSIZE:
                         drdrydt.append(r*np.power(t/(t + 1e-6),1/k)/dt)
                     else:
                         drdrydt.append(r*np.power(t/(t + g - FRESH_GRAINSIZE),1/k)/dt)
