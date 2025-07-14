@@ -207,7 +207,7 @@ class massBalance():
             snow = 0
         
         # Adjust snow by precipitation factor
-        snow *= float(self.args.kp)
+        # snow *= float(self.args.kp)
         
         return rain,snow  # kg m-2
 

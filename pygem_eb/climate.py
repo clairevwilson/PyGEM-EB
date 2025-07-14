@@ -230,8 +230,9 @@ class Climate():
             print('Reducing temperature for on-ice weather station')
             
         # PRECIP: correct according to lapse rate
-        tp_elev = self.AWS_elev if 'tp' in self.measured_vars else self.reanalysis_elev
-        new_tp = self.cds.tp.values*(1+PREC_GRAD*(self.elev-tp_elev))
+        # tp_elev = self.AWS_elev if 'tp' in self.measured_vars else self.reanalysis_elev
+        tp_elev = 1858
+        new_tp = self.cds.tp.values*(1+PREC_GRAD*(self.elev-tp_elev))*self.args.kp
 
         # SURFACE PRESSURE: correct according to barometric law
         sp_elev = self.AWS_elev if 'sp' in self.measured_vars else self.reanalysis_elev
