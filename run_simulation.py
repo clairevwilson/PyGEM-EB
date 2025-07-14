@@ -135,7 +135,7 @@ def get_site_table(site_df, args):
             args.initial_snow_depth = site_df.loc[site,'snowdepth']
     if 'firndepth' in site_df.columns:
         if not np.isnan(site_df.loc[site,'firndepth']):
-            args.initial_snow_depth = site_df.loc[site,'firndepth']
+            args.initial_firn_depth = site_df.loc[site,'firndepth']
 
     # *****Special HARD-CODED handling for Gulkana*****
     if args.glac_name == 'gulkana' and args.site != 'center':
