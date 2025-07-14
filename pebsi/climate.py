@@ -57,9 +57,7 @@ class Climate():
 
         # find median elevation of the glacier from RGI
         RGI_region = args.glac_no.split('.')[0]
-        if args.glac_name == 'gulkana':
-            self.median_elev = 1682
-        elif float(RGI_region) > 0:
+        if float(RGI_region) > 0:
             for fn in os.listdir(prms.RGI_fp):
                 # open the attributes .csv for the correct region
                 if fn[:2] == RGI_region and fn[-3:] == 'csv':
@@ -343,7 +341,7 @@ class Climate():
 
         # store the dataset as a netCDF
         if prms.store_climate:
-            out_fp = prms.output_filepath + self.args.out + self.args.site + '_climate'
+            out_fp = prms.output_filepath + self.args.out + 'climate'
             self.cds.to_netcdf(out_fp+'.nc')
             print('Climate dataset saved to',out_fp+'.nc')
         

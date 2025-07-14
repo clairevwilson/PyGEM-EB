@@ -39,7 +39,7 @@ class Surface():
         # set initial albedo based on surface type
         self.albedo_dict = {'snow':prms.albedo_fresh_snow,
                             'firn':prms.albedo_firn,
-                            'ice':prms.albedo_ice}
+                            'ice':args.a_ice}
         self.bba = self.albedo_dict[self.stype]
         self.albedo = [self.bba]
         self.vis_a = 1
@@ -61,7 +61,7 @@ class Surface():
         albedo_string = prms.clean_ice_fp.split('bba')[-1].split('.')[0]
         bba = int(albedo_string) / (10 ** len(albedo_string))
         # scale the new spectrum by the ice albedo
-        ice_point_spectrum = clean_ice * prms.albedo_ice / bba
+        ice_point_spectrum = clean_ice * args.a_ice / bba
         # name file for ice spectrum
         clean_ice_fn = prms.clean_ice_fp.split('/')[-1]
         self.ice_spectrum_fp = prms.clean_ice_fp.replace(clean_ice_fn,f'gulkana{args.site}_ice_spectrum_{args.task_id}.csv')

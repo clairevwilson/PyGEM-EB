@@ -18,7 +18,7 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 # Internal libraries
-import pebsi.input as eb_prms
+import pebsi.input as prms
 from pebsi.climate import Climate
 from pebsi.massbalance import massBalance
 from shading.shading import Shading
@@ -39,59 +39,61 @@ def get_args(parse=True):
     parser = argparse.ArgumentParser(description='energy balance model runs')
     
     # GLACIER INFORMATION
-    parser.add_argument('-glac_no', action='store', default=eb_prms.glac_no,
+    parser.add_argument('-glac_no', action='store', default=prms.glac_no,
                         help='RGI glacier ID')
     parser.add_argument('-site',action='store',default='center',type=str,
                         help='Site name')
-    parser.add_argument('-s0','--initial_snow_depth',default=eb_prms.initial_snow_depth,
+    parser.add_argument('-s0','--initial_snow_depth',default=prms.initial_snow_depth,
                         help='Initial snow depth in m',action='store',type=float)
-    parser.add_argument('-f0','--initial_firn_depth',default=eb_prms.initial_firn_depth,
+    parser.add_argument('-f0','--initial_firn_depth',default=prms.initial_firn_depth,
                         help='Initial firn depth in m',action='store',type=float)
     
     # MODEL TIME
     parser.add_argument('-start','--startdate', action='store', type=str, 
-                        default=eb_prms.startdate,
+                        default=prms.startdate,
                         help='pass str like datetime of model run start')
     parser.add_argument('-end','--enddate', action='store', type=str,
-                        default=eb_prms.enddate,
+                        default=prms.enddate,
                         help='pass str like datetime of model run end')
     parser.add_argument('-dfd','--dates_from_data',action='store_true',
                         help='use dates from input AWS data?')
     
     # USER OPTIONS
     parser.add_argument('-use_AWS', action='store_true',
-                        default=eb_prms.use_AWS,help='use AWS or just reanalysis?')
+                        default=prms.use_AWS,help='use AWS or just reanalysis?')
     parser.add_argument('-use_threads', action='store_true',
                         help='use threading to import climate data?')
     parser.add_argument('-store_data', action='store_true',
-                        default=eb_prms.store_data, help='store the model output?')
+                        default=prms.store_data, help='store the model output?')
     parser.add_argument('-debug', action='store_true',
-                        default=eb_prms.debug, help='print debug statements?')
+                        default=prms.debug, help='print debug statements?')
     parser.add_argument('-out',action='store',type=str,default='',
                         help='output file name excluding extension (.nc)')
     
     # ALBEDO SWITCHES
     parser.add_argument('-switch_LAPs',action='store', type=int,
-                        default=eb_prms.switch_LAPs, help='')
+                        default=prms.switch_LAPs, help='')
     parser.add_argument('-switch_melt',action='store', type=int, 
-                        default=eb_prms.switch_melt, help='')
+                        default=prms.switch_melt, help='')
     parser.add_argument('-switch_snow',action='store', type=int,
-                        default=eb_prms.switch_snow, help='')
+                        default=prms.switch_snow, help='')
     
     # CALIBRATED PARAMETERS
-    parser.add_argument('-kp',default=eb_prms.kp,action='store',type=float,
+    parser.add_argument('-kp',default=prms.kp,action='store',type=float,
                         help='Multiplicative precipitation factor')
-    parser.add_argument('-Boone_c5',default=eb_prms.Boone_c5,action='store',type=float,
+    parser.add_argument('-Boone_c5',default=prms.Boone_c5,action='store',type=float,
                         help='Parameter for Boone densification scheme')
+    parser.add_argument('-a_ice',default=prms.albedo_ice,action='store',type=float,
+                        help='Bare ice albedo')
     
     # FILEPATHS
-    parser.add_argument('-initial_temp_fp',default=eb_prms.initial_temp_fp,type=str,
+    parser.add_argument('-initial_temp_fp',default=prms.initial_temp_fp,type=str,
                         action='store',help='Filepath for initializing temperature')
-    parser.add_argument('-initial_density_fp',default=eb_prms.initial_density_fp,type=str,
+    parser.add_argument('-initial_density_fp',default=prms.initial_density_fp,type=str,
                         action='store',help='Filepath for initializing density')
-    parser.add_argument('-initial_grains_fp',default=eb_prms.initial_grains_fp,type=str,
+    parser.add_argument('-initial_grains_fp',default=prms.initial_grains_fp,type=str,
                         action='store',help='Filepath for initializing grain size')
-    parser.add_argument('-initial_LAP_fp',default=eb_prms.initial_LAP_fp,type=str,
+    parser.add_argument('-initial_LAP_fp',default=prms.initial_LAP_fp,type=str,
                         action='store',help='Filepath for initializing LAPs')
     
     # PARALLELIZATION
@@ -179,7 +181,7 @@ def get_shading(args):
     args.store = ['result','result_plot','search_plot']
 
     # check if we can index the lat/lon for this site
-    site_fp = eb_prms.site_fp.replace('GLACIER', args.glac_name)
+    site_fp = prms.site_fp.replace('GLACIER', args.glac_name)
     if os.path.exists(site_fp):
         # open site constants file and check if our site is there
         site_df = pd.read_csv(site_fp,index_col='site')
@@ -191,10 +193,10 @@ def get_shading(args):
     else:
         # no site constants file: use RGI cenlat and cenlon
         RGI_region = args.glac_no.split('.')[0]
-        for fn in os.listdir(eb_prms.RGI_fp):
+        for fn in os.listdir(prms.RGI_fp):
             # open the attributes .csv for the correct region
             if fn[:2] == RGI_region and fn[-3:] == 'csv':
-                RGI_df = pd.read_csv(eb_prms.RGI_fp + fn)
+                RGI_df = pd.read_csv(prms.RGI_fp + fn)
                 RGI_df.index = [f.split('-')[-1] for f in RGI_df['RGIId']]
         # grab the lat/lon from RGI
         args.lat = RGI_df.loc[args.glac_no,'CenLat']
@@ -231,7 +233,7 @@ def check_inputs(glac_no, args):
     args : command line arguments
     """
     # check if the RGI ID is in the metadata file
-    all_df = pd.read_csv(eb_prms.metadata_fp,index_col=0,converters={0: str})
+    all_df = pd.read_csv(prms.metadata_fp,index_col=0,converters={0: str})
     assert glac_no in all_df.index, f'Add {glac_no} to data/glacier_metadata.csv'
 
     # load the metadata for the glacier
@@ -242,18 +244,18 @@ def check_inputs(glac_no, args):
     if args.glac_name == 'test':
         args.AWS_fn = all_df.loc[glac_no,'AWS_fn']
     else:
-        args.AWS_fn = eb_prms.AWS_fp + all_df.loc[glac_no,'AWS_fn']
+        args.AWS_fn = prms.AWS_fp + all_df.loc[glac_no,'AWS_fn']
 
     # specify filepaths to args
-    args.shading_fp = eb_prms.shading_fp.replace('GLACIER',args.glac_name).replace('SITE',args.site)
-    args.dem_fp = eb_prms.dem_fp.replace('GLACIER', args.glac_name)
+    args.shading_fp = prms.shading_fp.replace('GLACIER',args.glac_name).replace('SITE',args.site)
+    args.dem_fp = prms.dem_fp.replace('GLACIER', args.glac_name)
 
     # check if the shading file exists
     if not os.path.exists(args.shading_fp):
         args = get_shading(args)
     
     # load site constants table
-    site_fp = eb_prms.site_fp.replace('GLACIER', args.glac_name)
+    site_fp = prms.site_fp.replace('GLACIER', args.glac_name)
     site_df = pd.read_csv(site_fp,index_col='site')
 
     # update args from the site table
@@ -269,7 +271,7 @@ def check_inputs(glac_no, args):
         enddate = pd.to_datetime(cdf.index.to_numpy()[-1])
 
         # have to offset by 30 minutes for MERRA-2
-        if eb_prms.reanalysis == 'MERRA2' and startdate.minute != 30:
+        if prms.reanalysis == 'MERRA2' and startdate.minute != 30:
             startdate += pd.Timedelta(minutes=30)
             enddate -= pd.Timedelta(minutes=30)
 

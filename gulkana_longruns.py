@@ -48,32 +48,9 @@ def pack_vars():
         args_run = copy.deepcopy(args)
         args_run.site = site
         if site == 'A':
-            args_run.enddate = pd.to_datetime('2015-05-20 00:00:00')
+            args_run.enddate = pd.to_datetime('2002-05-20 00:00:00') 
         elif site == 'AU':
             args_run.startdate = pd.to_datetime('2012-04-20 00:00:00')
-
-        # Set parameters filename (relative to PyGEM-EB/)
-        if params_fn:
-            args_run.params_fn = params_fn
-            params = pd.read_csv(params_fn,index_col=0)
-            kp = params.loc['kp',args_run.site].astype(float)
-            kw = params.loc['kw',args_run.site].astype(float)
-            a_ice = params.loc['a_ice',args_run.site].astype(float)
-            c5 = params.loc['Boone_c5',args_run.site].astype(float)
-            # Command line args override params input
-            if args_run.kp == eb_prms.kp:
-                args_run.kp = kp
-            if args_run.kw == eb_prms.wind_factor:
-                args_run.kw = kw
-            if args_run.a_ice == eb_prms.albedo_ice:
-                args_run.a_ice = a_ice
-            if args_run.Boone_c5 == eb_prms.Boone_c5:
-                args_run.Boone_c5 = c5
-            store_attrs = {'params_fn':params_fn,'site':site,
-                        'kp':str(args_run.kp),'kw':str(args_run.kw),
-                            'AWS':eb_prms.AWS_fn,'c5':str(c5)}
-        else:
-            store_attrs = {'site':site}
 
         # Output name
         args_run.out = f'Gulkana_{run_date}_long{site}_'
@@ -85,6 +62,9 @@ def pack_vars():
         #     args_run.out = '/07_01_AU_0/grid_07_01_set27_run0_0.nc' # 
         #     args_run.kp = 1.5
         #     args_run.Boone_c5 = 0.027
+
+        # Store model parameters
+        store_attrs = {'kp':args_run.kp, 'c5':args_run.Boone_c5}
 
         # Set task ID for SNICAR input file
         args_run.task_id = run_no + n_runs_ahead*n_processes
