@@ -37,8 +37,8 @@ sitedict = {'2024':['AB','ABB','B','BD','D','T'],'long':['A','AU','B','D']}     
 all_sites = sitedict['long']+sitedict['2024']+['mean','median']                  # List all sites
 
 # USER OPTIONS
-run_info = {'long':{'date':'07_01', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
-            '2024':{'date':'07_02', 'idx':'0'}}                     # (12_06) (03_06)
+run_info = {'long':{'date':'07_15', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
+            '2024':{'date':'07_14', 'idx':'0'}}                     # (12_06) (03_06)
 # params = {'c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
 #           'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5]} # 
 params = {'c5':[0.018,0.02,0.022,0.023,0.024,0.025,0.026,0.027,0.028,0.03], # 
@@ -86,99 +86,90 @@ def get_percentile(result_dict, error, percentile=50, method='MAE',plot=False):
         plt.show()
     return np.percentile(np.array(all_error), percentile)
 
-def process_runs(run_type, sites):
+def process_runs(run_type, fn):
     """
     Regenerates each individual run .pkl file which contains the
     timeseries and run information
     """
-    date = run_info[run_type]['date']
-    idx = run_info[run_type]['idx']
-    if sites == 'all':
-        sites = sitedict[run_type]
+    results = {}
+    ds = xr.open_dataset(fn)
+    site = ds.attrs['site']
 
-    for site in sites:
-        start_time = time.time()
-        fp = base_fp+f'{date}_{site}_{idx}/'
-        for f in ['grid_07_01_set52_run0_0.nc']: #os.listdir(fp):
-            results = {}
-            if '.nc' in f:
-                ds = xr.open_dataset(fp + f)
-                if run_type == 'long':
-                    # Seasonal mass balance
-                    years,wmod,wmeas,smod,smeas,amod,ameas = seasonal_mass_balance(ds, out='data')
-                    results['years'] = years
-                    results['winter_mod'] = wmod
-                    results['winter_meas'] = np.array(wmeas)
-                    results['summer_mod'] = smod
-                    results['summer_meas'] = np.array(smeas)
-                    results['annual_mod'] = amod
-                    results['annual_meas'] = np.array(ameas)
+    if run_type == 'long':
+        # Seasonal mass balance
+        years,wmod,wmeas,smod,smeas,amod,ameas = seasonal_mass_balance(ds, out='data')
+        results['years'] = years
+        results['winter_mod'] = wmod
+        results['winter_meas'] = np.array(wmeas)
+        results['summer_mod'] = smod
+        results['summer_meas'] = np.array(smeas)
+        results['annual_mod'] = amod
+        results['annual_meas'] = np.array(ameas)
 
-                    # Seasonal error
-                    error_dict = seasonal_mass_balance(ds,method=['MAE','MdAE','ME'])
-                    winter_MAE, winter_MdAE, winter_ME = error_dict['winter']
-                    summer_MAE, summer_MdAE, summer_ME = error_dict['summer']
-                    annual_MAE, annual_MdAE, annual_ME = error_dict['annual']
-                    seasonal_MAE = np.mean([winter_MAE, summer_MAE])
-                    seasonal_MdAE = np.mean([winter_MdAE, summer_MdAE])
-                    seasonal_ME = np.mean([winter_ME, summer_ME])
-                    all_seasonal = {'winter_MAE':winter_MAE,'winter_MdAE':winter_MdAE,'winter_ME':winter_ME,
-                                'summer_MAE':summer_MAE,'summer_MdAE':summer_MdAE,'summer_ME':summer_ME,
-                                'seasonal_MAE':seasonal_MAE,'seasonal_MdAE':seasonal_MdAE,'seasonal_ME':seasonal_ME,
-                                'annual_MAE':annual_MAE,'annual_MdAE':annual_MdAE,'annual_ME':annual_ME}
-                    for var in all_seasonal:
-                        results[var] = all_seasonal[var]
+        # Seasonal error
+        error_dict = seasonal_mass_balance(ds,method=['MAE','MdAE','ME'])
+        winter_MAE, winter_MdAE, winter_ME = error_dict['winter']
+        summer_MAE, summer_MdAE, summer_ME = error_dict['summer']
+        annual_MAE, annual_MdAE, annual_ME = error_dict['annual']
+        seasonal_MAE = np.mean([winter_MAE, summer_MAE])
+        seasonal_MdAE = np.mean([winter_MdAE, summer_MdAE])
+        seasonal_ME = np.mean([winter_ME, summer_ME])
+        all_seasonal = {'winter_MAE':winter_MAE,'winter_MdAE':winter_MdAE,'winter_ME':winter_ME,
+                    'summer_MAE':summer_MAE,'summer_MdAE':summer_MdAE,'summer_ME':summer_ME,
+                    'seasonal_MAE':seasonal_MAE,'seasonal_MdAE':seasonal_MdAE,'seasonal_ME':seasonal_ME,
+                    'annual_MAE':annual_MAE,'annual_MdAE':annual_MdAE,'annual_ME':annual_ME}
+        for var in all_seasonal:
+            results[var] = all_seasonal[var]
 
-                    # Snowpits
-                    years, data = snowpits(ds, out='data')
-                    for var in data:
-                        results[var] = data[var]
+        # Snowpits
+        years, data = snowpits(ds, out='data')
+        for var in data:
+            results[var] = data[var]
 
-                    # Snowpit error
-                    for method in ['MAE','ME','MdAE']:
-                        snowpit_dict = snowpits(ds,method=method, out='mean_error')
-                        for var in snowpit_dict:
-                            results[var] = snowpit_dict[var]
+        # Snowpit error
+        for method in ['MAE','ME','MdAE']:
+            snowpit_dict = snowpits(ds,method=method, out='mean_error')
+            for var in snowpit_dict:
+                results[var] = snowpit_dict[var]
 
-                elif run_type == '2024':
-                    # Cumulative mass balance
-                    dates, dhmod, dhmeas = cumulative_mass_balance(ds, out='data')
-                    results['dates'] = dates
-                    results['dh_mod'] = dhmod
-                    results['dh_meas'] = dhmeas
+    elif run_type == '2024':
+        # Cumulative mass balance
+        dates, dhmod, dhmeas = cumulative_mass_balance(ds, out='data')
+        results['dates'] = dates
+        results['dh_mod'] = dhmod
+        results['dh_meas'] = dhmeas
 
-                    # Error
-                    results['2024_MAE'] = cumulative_mass_balance(ds, method='MAE')
-                    results['2024_MdAE'] = cumulative_mass_balance(ds, method='MdAE')
-                    results['2024_ME'] = cumulative_mass_balance(ds, method='ME')
+        # Error
+        results['2024_MAE'] = cumulative_mass_balance(ds, method='MAE')
+        results['2024_MdAE'] = cumulative_mass_balance(ds, method='MdAE')
+        results['2024_ME'] = cumulative_mass_balance(ds, method='ME')
 
-                    # 2024 mass balance for sites where it's measured
-                    if site not in ['ABB','BD']:
-                        mbmod,mbmeas = cumulative_mass_balance(ds, out='mbs')
-                        results['mb2024_mod'] = mbmod
-                        results['mb2024_meas'] = mbmeas
+        # 2024 mass balance for sites where it's measured
+        if site not in ['ABB','BD']:
+            mbmod,mbmeas = cumulative_mass_balance(ds, out='mbs')
+            results['mb2024_mod'] = mbmod
+            results['mb2024_meas'] = mbmeas
 
-                    # albedo for site B
-                    if site == 'B':
-                        dates, albedomod, albedomeas = daily_albedo(ds, out='data')
-                        results['albedo_dates'] = dates
-                        results['albedo_mod'] = albedomod
-                        results['albedo_meas'] = albedomeas
+        # albedo for site B
+        if site == 'B':
+            dates, albedomod, albedomeas = daily_albedo(ds, out='data')
+            results['albedo_dates'] = dates
+            results['albedo_mod'] = albedomod
+            results['albedo_meas'] = albedomeas
 
-                        for method in ['MAE','ME','MdAE']:
-                            results[f'albedo_{method}'] = daily_albedo(ds, method=method)
-                    
-                # Store the attributes in the results dict
-                for attr in ds.attrs:
-                    results[attr] = ds.attrs[attr]
+            for method in ['MAE','ME','MdAE']:
+                results[f'albedo_{method}'] = daily_albedo(ds, method=method)
+        
+    # Store the attributes in the results dict
+    for attr in ds.attrs:
+        results[attr] = ds.attrs[attr]
 
-                # Write to new pickle file
-                f_pickle = f.replace('.nc','.pkl')
-                if os.path.exists(fp + f_pickle):
-                    os.remove(fp + f_pickle)
-                with open(fp + f_pickle, 'wb') as file:
-                    pickle.dump(results, file)
-        print('Completed site',site,'in',time.time() - start_time,'s')
+    # Write to new pickle file
+    fn_pickle = fn.replace('.nc','.pkl')
+    if os.path.exists(fn_pickle):
+        os.remove(fn_pickle)
+    with open(fn_pickle, 'wb') as file:
+        pickle.dump(results, file)
     return
 
 def create_dict(run_type):

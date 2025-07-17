@@ -38,19 +38,19 @@ class Layers():
         self.args = args
 
         # load in initial depths of snow, firn and ice in m
-        snow = args.initial_snow_depth
-        firn = args.initial_firn_depth
-        ice = prms.initial_ice_depth
+        dz_snow = args.initial_snow_depth
+        dz_firn = args.initial_firn_depth
+        dz_ice = prms.initial_ice_depth
 
         # calculate the layer depths based on initial snow, firn and ice depths
-        lheight,ldepth,ltype,nlayers = self.make_layers(snow,firn,ice)
+        lheight,ldepth,ltype,nlayers = self.make_layers(dz_snow,dz_firn,dz_ice)
         self.nlayers = nlayers              # NUMBER OF LAYERS
         self.ltype = ltype                  # LAYER TYPE (snow, firn, or ice)
         self.lheight = lheight              # LAYER HEIGHT (dz) [m]
         self.ldepth = ldepth                # LAYER DEPTH (midlayer) [m]
 
         # initialize layer temperature, density, water content
-        ltemp,ldensity,lwater,lgrainsize = self.initialize_layers(snow,firn)
+        ltemp,ldensity,lwater,lgrainsize = self.initialize_layers(dz_snow,dz_firn)
         self.ltemp = ltemp                  # LAYER TEMPERATURE [C]
         self.ldensity = ldensity            # LAYER DENSITY [kg m-3]
         self.lice = ldensity*lheight        # LAYER ICE (SOLID) MASS [kg m-2]

@@ -76,7 +76,7 @@ class massBalance():
             self.time = time
 
             # initiate the energy balance to unpack climate data
-            enbal = energyBalance(self.climate,time,self.args)
+            enbal = energyBalance(self,time)
             self.enbal = enbal 
 
             # get rain and snowfall amounts [kg m-2]

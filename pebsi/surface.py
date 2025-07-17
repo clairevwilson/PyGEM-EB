@@ -143,9 +143,9 @@ class Surface():
         if not enbal.nanLWout:
             # CASE (1): surftemp from LW data
             self.stemp = np.power(np.abs(enbal.LWout_ds/STEFAN_BOLTZMANN),1/4)
-            Qm = enbal.surface_EB(self.stemp,layers,self,self.days_since_snowfall)
+            Qm = enbal.surface_EB(self.stemp,self)
         else:
-            Qm_check = enbal.surface_EB(0,layers,self,self.days_since_snowfall)
+            Qm_check = enbal.surface_EB(0,self)
             # if Qm>0 with surftemp=0, the surface is melting or warming.
             # if Qm<0 with surftemp=0, the surface is cooling.
             cooling = True if Qm_check < 0 else False
@@ -155,8 +155,7 @@ class Surface():
                 Qm = Qm_check
                 if layers.ltemp[0] < 0.: 
                     # check heat with a surftemp of 0
-                    Qm_check = enbal.surface_EB(self.stemp,layers,self,
-                                               self.days_since_snowfall)
+                    Qm_check = enbal.surface_EB(self.stemp,self)
                     # heat the top layer
                     temp_change = Qm_check*dt/(HEAT_CAPACITY_ICE*layers.lice[0])
                     layers.ltemp[0] += temp_change
@@ -180,8 +179,8 @@ class Surface():
                     # run minimization on EB function
                     result = minimize(enbal.surface_EB,self.stemp,
                                       method='L-BFGS-B',bounds=((-60,0),),tol=1e-3,
-                                      args=(layers,self,self.days_since_snowfall,'optim'))
-                    Qm = enbal.surface_EB(result.x[0],layers,self,self.days_since_snowfall)
+                                      args=(self,'optim'))
+                    Qm = enbal.surface_EB(result.x[0],self)
                     # check success and print warning 
                     if not result.success and abs(Qm) > 10:
                         print('Unsuccessful minimization, Qm = ',Qm)
@@ -195,8 +194,7 @@ class Surface():
                     while loop:
                         n_iters += 1
                         # initial check of Qm comparing to previous surftemp
-                        Qm_check = enbal.surface_EB(self.stemp,layers,self,
-                                                   self.days_since_snowfall)
+                        Qm_check = enbal.surface_EB(self.stemp,self)
                         
                         # check direction of flux at that temperature and adjust
                         if Qm_check > 0.5:
@@ -212,8 +210,7 @@ class Surface():
                             if self.stemp == -60:
                                 result = minimize(enbal.surface_EB,-50,method='L-BFGS-B',
                                                     bounds=((-60,0),),tol=1e-3,
-                                                    args=(layers,self,
-                                                          self.days_since_snowfall,'optim'))
+                                                    args=(self,'optim'))
                                 if result.x > -60:
                                     self.stemp = result.x[0]
                             break
@@ -222,7 +219,7 @@ class Surface():
                 Qm = 0
 
         # update surface balance terms with new surftemp
-        enbal.surface_EB(self.stemp,layers,self,self.days_since_snowfall)
+        enbal.surface_EB(self.stemp,self)
         self.Qm = Qm
         self.tcc = enbal.tcc
         return

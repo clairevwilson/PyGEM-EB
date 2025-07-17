@@ -22,7 +22,7 @@ class energyBalance():
     so it stores the climate data and surface fluxes 
     for a single timestep.
     """ 
-    def __init__(self,climate,timestamp,args):
+    def __init__(self,massbal,timestamp):
         """
         Loads in the climate data at a given timestep 
         to use in the surface energy balance.
@@ -36,6 +36,12 @@ class energyBalance():
             Timestamp to index the climate dataset.
         args : command-line arguments
         """
+        # pull other classes from mass balance class
+        climate = massbal.climate
+        args = massbal.args
+        layers = massbal.layers
+        surface = massbal.surface
+
         # unpack climate variables
         climateds_now = climate.cds.sel(time=timestamp)
         self.tempC = climateds_now['temp'].values
@@ -75,6 +81,7 @@ class energyBalance():
         self.tempK = self.tempC + 273.15
         self.prec =  self.tp / 3600     # tp is hourly total precip, prec is the rate in m/s
         self.rh = 100 if self.rh > 100 else self.rh
+        self.get_roughness(surface.days_since_snowfall,layers)
 
         # adjust wind speed
         self.wind *= float(prms.wind_factor)
@@ -88,8 +95,7 @@ class energyBalance():
         self.nanalbedo = True if np.isnan(self.albedo_ds) else False
         return
 
-    def surface_EB(self,surftemp,layers,surface,
-                   days_since_snowfall,mode='sum'):
+    def surface_EB(self,surftemp,surface,mode='sum'):
         """
         Calculates the surface heat fluxes for the 
         current timestep.
@@ -98,12 +104,8 @@ class energyBalance():
         ==========
         surftemp : float
             Temperature of the surface snow [C]
-        layers
-            Class object from pebsi.layers
         surface : float
             Class object from pebsi.surface
-        days_since_snowfall : int
-            Number of days since fresh snowfall
         mode : str, default: 'sum'
             Options: 'list', 'sum', or 'optim'
             Return heat flux list, sum or absolute value
@@ -148,8 +150,7 @@ class energyBalance():
         self.ground = Qg[0] if '__iter__' in dir(Qg) else Qg
 
         # TURBULENT FLUXES (Qs and Ql)
-        roughness = self.get_roughness(days_since_snowfall,layers)
-        Qs, Ql = self.get_turbulent(surftemp,roughness)
+        Qs, Ql = self.get_turbulent(surftemp)
         self.sens = Qs[0] if '__iter__' in dir(Qs) else Qs
         self.lat = Ql[0] if '__iter__' in dir(Qs) else Ql
 
@@ -346,7 +347,7 @@ class energyBalance():
             assert 1==0, 'Ground flux method not accepted; choose from [\'MolgHardy\']'
         return Qg
     
-    def get_turbulent(self,surftemp,roughness):
+    def get_turbulent(self,surftemp):
         """
         Calculates turbulent (sensible and latent heat)
         fluxes based on Monin-Obukhov Similarity Theory 
@@ -369,14 +370,14 @@ class energyBalance():
         SLOPE = self.args.slope * np.pi/180
 
         # ROUGHNESS LENGTHS
-        z0 = roughness  # Roughness length for momentum
-        z0t = z0/100    # Roughness length for heat
-        z0q = z0/10     # Roughness length for moisture
+        z0 = self.roughness  # Roughness length for momentum
+        z0t = z0/100         # Roughness length for heat
+        z0q = z0/10          # Roughness length for moisture
 
         # adjust wind speed to reference height
         z = 2 # reference height in m
         if prms.wind_ref_height != 2:
-            wind_2m *= np.log(2/roughness) / np.log(WIND_REF_Z/roughness)
+            wind_2m *= np.log(2/z0) / np.log(WIND_REF_Z/z0)
         else:
             wind_2m = self.wind
 
@@ -500,6 +501,8 @@ class energyBalance():
         ROUGHNESS_FIRN = prms.roughness_firn
         ROUGHNESS_ICE = prms.roughness_ice
         AGING_RATE = prms.roughness_aging_rate
+        if self.timestamp < pd.to_datetime('2023-04-18 3:00'):
+            print('fresh',ROUGHNESS_FRESH_SNOW,'aged',ROUGHNESS_AGED_SNOW,'firn',ROUGHNESS_FIRN,'ice',ROUGHNESS_ICE,self.timestamp)
 
         # determine roughness from surface type
         layertype = layers.ltype
@@ -509,7 +512,10 @@ class energyBalance():
             sigma = ROUGHNESS_FIRN
         elif layertype[0] in ['ice']:
             sigma = ROUGHNESS_ICE
-        return sigma/1000
+
+        # return roughness in m
+        self.roughness = sigma / 1000
+        return 
     
     def vapor_pressure(self,airtemp,method='ARM'):
         """
