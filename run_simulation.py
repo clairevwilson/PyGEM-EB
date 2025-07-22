@@ -275,6 +275,10 @@ def check_inputs(glac_no, args):
             startdate += pd.Timedelta(minutes=30)
             enddate -= pd.Timedelta(minutes=30)
 
+        # add dates to args
+        args.startdate = startdate
+        args.enddate = enddate
+
     # create model run name
     if args.out == '':
         model_run_date = str(pd.Timestamp.today()).replace('-','_')[0:10]

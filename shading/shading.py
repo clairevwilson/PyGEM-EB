@@ -129,14 +129,16 @@ class Shading():
             minx, miny, maxx, maxy = self.shapefile.total_bounds
             dem_not_found = 'DEM was not found: download for the box around:'
             bounding_box = f'      latitude: {miny:.6f} to {maxy:.6f}    longitude: {minx:.6f} to {maxx:.6f}'
-            move_to = f'                and move to PyGEM-EB/../data/DEMs/{args.glac_name}_dem.tif'
+            move_to = f'                and move to {args.dem_fp}'
             assert os.path.exists(args.dem_fp), f'{dem_not_found}\n{bounding_box}\n{move_to}'
 
         # Load the DEM
         self.load_dem()
 
-        # Define output filepaths
+        # Define output filepaths and make any directories
         gn = args.glac_name
+        if not os.path.exists(fp_base + 'plots/'):
+            os.mkdir(fp_base + 'plots/')
         if not os.path.exists(fp_base + f'plots/{gn}'):
             os.mkdir(fp_base + f'plots/{gn}')
         if not os.path.exists(fp_out + f'{gn}/shade/'):
