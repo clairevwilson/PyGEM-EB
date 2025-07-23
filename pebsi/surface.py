@@ -142,7 +142,7 @@ class Surface():
 
         if not enbal.nanLWout:
             # CASE (1): surftemp from LW data
-            self.stemp = np.power(np.abs(enbal.LWout_ds/STEFAN_BOLTZMANN),1/4)
+            self.stemp = np.power(np.abs(enbal.LWout_ds/(dt*STEFAN_BOLTZMANN)),1/4) - 273.15
             Qm = enbal.surface_EB(self.stemp,self)
         else:
             Qm_check = enbal.surface_EB(0,self)

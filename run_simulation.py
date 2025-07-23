@@ -139,6 +139,15 @@ def get_site_table(site_df, args):
         if not np.isnan(site_df.loc[site,'firndepth']):
             args.initial_firn_depth = site_df.loc[site,'firndepth']
 
+    # Override site lat/lon/elevation with the AWS site
+    if args.use_AWS and prms.use_AWS_site:
+        metadata_df = pd.read_csv(prms.AWS_metadata_fn, sep='\t', index_col='glacier')
+        args.lat = metadata_df.loc[args.glac_name, 'latitude']
+        args.lon = metadata_df.loc[args.glac_name, 'longitude']
+        args.elev = metadata_df.loc[args.glac_name, 'elevation']
+        if args.debug:
+            print(f'~ Using AWS site: ({args.lat}, {args.lon}) at {args.elev} m a.s.l.')
+
     # *****Special HARD-CODED handling for Gulkana*****
     if args.glac_name == 'gulkana' and args.site != 'center':
         # set scaling albedo

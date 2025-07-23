@@ -18,7 +18,8 @@ machine = socket.gethostname()
 metadata_fp = 'data/glacier_metadata.csv'                   # Glacier metadata filepath
 site_fp = 'data/by_glacier/GLACIER/site_constants.csv'      # Generalized glacier site info filepath
 RGI_fp = '../RGI/rgi60/00_rgi60_attribs/'                   # Randolph Glacier Inventory filepath
-AWS_fp = '../climate_data/AWS/'                             # Weather station data filepath
+AWS_fp = '../climate_data/AWS/Processed/'                   # Weather station data filepath
+AWS_metadata_fn = AWS_fp + 'aws_metadata.txt'               # Weather station metadata filename
 # SNICAR
 grainsize_fp = 'data/grainsize/drygrainsize(SSAin=##).nc'   # Grain size evolution lookup table filepath
 snicar_input_fp = 'biosnicar-py/biosnicar/inputs.yaml'      # SNICAR input filepath
@@ -43,7 +44,10 @@ albedo_out_fp = '../Output/EB/albedo.csv'                   # Output spectral al
 startdate = pd.to_datetime('2024-04-20 00:00:00') 
 enddate = pd.to_datetime('2024-08-20 00:00:00')
 
-# REANALYSIS CHOICES
+# WEATHER STATION
+use_AWS_site = False                        # True to override site (lat, lon, etc.) to the AWS site
+
+# REANALYSIS DATA
 reanalysis = 'MERRA2'                       # 'MERRA2' ('ERA5-hourly' ***** BROKEN)
 MERRA2_filetag = False                      # False or string to follow 'MERRA2_VAR_' in MERRA2 filename
 bias_vars = ['wind','SWin','temp','rh']     # Vars to correct by quantile mapping

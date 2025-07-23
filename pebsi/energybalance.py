@@ -501,8 +501,6 @@ class energyBalance():
         ROUGHNESS_FIRN = prms.roughness_firn
         ROUGHNESS_ICE = prms.roughness_ice
         AGING_RATE = prms.roughness_aging_rate
-        if self.timestamp < pd.to_datetime('2023-04-18 3:00'):
-            print('fresh',ROUGHNESS_FRESH_SNOW,'aged',ROUGHNESS_AGED_SNOW,'firn',ROUGHNESS_FIRN,'ice',ROUGHNESS_ICE,self.timestamp)
 
         # determine roughness from surface type
         layertype = layers.ltype

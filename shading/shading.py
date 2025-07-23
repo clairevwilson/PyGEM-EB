@@ -592,12 +592,20 @@ class Shading():
     def store_site_info(self):
         self.site_df.loc[self.args.site,'lat'] = self.args.lat
         self.site_df.loc[self.args.site,'lon'] = self.args.lon
+        if 'elevation' in self.site_df.columns:
+            if np.isnan(self.site_df.loc[self.args.site,'elevation']):
+                self.site_df.loc[self.args.site,'elevation'] = int(self.point_elev)
+                string = '~ Saved sky view, slope, aspect and elevation '
+            else:
+                string = '~ Saved sky view, slope, and aspect '
+        else:
+            self.site_df.loc[self.args.site,'elevation'] = int(self.point_elev)
+            string = '~ Saved sky view, slope, aspect and elevation '
         self.site_df.loc[self.args.site,'sky_view'] = self.sky_view
         self.site_df.loc[self.args.site,'slope'] = self.point_slope*180/pi
         self.site_df.loc[self.args.site,'aspect'] = self.point_aspect*180/pi
-        self.site_df.loc[self.args.site,'elevation'] = int(self.point_elev)
         self.site_df.to_csv(self.args.site_fp)
-        print(f'~ Saved sky view, slope, aspect and elevation to {self.args.glac_name}/site_constants.csv ~')
+        print(string + f'to {self.args.glac_name}/site_constants.csv ~')
 
 # RUN MODEL
 if __name__ == '__main__':

@@ -131,7 +131,8 @@ class Climate():
         df = df.reindex(index=index_joined).interpolate().reindex(new_index)
 
         # get AWS elevation
-        self.AWS_elev = df.iloc[0]['z']
+        metadata_df = pd.read_csv(prms.AWS_metadata_fn, sep='\t', index_col='glacier')
+        self.AWS_elev = metadata_df.loc[self.args.glac_name, 'elevation']
 
         # get the available variables
         all_AWS_vars = ['temp','tp','rh','uwind','vwind','sp','SWin','SWout','albedo',

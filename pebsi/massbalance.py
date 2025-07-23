@@ -264,14 +264,16 @@ class massBalance():
         # calculate melt from temperatures above 0
         layermelt = np.zeros(layers.nlayers)
         for layer,temp in enumerate(lT):
-            # check if temperature is above 0
-            if temp > 0.:
-                # calculate melt from the energy that raised the temperature above 0
-                melt = (temp-0.)*lm[layer]*HEAT_CAPACITY_ICE/LH_RF
-                lT[layer] = 0.
-            else:
-                melt = 0
-            layermelt[layer] = melt
+            if layer > 0:
+                # check if temperature is above 0
+                if temp > 0.:
+                    # calculate melt from the energy that raised the temperature above 0
+                    melt = (temp-0.)*lm[layer]*HEAT_CAPACITY_ICE/LH_RF
+                    lT[layer] = 0.
+                else:
+                    melt = 0
+                # cap layermelt at layer mass
+                layermelt[layer] = min(melt, lm[layer])
 
         # LAYERS OUT
         layers.ltemp = lT
@@ -398,6 +400,7 @@ class massBalance():
         if len(snow_firn_idx) > 0 and layers.ice_idx[0] < snow_firn_idx[-1]:
             if layers.ice_idx[0] != 0: # impermeable ice layer
                 snow_firn_idx = snow_firn_idx[:layers.ice_idx[0]]
+                print('impermeable ice layer?')
             else: # surface ice layer: all water runs off
                 snow_firn_idx = []
 
@@ -492,7 +495,7 @@ class massBalance():
             layers.lice -= layermelt
             layers.lheight -= layermelt / layers.ldensity
             runoff += water_in + np.sum(layermelt)
-        
+
         # CHECK MASS CONSERVATION
         ins = water_in
         outs = runoff
@@ -707,7 +710,7 @@ class massBalance():
                 viscosity = VISCOSITY_SNOW*np.exp(c4*(0.-lT[layer])+c5*lp[layer])
 
                 # get change in density
-                mass_term = (weight_above*GRAVITY)/viscosity
+                mass_term = weight_above/viscosity
                 temp_term = -c2*(0.-lT[layer])
                 dens_term = -c3*max(0,lp[layer]-DENSITY_FRESH_SNOW)
                 dRho = (mass_term+c1*np.exp(temp_term+dens_term))*lp[layer]*dt
