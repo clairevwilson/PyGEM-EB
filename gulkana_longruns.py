@@ -18,7 +18,7 @@ import pebsi.input as eb_prms
 
 # User info
 use_AWS = False
-sites = ['A'] # Sites to run in parallel 
+sites = ['AU','B','D'] # Sites to run in parallel 
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
 params_fn = False # '../Output/params/11_26_best.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
@@ -48,7 +48,7 @@ def pack_vars():
         args_run = copy.deepcopy(args)
         args_run.site = site
         if site == 'A':
-            args_run.enddate = pd.to_datetime('2002-05-20 00:00:00') 
+            args_run.enddate = pd.to_datetime('2014-05-20 00:00:00') 
         elif site == 'AU':
             args_run.startdate = pd.to_datetime('2012-04-20 00:00:00')
 

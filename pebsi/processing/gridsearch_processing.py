@@ -38,7 +38,7 @@ all_sites = sitedict['long']+sitedict['2024']+['mean','median']                 
 
 # USER OPTIONS
 run_info = {'long':{'date':'07_15', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
-            '2024':{'date':'07_14', 'idx':'0'}}                     # (12_06) (03_06)
+            '2024':{'date':'07_23', 'idx':'0'}}                     # (12_06) (03_06)
 # params = {'c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
 #           'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5]} # 
 params = {'c5':[0.018,0.02,0.022,0.023,0.024,0.025,0.026,0.027,0.028,0.03], # 
@@ -64,8 +64,7 @@ def get_any(result_dict,c5='0.018',kp='2',site='B',run_type='long'):
     else:
         date = run_info['long']['date']
         idx = run_info['long']['idx']
-    site = 'AU'
-    print(setno, runno)
+    print(date, idx)
     ds,_,_ = getds(f'/trace/group/rounce/cvwilson/Output/{date}_{site}_{idx}/grid_{date}_set{setno}_run{runno}_0.nc')
     return ds
 

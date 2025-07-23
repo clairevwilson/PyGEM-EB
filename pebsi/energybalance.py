@@ -69,7 +69,8 @@ class energyBalance():
 
         # store previous timestep incoming shortwave
         if timestamp != pd.to_datetime(climate.cds.time.values[0]):
-            self.last_SWin_ds = climate.cds.sel(time=timestamp - pd.Timedelta(seconds=self.dt))['SWin'].values
+            last_stamp = timestamp - pd.Timedelta(seconds=self.dt)
+            self.last_SWin_ds = climate.cds.sel(time=last_stamp)['SWin'].values
         else:
             self.last_SWin_ds = self.SWin_ds
 

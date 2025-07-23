@@ -65,7 +65,7 @@ if repeat_run:
         os.mkdir(eb_prms.output_filepath + out_fp)
 else:
     # date = str(pd.Timestamp.today()).replace('-','_')[5:10]
-    date = '07_15' if args.run_type == 'long' else '07_14'
+    date = '07_24' if args.run_type == 'long' else '07_23'
     print('Forcing run date to be', date)
     n_today = 0
     out_fp = f'{date}_{args.site}_{n_today}/'
