@@ -18,7 +18,7 @@ import pebsi.input as eb_prms
 
 # User info
 use_AWS = False
-sites = ['AU','B','D'] # Sites to run in parallel 
+sites = ['A','AU','B','D'] # Sites to run in parallel 
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
 params_fn = False # '../Output/params/11_26_best.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
@@ -53,7 +53,8 @@ def pack_vars():
             args_run.startdate = pd.to_datetime('2012-04-20 00:00:00')
 
         # Output name
-        args_run.out = f'Gulkana_{run_date}_long{site}_'
+        # args_run.out = f'Gulkana_{run_date}_long{site}_'
+        args_run.out = '07_24_D_0/grid_07_24_set64_run0_'
         # if site == 'B':
         #     args_run.out = '/07_01_B_0/grid_07_01_set52_run0_0.nc'
         #     args_run.kp = 2.25

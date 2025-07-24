@@ -734,7 +734,7 @@ def snow_temperature(ds,method='RMSE',plot=False,plot_heights=[0.5]):
 
 # ========== 4. ALBEDO ==========
 def daily_albedo(bds,method='MAE',out=None):
-    df = pd.read_csv('/trace/home/cvwilson/research/climate_data/AWS/Preprocessed/gulkana2024_bothalbedo.csv',index_col=0)
+    df = pd.read_csv('/trace/home/cvwilson/research/climate_data/AWS/Processed/gulkana2024_bothalbedo.csv',index_col=0)
     df.index = pd.to_datetime(df.index) # - pd.Timedelta(hours=8)
     
     # Sample dataset to daily

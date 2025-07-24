@@ -1720,8 +1720,8 @@ def plot_heatmap_by_site_weighted(error_names, result_dict, metric='MAE', savefi
                         each += '_MAE'
                         errors_to_weight.append(result_dict[c5][kp][site2][each+'_norm'])
                     error_value = np.sum(errors_to_weight * np.array(weights))
-                    if site1 == 'mean':
-                        print(site2, error_value)
+                    # if site1 == 'mean':
+                    #     print(site2, error_value)
                 errors[s2,s1] = error_value
 
             max_value = np.max(errors)

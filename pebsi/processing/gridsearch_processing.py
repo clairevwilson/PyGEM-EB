@@ -37,7 +37,7 @@ sitedict = {'2024':['AB','ABB','B','BD','D','T'],'long':['A','AU','B','D']}     
 all_sites = sitedict['long']+sitedict['2024']+['mean','median']                  # List all sites
 
 # USER OPTIONS
-run_info = {'long':{'date':'07_15', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
+run_info = {'long':{'date':'07_24', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
             '2024':{'date':'07_23', 'idx':'0'}}                     # (12_06) (03_06)
 # params = {'c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
 #           'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5]} # 
@@ -72,7 +72,12 @@ def get_percentile(result_dict, error, percentile=50, method='MAE',plot=False):
     all_error = []
     for c5 in params['c5']:
         for kp in params['kp']:
-            all_error.append(result_dict[c5][kp]['mean'][error+'_'+method])
+            if '2024' in error:
+                sites = sitedict['2024'] + ['mean']
+            else:
+                sites = sitedict['long'] + ['mean']
+            for site in sites:
+                all_error.append(result_dict[c5][kp][site][error+'_'+method])
     if plot:
         fig, ax = plt.subplots(figsize=(2,2))
         sorted_list = np.sort(all_error)
@@ -83,7 +88,9 @@ def get_percentile(result_dict, error, percentile=50, method='MAE',plot=False):
         ax.axhline(percentile/100,color='r')
         ax.tick_params(length=5)
         plt.show()
-    return np.percentile(np.array(all_error), percentile)
+    upper = np.percentile(np.array(all_error), percentile)
+    lower = np.min(all_error)
+    return lower, upper
 
 def process_runs(run_type, fn):
     """
@@ -197,8 +204,8 @@ def create_dict(run_type):
                     run_dict = pickle.load(file)
                 set_no = f.split('_')[3].split('set')[1]
                 run_no = f.split('_')[4].split('run')[1]
-                c5 = run_dict['c5']
-                kp = run_dict['kp']
+                c5 = str(run_dict['c5'])
+                kp = str(run_dict['kp'])
                 for var in run_dict:
                     grid_dict[c5][kp][site][var] = run_dict[var]
                 grid_dict[c5][kp][site]['set_no'] = set_no
@@ -579,40 +586,6 @@ def add_normalized(result_dict, error_lims=error_lims, pareto=False):
     all_error.remove('run_no')
     all_error.remove('set_no')
 
-    # Create storage for minimum/maximum error of each error type
-    error_extremes_dict = {}
-    for site in all_sites:
-        error_extremes_dict[site] = {}
-        for error_type in all_error:
-            error_extremes_dict[site][error_type] = {'min':np.inf,'max':0}
-
-    # Go through every error and store the extremes
-    if pareto:
-        all_combos = pareto
-    else:
-        all_combos = itertools.product(params['c5'],params['kp'])
-    
-    for c5,kp in all_combos:
-        for site in all_sites:
-            if site in result_dict[c5][kp]:
-                for error_type in result_dict[c5][kp][site]:
-                    if 'AE' in error_type:
-                        current_value = result_dict[c5][kp][site][error_type]
-
-                        # Check if it's a bad run and skip if so
-                        error_name = error_type.split('_')[0]
-                        if error_name in error_lims:
-                            if current_value > error_lims[error_name]:
-                                continue
-                        else:
-                            continue
-
-                        # Acceptable run: compare error metrics to the running extremes
-                        if current_value < error_extremes_dict[site][error_type]['min']:
-                            error_extremes_dict[site][error_type]['min'] = current_value
-                        if current_value > error_extremes_dict[site][error_type]['max']:
-                            error_extremes_dict[site][error_type]['max'] = current_value
-
     # Divide each value by the minimum to get error_norm
     for c5 in params['c5']:
         for kp in params['kp']:
@@ -624,11 +597,12 @@ def add_normalized(result_dict, error_lims=error_lims, pareto=False):
                 if site in result_dict[c5][kp]:
                     list_errors = copy.deepcopy(result_dict[c5][kp][site])
                     for error_type in list_errors:
-                        if '_no' not in error_type:
+                        if error_type.split('_M')[0] in error_lims:
                             current_value = result_dict[c5][kp][site][error_type]
-                            min_value = error_extremes_dict[site][error_type]['min']
-                            max_value = error_extremes_dict[site][error_type]['max']
-                            if (max_value - min_value) > 0 and include:
+                            min_value = error_lims[error_type.split('_M')[0]][0]
+                            max_value = error_lims[error_type.split('_M')[0]][1]
+                            
+                            if include and np.abs(max_value - min_value) > 0:
                                 scaled_value = (current_value - min_value) / (max_value - min_value)
                                 result_dict[c5][kp][site][error_type+'_norm'] = scaled_value
                             else:

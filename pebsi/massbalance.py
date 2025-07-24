@@ -342,6 +342,15 @@ class massBalance():
             layermelt[0] = surface_melt
             fully_melted = []
         
+        # check if any additional layers fully melted from subsurface heating
+        if np.any(lm - layermelt <= 0):
+            melted_subsurf = np.where(lm - layermelt <= 0)[0]
+            for i in melted_subsurf:
+                if i not in fully_melted:
+                    fully_melted = np.append(fully_melted, i)
+                    layermelt[i] = lm[i] + lw[i]
+            fully_melted = np.array(fully_melted, dtype=int)
+        
         class MeltedLayers():
             def __init__(self):
                 self.mass = np.array(layermelt)[fully_melted]
@@ -400,7 +409,7 @@ class massBalance():
         if len(snow_firn_idx) > 0 and layers.ice_idx[0] < snow_firn_idx[-1]:
             if layers.ice_idx[0] != 0: # impermeable ice layer
                 snow_firn_idx = snow_firn_idx[:layers.ice_idx[0]]
-                print('impermeable ice layer?')
+                print('impermeable ice layer? top density:', layers.density[:3], 'height:', layers.lheight[:3])
             else: # surface ice layer: all water runs off
                 snow_firn_idx = []
 
