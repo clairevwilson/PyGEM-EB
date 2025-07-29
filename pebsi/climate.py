@@ -73,9 +73,6 @@ class Climate():
                             'bcwet','bcdry','ocwet','ocdry','dustwet','dustdry']
         if not self.args.use_AWS:
             self.measured_vars = []
-        
-        # default to wind direction being calculated
-        self.wind_direction = True
 
         # create empty dataset
         nans = np.ones(n_time)*np.nan
@@ -146,6 +143,8 @@ class Climate():
         if uwind_measured ^ vwind_measured:
             self.wind_direction = False
             # print('! Wind speed was input as a scalar. Wind shading is not handled')
+        else:
+            self.wind_direction = True
         
         # extract and store data
         for var in self.measured_vars:
@@ -182,10 +181,9 @@ class Climate():
         dates = self.dates_UTC
         lat = self.lat
         lon = self.lon
-        use_threads = self.args.use_threads
         
         # interpolate data if time was input on the hour instead of half-hour
-        interpolate = dates[0].minute != 30 and prms.reanalysis == 'MERRA2'
+        self.interpolate = dates[0].minute != 30 and prms.reanalysis == 'MERRA2'
         
         # get reanalysis data geopotential
         z_fp = self.reanalysis_fp + self.var_dict['elev']['fn']
@@ -193,71 +191,60 @@ class Climate():
         zds = zds.sel({self.lat_vn:lat,self.lon_vn:lon},method='nearest')
         zds = self.check_units('elev',zds)
         self.reanalysis_elev = zds.isel(time=0).values.ravel()[0]
-
-        # define worker function for threading
-        def access_cell(fn, var, result_dict):
-            # open and check units of climate data
-            ds = xr.open_dataset(fn)
-
-            # index by lat and lon
-            vn = self.var_dict[var]['vn'] 
-            lat_vn,lon_vn = [self.lat_vn,self.lon_vn]
-            if 'bc' in var or 'oc' in var or 'dust' in var:
-                if prms.reanalysis == 'ERA5-hourly':
-                    lat_vn,lon_vn = ['lat','lon']
-            ds = ds.sel({lat_vn:lat,lon_vn:lon}, method='nearest')[vn]
-
-            # check the units
-            ds = self.check_units(var,ds)
-
-            # for time-varying variables, select/interpolate to the model time
-            if var != 'elev':
-                dep_var = 'bc' in var or 'dust' in var or 'oc' in var
-                if not dep_var and prms.reanalysis == 'ERA5-hourly':
-                    assert dates[0] >= pd.to_datetime(ds.time.values[0])
-                    assert dates[-1] <= pd.to_datetime(ds.time.values[-1])
-                    ds = ds.interp(time=dates)
-                elif interpolate:
-                    ds = ds.interp(time=dates)
-                else:
-                    ds = ds.sel(time=dates)
-            
-            # make sure the gridcell corrected is close enough to the glacier
-            assert np.abs(ds.coords[lat_vn].values - float(lat)) <= 0.5, 'Wrong grid cell was accessed'
-            assert np.abs(ds.coords[lon_vn].values - float(lon)) <= 0.5, 'Wrong grid cell was accessed'
-
-            # store result
-            result_dict[var] = ds.values.ravel()
-            ds.close()
-
-            # if not threading, return the result
-            if not use_threads:
-                return result_dict
         
         # initiate variables
         all_data = {}
-        threads = []
         # loop through vars
         for var in vars:
+            # gather data for each var and add to all_data
             fn = self.reanalysis_fp + self.var_dict[var]['fn']
-            if use_threads:
-                # initiate threads
-                thread = threading.Thread(target=access_cell,
-                                        args=(fn, var, all_data))
-                thread.start()
-                threads.append(thread)
-            else:
-                # no threads, gather data in series
-                all_data = access_cell(fn,var,all_data)
-        if use_threads:
-            # join threads
-            for thread in threads:
-                thread.join()
+            all_data = self.get_var_data(fn,var,all_data)
 
         # store data
         for var in vars:
             self.cds[var].values = all_data[var].ravel()
         return
+    
+    def get_var_data(self, fn, var, result_dict):
+        # get dates
+        dates = self.dates_UTC
+
+        # open and check units of climate data
+        ds = xr.open_dataset(fn)
+
+        # index by lat and lon
+        vn = self.var_dict[var]['vn'] 
+        lat_vn,lon_vn = [self.lat_vn,self.lon_vn]
+        if 'bc' in var or 'oc' in var or 'dust' in var:
+            if prms.reanalysis == 'ERA5-hourly':
+                lat_vn,lon_vn = ['lat','lon']
+        ds = ds.sel({lat_vn:self.lat,lon_vn:self.lon}, method='nearest')[vn]
+
+        # check the units
+        ds = self.check_units(var,ds)
+
+        # for time-varying variables, select/interpolate to the model time
+        if var != 'elev':
+            dep_var = 'bc' in var or 'dust' in var or 'oc' in var
+            if not dep_var and prms.reanalysis == 'ERA5-hourly':
+                assert dates[0] >= pd.to_datetime(ds.time.values[0])
+                assert dates[-1] <= pd.to_datetime(ds.time.values[-1])
+                ds = ds.interp(time=dates)
+            elif self.interpolate:
+                ds = ds.interp(time=dates)
+            else:
+                ds = ds.sel(time=dates)
+        
+        # make sure the gridcell corrected is close enough to the glacier
+        assert np.abs(ds.coords[lat_vn].values - float(self.lat)) <= 0.5, 'Wrong grid cell was accessed'
+        assert np.abs(ds.coords[lon_vn].values - float(self.lon)) <= 0.5, 'Wrong grid cell was accessed'
+
+        # store result
+        result_dict[var] = ds.values.ravel()
+        ds.close()
+
+        # return the result dict
+        return result_dict
 
     def adjust_to_elevation(self):
         """

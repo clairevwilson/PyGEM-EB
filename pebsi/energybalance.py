@@ -108,35 +108,34 @@ class energyBalance():
         surface : float
             Class object from pebsi.surface
         mode : str, default: 'sum'
-            Options: 'list', 'sum', or 'optim'
-            Return heat flux list, sum or absolute value
+            Options: 'sum', or 'optim'
+            Return heat flux sum or absolute value of sum
             ('optim' is for BFGS optimization)
 
         Returns
         -------
         Qm : float OR np.ndarray
-            Using mode 'sum' or 'optim':
-                Returns the sum of heat fluxes
-            Using mode 'list':
-                Returns list in the order of:
-                [SWin, SWout, LWin, LWout, 
-                 sensible, latent, rain, ground]
+            Returns the sum of heat fluxes
         """
         # SHORTWAVE RADIATION  (Snet)
         SWin,SWout = self.get_SW(surface)
-        Snet_surf = SWin + SWout
         self.SWin = SWin
         self.SWout = SWout[0] if '__iter__' in dir(SWout) else SWout
+
+        # Handle penetrating shortwave separately
+        FRAC_ABSRAD = 0.9 if surface.stype in ['snow'] else 0.8
+        self.SWnet_surf = (SWin + SWout) * FRAC_ABSRAD
+        self.SWnet_penetrating = (SWin + SWout) * (1 - FRAC_ABSRAD)
                     
         # LONGWAVE RADIATION (Lnet)
         LWin,LWout = self.get_LW(surftemp)
-        Lnet = LWin + LWout
+        self.LWnet = LWin + LWout
         self.LWin = LWin
         self.LWout = LWout[0] if '__iter__' in dir(LWout) else LWout
 
         # NET RADIATION
         if self.nanNR:
-            NR = Snet_surf + Lnet
+            NR = self.SWnet_surf + self.LWnet
             self.NR = NR
         else:
             NR = self.NR_ds / self.dt
@@ -162,10 +161,8 @@ class energyBalance():
             return Qm
         elif mode in ['optim']:
             return np.abs(Qm)
-        elif mode in ['list']:
-            return np.array([SWin,SWout,LWin,LWout,Qs,Ql,Qp,Qg])
         else:
-            assert 1==0, 'argument \'mode\' in function surfaceEB should be sum, list or optim'
+            assert 1==0, 'argument \'mode\' in function surfaceEB should be sum or optim'
     
     def get_SW(self,surface):
         """

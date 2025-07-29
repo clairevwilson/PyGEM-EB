@@ -7,23 +7,59 @@ import pebsi.processing.gridsearch_processing as gsproc
 from multiprocessing import Pool
 import argparse
 import time
+import os
 
-n=120
+parser = argparse.ArgumentParser()
+parser.add_argument('-n','--n_processes',default=10,type=int)
+args = parser.parse_args()
+
+n_processes = args.n_processes
+
+def process_run(runs):
+    for run in runs:
+        run_type,fn = run
+        gsproc.process_run(run_type, fn)
 
 for run_type in ['long','2024']:
     for site in gsproc.sitedict[run_type]:
         start_site = time.time()
-        packed_vars = []
         date = gsproc.run_info[run_type]['date']
         idx = gsproc.run_info[run_type]['idx']
         fp = gsproc.base_fp+f'{date}_{site}_{idx}/'
 
-        for i in range(n):
-            fn = fp + f'grid_{date}_set{i}_run0_0.nc'
-            packed_vars.append((run_type,fn))
+        if os.path.exists(fp + f'grid_{date}_set0_run0_0.pkl'):
+            continue
 
-        with Pool(n) as processes_pool:
-            processes_pool.starmap(gsproc.process_runs,packed_vars)
+        check_date = gsproc.run_info['long']['date']
+        check_idx = gsproc.run_info['long']['idx']
+        n_runs = len(os.listdir(fp)) - 1
+
+        # Parse list for inputs to Pool function
+        packed_vars = [[] for _ in range(n_processes)]
+        run_no = 0  # Counter for runs added to each set
+        set_no = 0  # Index for the parallel process
+
+        if n_runs <= n_processes:
+            n_runs_per_process = 1
+            n_process_with_extra = 0
+        else:
+            n_runs_per_process = n_runs // n_processes     # Base number of runs per CPU
+            n_process_with_extra = n_runs % n_processes    # Number of CPUs with one extra run
+
+        for i in range(n_runs):
+            fn = fp + f'grid_{date}_set{i}_run0_0.nc'
+            packed_vars[set_no].append((run_type,fn))
+
+            # Check if moving to the next set of runs
+            n_runs_set = n_runs_per_process + (1 if set_no < n_process_with_extra else 0)
+            if run_no == n_runs_set - 1:
+                set_no += 1
+                run_no = -1
+            
+            run_no += 1
+
+        with Pool(n_processes) as processes_pool:
+            processes_pool.map(process_run,packed_vars)
 
         elapsed = time.time() - start_site
         print(f'Finished site {site} in {elapsed:.0f}')

@@ -6,6 +6,7 @@ across all sites for a single parameter combination.
 """
 
 # Built-in libraries
+import sys
 import time
 import copy
 from multiprocessing import Pool
@@ -16,13 +17,16 @@ import run_simulation as sim
 import pebsi.massbalance as mb
 import pebsi.input as eb_prms
 
+# Redirect prints to a file
+# sys.stdout = open('/trace/group/rounce/cvwilson/Output/longruns_test.txt', 'w')
+
 # User info
 use_AWS = False
-sites = ['A','AU','B','D'] # Sites to run in parallel 
+sites = ['D'] # Sites to run in parallel  'A','AU','B','D'
 # False or filename of parameters .csv for run, relative to PyGEM-EB/
 params_fn = False # '../Output/params/11_26_best.csv'
 run_date = str(pd.Timestamp.today()).replace('-','_')[:10]
-n_runs_ahead = 0    # Step if you're going to run this script more than once
+n_runs_ahead = 1    # Step if you're going to run this script more than once
 
 # Read command line args
 args = sim.get_args()
@@ -53,19 +57,10 @@ def pack_vars():
             args_run.startdate = pd.to_datetime('2012-04-20 00:00:00')
 
         # Output name
-        # args_run.out = f'Gulkana_{run_date}_long{site}_'
-        args_run.out = '07_24_D_0/grid_07_24_set64_run0_'
-        # if site == 'B':
-        #     args_run.out = '/07_01_B_0/grid_07_01_set52_run0_0.nc'
-        #     args_run.kp = 2.25
-        #     args_run.Boone_c5 = 0.022
-        # else:
-        #     args_run.out = '/07_01_AU_0/grid_07_01_set27_run0_0.nc' # 
-        #     args_run.kp = 1.5
-        #     args_run.Boone_c5 = 0.027
+        args_run.out = f'Gulkana_{run_date}_long{site}_'
 
         # Store model parameters
-        store_attrs = {'kp':args_run.kp, 'c5':args_run.Boone_c5}
+        store_attrs = {'kp':str(args_run.kp), 'c5':str(args_run.Boone_c5)}
 
         # Set task ID for SNICAR input file
         args_run.task_id = run_no + n_runs_ahead*n_processes
@@ -105,3 +100,5 @@ if __name__ == '__main__':
     packed_vars = pack_vars()
     with Pool(n_processes) as processes_pool:
         processes_pool.map(run_model_parallel,packed_vars)
+
+# sys.stdout.close()

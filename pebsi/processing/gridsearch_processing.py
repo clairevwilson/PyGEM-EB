@@ -37,12 +37,10 @@ sitedict = {'2024':['AB','ABB','B','BD','D','T'],'long':['A','AU','B','D']}     
 all_sites = sitedict['long']+sitedict['2024']+['mean','median']                  # List all sites
 
 # USER OPTIONS
-run_info = {'long':{'date':'07_24', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
-            '2024':{'date':'07_23', 'idx':'0'}}                     # (12_06) (03_06)
-# params = {'c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
-#           'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5]} # 
-params = {'c5':[0.018,0.02,0.022,0.023,0.024,0.025,0.026,0.027,0.028,0.03], # 
-          'kp':[1,1.25,1.5,1.75,2,2.25,2.375,2.5,2.625,2.75,2.875,3]} #
+run_info = {'long':{'date':'07_25', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
+            '2024':{'date':'07_26', 'idx':'0'}}                     # (12_06) (03_06)
+params = {'c5':[0.01, 0.012, 0.014,0.015,0.016,0.017, 0.018,0.02,0.022,0.024], # 
+          'kp':[1,1.25,1.5,1.75,2,2.25,2.375,2.5,2.625,2.75,2.875,3]} # 
 for key in params:                                                  # Convert params to strings for processing
     for v,value in enumerate(params[key]):
         params[key][v] = str(value)
@@ -92,7 +90,7 @@ def get_percentile(result_dict, error, percentile=50, method='MAE',plot=False):
     lower = np.min(all_error)
     return lower, upper
 
-def process_runs(run_type, fn):
+def process_run(run_type, fn):
     """
     Regenerates each individual run .pkl file which contains the
     timeseries and run information
@@ -100,6 +98,7 @@ def process_runs(run_type, fn):
     results = {}
     ds = xr.open_dataset(fn)
     site = ds.attrs['site']
+    print('Processing', fn)
 
     if run_type == 'long':
         # Seasonal mass balance
@@ -169,6 +168,8 @@ def process_runs(run_type, fn):
     # Store the attributes in the results dict
     for attr in ds.attrs:
         results[attr] = ds.attrs[attr]
+        if attr in ['c5','kp']:
+            results[attr] = str(ds.attrs[attr])
 
     # Write to new pickle file
     fn_pickle = fn.replace('.nc','.pkl')
@@ -176,7 +177,8 @@ def process_runs(run_type, fn):
         os.remove(fn_pickle)
     with open(fn_pickle, 'wb') as file:
         pickle.dump(results, file)
-    return
+
+    return results
 
 def create_dict(run_type):
     """
@@ -224,7 +226,7 @@ def add_site_means(result_dict):
     """
     # ===== Find site means of each error type =====
     # List out all error types
-    all_error = list(result_dict['0.026']['2.5']['B'].keys())
+    all_error = list(result_dict['0.018']['2.5']['B'].keys())
         
     # Create dictionary to store site means
     sites_error_dict = {}
@@ -296,7 +298,7 @@ def get_result_dict(force_redo=False):
                         result_dict[c5][kp][site] = {}
                     # Add the 2024 error stats
                     for var in both_dict['2024'][c5][kp][site]:
-                            result_dict[c5][kp][site][var] = both_dict['2024'][c5][kp][site][var]
+                        result_dict[c5][kp][site][var] = both_dict['2024'][c5][kp][site][var]
     
     result_dict = add_site_means(result_dict)
     return result_dict
@@ -582,7 +584,7 @@ def add_normalized(result_dict, error_lims=error_lims, pareto=False):
     """
 
     # Grab list of all error metrics
-    all_error = list(result_dict['0.026']['2.5']['B'].keys())
+    all_error = list(result_dict['0.018']['2.5']['B'].keys())
     all_error.remove('run_no')
     all_error.remove('set_no')
 

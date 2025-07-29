@@ -58,20 +58,19 @@ if 'trace' in eb_prms.machine:
     eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
 
 if repeat_run:
-    date = '03_05' if args.run_type == 'long' else '03_06'
-    n_today = '1'
+    date = '07_25' if args.run_type == 'long' else '07_26'
+    print('Forcing run date to be', date)
+    n_today = '0'
     out_fp = f'{date}_{args.site}_{n_today}/'
     if not os.path.exists(eb_prms.output_filepath + out_fp):
         os.mkdir(eb_prms.output_filepath + out_fp)
 else:
-    # date = str(pd.Timestamp.today()).replace('-','_')[5:10]
-    date = '07_25' if args.run_type == 'long' else '07_26'
-    print('Forcing run date to be', date)
+    date = str(pd.Timestamp.today()).replace('-','_')[5:10]
     n_today = 0
     out_fp = f'{date}_{args.site}_{n_today}/'
-    # while os.path.exists(eb_prms.output_filepath + out_fp):
-    #     n_today += 1
-    #     out_fp = f'{date}_{args.site}_{n_today}/'
+    while os.path.exists(eb_prms.output_filepath + out_fp):
+        n_today += 1
+        out_fp = f'{date}_{args.site}_{n_today}/'
     os.mkdir(eb_prms.output_filepath + out_fp)
 
 # Force some args
@@ -178,48 +177,6 @@ def run_model_parallel(list_inputs):
                 print('An error occurred at site',args.site,'with c5 =',args.Boone_c5,'kp =',args.kp,' ... removing',args.out)
                 traceback.print_exc()
                 os.remove(eb_prms.output_filepath + args.out + '0.nc')
-
-        # If succeeded, process and save only the stats
-        # out_fn = eb_prms.output_filepath + args.out
-        # if os.path.exists(out_fn + '0.nc') and not os.path.exists(out_fn + '0.pkl'):
-        #     with xr.open_dataset(out_fn + '0.nc') as dataset:
-        #         ds = dataset.load()
-        #         if args.run_type == 'long':
-        #             # seasonal mass balance
-        #             error_dict = seasonal_mass_balance(ds,method=['MAE','ME'])
-        #             winter_MAE, winter_ME = error_dict['winter']
-        #             summer_MAE, summer_ME = error_dict['summer']
-        #             annual_MAE, annual_ME = error_dict['annual']
-        #             seasonal_MAE = np.mean([winter_MAE, summer_MAE])
-        #             seasonal_ME = np.mean([winter_ME, summer_ME])
-        #             results = {'winter_MAE':winter_MAE,'summer_MAE':summer_MAE,
-        #                     'winter_ME':winter_ME,'summer_ME':summer_ME,
-        #                     'seasonal_MAE':seasonal_MAE,'seasonal_ME':seasonal_ME,
-        #                     'annual_MAE':annual_MAE,'annual_ME':annual_ME}
-
-        #             # snowpits
-        #             for method in ['MAE','ME']:
-        #                 snowpit_dict = snowpits(ds,method=method)
-        #                 for var in snowpit_dict:
-        #                     results[var] = snowpit_dict[var]
-
-        #         elif args.run_type == '2024':
-        #             MAE = cumulative_mass_balance(ds,method='MAE')
-        #             ME = cumulative_mass_balance(ds,method='ME')
-        #             results = {'MAE':MAE,'ME':ME}
-
-        #         # Store the attributes in the results dict
-        #         for attr in ds.attrs:
-        #             results[attr] = ds.attrs[attr]
-
-        #     # Pickle the dict
-        #     stats_fn = out_fn + '0.pkl'
-        #     with open(stats_fn, 'wb') as file:
-        #         pickle.dump(results,file)
-
-            # Remove the .nc
-            # os.remove(eb_prms.output_filepath + args.out + '0.nc')
-
     return
 
 # Run model in parallel

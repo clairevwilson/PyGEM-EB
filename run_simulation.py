@@ -61,8 +61,6 @@ def get_args(parse=True):
     # USER OPTIONS
     parser.add_argument('-use_AWS', action='store_true',
                         default=prms.use_AWS,help='use AWS or just reanalysis?')
-    parser.add_argument('-use_threads', action='store_true',
-                        help='use threading to import climate data?')
     parser.add_argument('-store_data', action='store_true',
                         default=prms.store_data, help='store the model output?')
     parser.add_argument('-debug', action='store_true',

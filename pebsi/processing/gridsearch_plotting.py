@@ -522,9 +522,27 @@ def plot_difference_by_param(best, result_dict, site='B', plot_vars=['2024','ann
         diff = 0.002 if param == 'c5' else 0.5
         param_arr = np.array(param_list).astype(float)
         boundaries = np.append(np.array([param_arr[0] - diff]), param_arr)
+
+        #     cmap = mpl.colormaps.get_cmap('viridis_r')
+        # norm =  mpl.colors.Normalize(vmin=0.01,vmax=0.024)
+        # param_arr = np.array(param_list).astype(float)
+        # boundaries = np.append(np.array([param_arr[0] - 0.002]), param_arr)
+        # 
+        # cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+        #             cax=cbar_ax,
+        #             orientation='vertical',
+        #             boundaries=boundaries,ticks=tick_locations,
+        #             spacing='proportional')
+        # cb.ax.set_yticks(tick_locations)
+        # cb.ax.tick_params(labelsize=10,direction='inout',length=8)
+        # cb.ax.minorticks_on()
+        # cb.ax.yaxis.set_minor_locator(mpl.ticker.FixedLocator([0.0145,0.0165]))
+        # cb.ax.tick_params(which='minor', length=2)
+        # cb.ax.set_yticklabels(labeled_ticks)
+        # cb.ax.set_title('$c_5$')
         if param == 'c5':
-            labeled_ticks = [0.018,0.022,0.026,0.03]
-            tick_locations = [0.017,0.021,0.0255,0.029]
+            labeled_ticks = [0.010,0.014,0.018,0.022]
+            tick_locations = [0.009,0.013,0.0175,0.021]
         else:
             labeled_ticks = [1.0,1.5,2.0,2.5,3.0]
             tick_locations = [0.75,1.25,1.75,2.375,2.875]
@@ -933,11 +951,11 @@ def plot_tradeoffs(result_dict, error_names, site='mean',
     param_list = params['c5']
     cbar_ax = fig.add_axes([1.05, 0.12, 0.02, 0.8])
     cmap = mpl.colormaps.get_cmap('viridis_r')
-    norm =  mpl.colors.Normalize(vmin=0.018,vmax=0.03)
+    norm =  mpl.colors.Normalize(vmin=0.01,vmax=0.024)
     param_arr = np.array(param_list).astype(float)
     boundaries = np.append(np.array([param_arr[0] - 0.002]), param_arr)
-    labeled_ticks = [0.018,0.02,0.022,0.024,0.026,0.028,0.03]
-    tick_locations = [0.017,0.019,0.021,0.0235,0.0255,0.0275,0.029]
+    labeled_ticks = [0.010,0.012,0.014,0.016,0.018,0.02,0.022,0.024]
+    tick_locations = [0.009,0.011,0.013,0.0155,0.0175,0.019,0.021,0.023]
     cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
                 cax=cbar_ax,
                 orientation='vertical',
@@ -946,7 +964,7 @@ def plot_tradeoffs(result_dict, error_names, site='mean',
     cb.ax.set_yticks(tick_locations)
     cb.ax.tick_params(labelsize=10,direction='inout',length=8)
     cb.ax.minorticks_on()
-    cb.ax.yaxis.set_minor_locator(mpl.ticker.FixedLocator([0.0225,0.0245,0.0265]))
+    cb.ax.yaxis.set_minor_locator(mpl.ticker.FixedLocator([0.0145,0.0165]))
     cb.ax.tick_params(which='minor', length=2)
     cb.ax.set_yticklabels(labeled_ticks)
     cb.ax.set_title('$c_5$')
@@ -997,11 +1015,11 @@ def plot_pareto_2024(all_pareto, result_dict, frequency_dict, best, savefig=Fals
     param_list = gsproc.params['c5']
     cbar_ax = fig.add_axes([0.93, 0.10, 0.02, 0.79])
     cmap = mpl.colormaps.get_cmap('viridis_r')
-    norm =  mpl.colors.Normalize(vmin=0.018,vmax=0.03)
+    norm =  mpl.colors.Normalize(vmin=0.01,vmax=0.024)
     param_arr = np.array(param_list).astype(float)
     boundaries = np.append(np.array([param_arr[0] - 0.002]), param_arr)
-    labeled_ticks = [0.018,0.02,0.022,0.024,0.026,0.028,0.03]
-    tick_locations = [0.017,0.019,0.021,0.0235,0.0255,0.0275,0.029]
+    labeled_ticks = [0.010,0.012,0.014,0.016,0.018,0.02,0.022,0.024]
+    tick_locations = [0.009,0.011,0.013,0.0155,0.0175,0.019,0.021,0.023]
     cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
                 cax=cbar_ax,
                 orientation='vertical',
@@ -1010,7 +1028,7 @@ def plot_pareto_2024(all_pareto, result_dict, frequency_dict, best, savefig=Fals
     cb.ax.set_yticks(tick_locations)
     cb.ax.tick_params(labelsize=10,direction='inout',length=8)
     cb.ax.minorticks_on()
-    cb.ax.yaxis.set_minor_locator(mpl.ticker.FixedLocator([0.0225,0.0245,0.0265]))
+    cb.ax.yaxis.set_minor_locator(mpl.ticker.FixedLocator([0.0145,0.0165]))
     cb.ax.tick_params(which='minor', length=2)
     cb.ax.set_yticklabels(labeled_ticks)
     cb.ax.set_title('$c_5$')
@@ -1041,7 +1059,6 @@ def plot_pareto_2024(all_pareto, result_dict, frequency_dict, best, savefig=Fals
     # SURFACE HEIGHT CHANGE TRADEOFFS
     ax = axes[0,1]
     cmap = mpl.colormaps.get_cmap('viridis_r')
-    norm =  mpl.colors.Normalize(vmin=0.018,vmax=0.03)
     for c5 in frequency_dict:
         kp_list = []
         MAE_list = []
@@ -1067,7 +1084,7 @@ def plot_pareto_2024(all_pareto, result_dict, frequency_dict, best, savefig=Fals
     ax.plot(dates_albedo, albedo_best, color='k', linewidth=1.5) #,label='Best parameters')
     ax.fill_between(dates_albedo, min_series, max_series, alpha=0.8, color='gray')
     # Plot ice exposure date
-    when_modeled = dates_albedo[np.where(albedo_best == np.min(albedo_best))[0][0]]
+    when_modeled = dates_albedo[np.where(np.abs(albedo_best - np.min(albedo_best)) < 0.05)[0][0]]
     when_measured = pd.to_datetime('2024-07-21')
     ax.axvline(when_modeled, color='r', linewidth=1.5,label='Ice exposed')
     ax.axvline(when_measured, color='r', linestyle='--', linewidth=1.2)
@@ -1084,7 +1101,6 @@ def plot_pareto_2024(all_pareto, result_dict, frequency_dict, best, savefig=Fals
 
     ax = axes[1,1]
     cmap = mpl.colormaps.get_cmap('viridis_r')
-    norm =  mpl.colors.Normalize(vmin=0.018,vmax=0.03)
     for c5 in frequency_dict:
         kp_list = []
         MAE_list = []
