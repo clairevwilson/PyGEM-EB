@@ -39,8 +39,8 @@ all_sites = sitedict['long']+sitedict['2024']+['mean','median']                 
 # USER OPTIONS
 run_info = {'long':{'date':'07_25', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
             '2024':{'date':'07_26', 'idx':'0'}}                     # (12_06) (03_06)
-params = {'c5':[0.01, 0.012, 0.014,0.015,0.016,0.017, 0.018,0.02,0.022,0.024], # 
-          'kp':[1,1.25,1.5,1.75,2,2.25,2.375,2.5,2.625,2.75,2.875,3]} # 
+params = {'c5':[0.01, 0.012, 0.014,0.016, 0.018,0.02,0.022,0.024], # 
+          'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3]} # 
 for key in params:                                                  # Convert params to strings for processing
     for v,value in enumerate(params[key]):
         params[key][v] = str(value)

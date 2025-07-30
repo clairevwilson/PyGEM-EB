@@ -524,11 +524,13 @@ class Layers():
                 # merge into ice below
                 if self.ltype[layer+1] in ['ice']:
                     self.merge_layers(layer)
-
+            # advance layer if it fails the new ice check
             else:
                 layer += 1
 
-        # bound density of superimposed ice (fake snow)
+        # bound density of superimposed ice
+        if np.any(self.ldensity[self.snow_idx] > DENSITY_ICE):
+            print('dense snow?')
         self.ldensity[self.snow_idx][self.ldensity[self.snow_idx] > DENSITY_ICE] = DENSITY_ICE
         return
     

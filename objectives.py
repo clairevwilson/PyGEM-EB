@@ -68,8 +68,7 @@ def seasonal_mass_balance(ds,method='MAE',out=None):
     years_model = np.unique(pd.to_datetime(ds.time.values).year)
     if pd.to_datetime(f'{years_model[-1]}-08-01') not in ds.time.values:
         years_model = years_model[:-1]
-    # if site == 'AU':
-    #     years_model = years_model[1:]
+
     years_measure = np.unique(df_mb.index)
     years = np.sort(list(set(years_model) & set(years_measure)))
 

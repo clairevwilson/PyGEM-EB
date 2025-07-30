@@ -30,8 +30,8 @@ repeat_run = False   # True if restarting an already begun run
 # Define sets of parameters
 # params = {'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
 #           'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5]} # 
-params = {'Boone_c5':[0.01, 0.012, 0.014,0.015,0.016,0.017, 0.018,0.02,0.022,0.024], # 
-          'kp':[1,1.25,1.5,1.75,2,2.25,2.375,2.5,2.625,2.75,2.875,3]} # 
+params = {'Boone_c5':[0.01, 0.012, 0.014,0.016,0.018,0.02,0.022,0.024], # 
+          'kp':[0.25,0.5,0.75,1,1.25,1.5,1.75,2,2.25,2.5,2.75,3]} # 
 
 # Read command line args
 parser = sim.get_args(parse=False)
@@ -74,7 +74,7 @@ else:
     os.mkdir(eb_prms.output_filepath + out_fp)
 
 # Force some args
-args.store_data = True              # Ensures output is stored
+args.store_data = True      # Ensures output is stored
 if args.run_type == '2024': # Short AWS run
     args.use_AWS = True
     eb_prms.AWS_fn = '../climate_data/AWS/Preprocessed/gulkana2024.csv'

@@ -123,7 +123,13 @@ class energyBalance():
         self.SWout = SWout[0] if '__iter__' in dir(SWout) else SWout
 
         # Handle penetrating shortwave separately
-        FRAC_ABSRAD = 0.9 if surface.stype in ['snow'] else 0.8
+        if prms.option_SWpen:
+            if surface.stype in ['snow']:
+                FRAC_ABSRAD = prms.frac_absrad_snow
+            else:
+                FRAC_ABSRAD = prms.frac_absrad_ice
+        else:
+            FRAC_ABSRAD = 1
         self.SWnet_surf = (SWin + SWout) * FRAC_ABSRAD
         self.SWnet_penetrating = (SWin + SWout) * (1 - FRAC_ABSRAD)
                     

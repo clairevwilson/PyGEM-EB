@@ -18,7 +18,7 @@ import pebsi.massbalance as mb
 import pebsi.input as eb_prms
 
 # Redirect prints to a file
-# sys.stdout = open('/trace/group/rounce/cvwilson/Output/longruns_test.txt', 'w')
+sys.stdout = open('/trace/group/rounce/cvwilson/Output/longruns_test.txt', 'w')
 
 # User info
 use_AWS = False
@@ -101,4 +101,4 @@ if __name__ == '__main__':
     with Pool(n_processes) as processes_pool:
         processes_pool.map(run_model_parallel,packed_vars)
 
-# sys.stdout.close()
+sys.stdout.close()
