@@ -70,9 +70,10 @@ class Layers():
        
         # additional layer properties
         self.update_layer_props()
-        self.drefreeze = np.zeros_like(self.ltemp)   # LAYER MASS OF REFREEZE [kg m-2]
+        self.drefreeze = np.zeros_like(self.ltemp)   # LAYER MASS OF REFREEZE ADDED THIS TIMESTEP [kg m-2]
+        self.lrefreeze = np.zeros_like(self.ltemp)   # LAYER MASS OF REFREEZE [kg m-2]
         self.lnewsnow = np.zeros_like(self.ltemp)    # LAYER MASS OF NEW SNOW [kg m-2]
-        self.lrefreeze = np.zeros_like(self.ltemp) # TRACK CUM. REFREEZE [kg m-2]
+        self.lage = np.zeros_like(self.ltemp)        # LAYER AGE [days]
 
         # initialize bucket for 'delayed snow' and running max snow mass
         self.delayed_snow = 0
@@ -324,7 +325,8 @@ class Layers():
         self.lOC = np.append(new_layer_OC,self.lOC)
         new_layer_dust = layers_to_add.loc['dust'].values.astype(float)*self.lheight[0]
         self.ldust = np.append(new_layer_dust,self.ldust)
-        # new layers start with 0 refreeze
+        # new layers start with 0 refreeze and 0 days old
+        self.lage = np.append(0,self.lage)
         self.drefreeze = np.append(0,self.drefreeze) 
         self.lrefreeze = np.append(0,self.lrefreeze)
         self.update_layer_props()
@@ -345,6 +347,7 @@ class Layers():
         self.lheight = np.delete(self.lheight,layer_to_remove)
         self.ltype = np.delete(self.ltype,layer_to_remove)
         self.lice = np.delete(self.lice,layer_to_remove)
+        self.lage = np.delete(self.lage,layer_to_remove)
         self.drefreeze = np.delete(self.drefreeze,layer_to_remove)
         self.lrefreeze = np.delete(self.lrefreeze,layer_to_remove)
         self.lnewsnow = np.delete(self.lnewsnow,layer_to_remove)
@@ -380,6 +383,7 @@ class Layers():
         self.lheight = np.insert(self.lheight,l,self.lheight[l])
         self.lice[l] = self.lice[l]/2
         self.lice = np.insert(self.lice,l,self.lice[l])
+        self.lage = np.insert(self.lage,l,self.lage[l])
         self.drefreeze[l] = self.drefreeze[l]/2
         self.drefreeze = np.insert(self.drefreeze,l,self.drefreeze[l])
         self.lrefreeze[l] = self.lrefreeze[l]/2
@@ -411,10 +415,11 @@ class Layers():
         self.ltemp[l+1] = np.mean(self.ltemp[l:l+2])
         self.lheight[l+1] = np.sum(self.lheight[l:l+2])
         self.lice[l+1] = np.sum(self.lice[l:l+2])
+        self.lage[l+1] = np.sum(self.lage[l:l+2]*self.lice[l:l+2])/np.sum(self.lice[l:l+2])
         self.drefreeze[l+1] = np.sum(self.drefreeze[l:l+2])
         self.lrefreeze[l+1] = np.sum(self.lrefreeze[l:l+2])
         self.lnewsnow[l+1] = np.sum(self.lnewsnow[l:l+2])
-        self.lgrainsize[l+1] = np.mean(self.lgrainsize[l:l+2])
+        self.lgrainsize[l+1] = np.sum(self.lgrainsize[l:l+2]*self.lice[l:l+2])/np.sum(self.lice[l:l+2])
         self.lBC[l+1] = np.sum(self.lBC[l:l+2])
         self.lOC[l+1] = np.sum(self.lOC[l:l+2])
         self.ldust[l+1] = np.sum(self.ldust[l:l+2])
@@ -529,8 +534,6 @@ class Layers():
                 layer += 1
 
         # bound density of superimposed ice
-        if np.any(self.ldensity[self.snow_idx] > DENSITY_ICE):
-            print('dense snow?')
         self.ldensity[self.snow_idx][self.ldensity[self.snow_idx] > DENSITY_ICE] = DENSITY_ICE
         return
     

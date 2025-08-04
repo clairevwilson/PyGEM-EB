@@ -93,8 +93,11 @@ class massBalance():
             # >>> UPDATE DAILY PROPERTIES <<<
             if time.hour == 0:
                 # surrounding albedo, surface type, days since snowfall
-                surface.daily_updates(layers,enbal.tempC,surface.stemp,time)
+                surface.daily_updates(layers,time)
                 self.days_since_snowfall = surface.days_since_snowfall
+
+                # age layers by one hour
+                layers.lage += 1
 
                 # grain size
                 if self.args.switch_melt == 2 and layers.nlayers > 2:
@@ -114,7 +117,7 @@ class massBalance():
             # >>> MELTING <<<
             # calculate subsurface heating from penetrating SW
             subsurf_layermelt = self.subsurface_heating()
-            
+    
             # combine surface and subsurface melt into one array
             layermelt = self.melting(subsurf_layermelt)
 
@@ -123,14 +126,20 @@ class massBalance():
             # fully melted layers were removed from layermelt so add that mass
             if self.melted_layers != 0:
                 melt += np.sum(self.melted_layers.mass)
-            
+            if self.time == pd.to_datetime('2016-10-30 21:00:00'):
+                print('melt', layers.ltemp)
+
             # >>> PERCOLATION <<<
             # route meltwater and LAPs through snow/firn
             runoff = self.percolation(layermelt,rainfall)
+            if self.time == pd.to_datetime('2016-10-30 21:00:00'):
+                print('runoff', layers.ltemp)
             
             # >>> TEMPERATURE PROFILE <<<
             # recalculate the temperature profile considering conduction
             self.thermal_conduction()
+            if self.time == pd.to_datetime('2016-10-30 21:00:00'):
+                print('ther', layers.ltemp)
 
             # >>> PHASE CHANGES <<<
             # calculate mass gain or loss from phase changes
@@ -143,13 +152,13 @@ class massBalance():
             # run densification (daily)
             if time.hour == 0:
                 self.densification()
-
+            
             # >>> CHECK LAYERS <<<
             # check and update layer sizes
             layers.check_layers(self.output.out_fn)
 
             # if towards the end of summer, check if old snow should become firn
-            if time.day_of_year >= prms.end_summer_doy and time.hour == 0:
+            if time.day_of_year >= prms.start_end_summer and time.hour == 0:
                 if not self.firn_converted:
                     self.end_of_summer()
 
@@ -392,12 +401,10 @@ class massBalance():
             idx = layers.snow_idx
             n = len(idx)
             
-            # get fractions of refreeze, new snow and old snow
+            # get fractions of refreeze and old snow
             refreeze = layers.drefreeze[idx]
-            new_snow = layers.lnewsnow[idx]
-            old_snow = layers.lice[idx] - refreeze - new_snow
+            old_snow = layers.lice[idx] - refreeze
             f_old = old_snow / layers.lice[idx]
-            f_new = new_snow / layers.lice[idx]
             f_rfz = refreeze / layers.lice[idx]
             f_liq = layers.lwater[idx] / (layers.lwater[idx] + layers.lice[idx])
 
@@ -472,7 +479,7 @@ class massBalance():
             aged_grainsize = grainsize + drdry + drwet
                       
             # sum contributions of old snow, new snow and refreeze
-            grainsize = aged_grainsize*f_old + FRESH_GRAINSIZE*f_new + RFZ_GRAINSIZE*f_rfz
+            grainsize = aged_grainsize*f_old + RFZ_GRAINSIZE*f_rfz
 
             # enforce maximum grainsize
             grainsize[np.where(grainsize > FIRN_GRAINSIZE)[0]] = FIRN_GRAINSIZE
@@ -532,7 +539,7 @@ class massBalance():
         layerSW[0] = 0 # surface layer handled separately
 
         # recalculate layer temperatures, excluding the top layer (calculated separately)
-        lT[1:] = lT[1:] + layerSW[1:]*self.dt/(lm[1:]*HEAT_CAPACITY_ICE)
+        lT[1:] += layerSW[1:]*self.dt/(lm[1:]*HEAT_CAPACITY_ICE)
 
         # calculate melt from temperatures above 0
         layermelt = np.zeros(layers.nlayers)
@@ -547,7 +554,6 @@ class massBalance():
                 sensible_energy = temp * lm[layer] * HEAT_CAPACITY_ICE
                 total_energy = sensible_energy + leftover_energy
                 melt = total_energy / LH_RF
-
                 # set layer temp to the melting point
                 lT[layer] = 0.
             else:
@@ -700,10 +706,8 @@ class massBalance():
                 snow_firn_idx = snow_firn_idx[:layers.ice_idx[0]]
             else:
                 print('! impermeable ice layer in the snow')
-                print(layers.ice_idx[0] == 0 ,layers.ice_idx, len(layers.snow_idx) > 0, layers.snow_idx)
-                print(self.time, layers.ldensity, layers.ltype, layers.lheight)
-                print(self.args.kp, self.args.Boone_c5)
-                assert 1==0 # DEBUGGING THIS ACTIVELY
+                print(self.time, layers.ldensity, layers.ltype, layers.lheight,self.args.kp, self.args.Boone_c5)
+                assert 1==0 # still making sure this never pops up --- it shouldn't be able to
 
         # initialize variables
         initial_mass = np.sum(layers.lice + layers.lwater)
@@ -952,7 +956,6 @@ class massBalance():
         layers.ltemp[snow_firn_idx] = lT
         layers.lwater[snow_firn_idx] = lw
         layers.lice[snow_firn_idx] = lm
-        layers.lheight[snow_firn_idx] = lh
         layers.update_layer_props()
 
         # CHECK MASS CONSERVATION
@@ -1007,11 +1010,6 @@ class massBalance():
                 dRho = (mass_term+c1*np.exp(temp_term+dens_term))*lp[layer]*dt
                 lp[layer] += dRho
 
-            # LAYERS OUT
-            layers.ldensity = lp
-            layers.lheight = lm / lp
-            layers.update_layer_props('depth')
-
         # Herron Langway (1980) method
         elif prms.method_densification in ['HerronLangway']:
             # yearly accumulation is the maximum layer snow mass in mm w.e. yr-1
@@ -1029,11 +1027,6 @@ class massBalance():
             dRho = k*a**b*(DENSITY_ICE - lp)/DENSITY_ICE*dt
             lp += dRho
 
-            # LAYERS OUT
-            layers.ldensity = lp
-            layers.lheight = lm / lp
-            layers.update_layer_props('depth')
-
         # Kojima (1967) method (JULES)
         elif prms.method_densification in ['Kojima']:
             NU_0 = 1e7      # Pa s
@@ -1049,10 +1042,10 @@ class massBalance():
                 dRho = lp[layer]*weight_above/NU_0*exp_term
                 lp[layer] += dRho
 
-            # LAYERS OUT
-            layers.ldensity = lp
-            layers.lheight = lm / lp
-            layers.update_layer_props('depth')
+        # LAYERS OUT
+        layers.ldensity = lp
+        layers.lheight = lm / lp
+        layers.update_layer_props('depth')
 
         # check if new firn or ice layers were created
         layers.update_layer_types()
@@ -1095,8 +1088,11 @@ class massBalance():
             # check if dm causes negativity
             if layers.lice[0] + dm < 0: 
                 # remove mass from next layer
-                layers.lice[1] += dm + layers.lice[0] 
+                remaining_dm = -(np.abs(dm) - layers.lice)
+                layers.lice[1] += remaining_dm
+                layers.lheight[1] += remaining_dm / layers.ldensity[1]
                 layers.lice[0] = 0
+                layers.remove_layer(0)
             else:
                 # add mass to layer if it doesn't cause negativity
                 layers.lice[0] += dm
@@ -1259,14 +1255,23 @@ class massBalance():
         are transformed to firn and cumulative refreeze
         is reset to 0.
         """
+        # get classes
+        layers = self.layers
+
+        # exit function if there is no snow
+        if len(layers.snow_idx) == 0:
+            return
+        
         # CONSTANTS
         NDAYS = prms.new_snow_days
         SNOW_THRESHOLD = prms.new_snow_threshold
         T_LOW = prms.snow_threshold_low
         T_HIGH = prms.snow_threshold_high
+        FIRN_AGE = prms.firn_age
 
-        # only merge firn if there is snow and firn below that snow
-        if len(self.layers.snow_idx) > 0 and len(self.layers.firn_idx) > 0:
+        # only merge firn if there is old enough snow
+        lage_snow = layers.lage[layers.snow_idx]
+        if np.any(lage_snow >= FIRN_AGE):
             # define rain vs snow scaling 
             rain_scale = np.linspace(1,0,20)
             temp_scale = np.linspace(T_LOW,T_HIGH,20)
@@ -1280,22 +1285,26 @@ class massBalance():
             # create array to mask tp to snow amounts
             mask = np.interp(check_temp,temp_scale,rain_scale)
             upcoming_snow = np.sum(check_tp*mask)
-            
-            # if we are not getting new snow, exit the function
+           
+            # check if we are getting enough snow to surpass the threshold
             if upcoming_snow < SNOW_THRESHOLD:
+                # not getting enough snow: exit function
                 return
+            else:
+                # getting new snow: set the timestamp
+                firn_merged = self.time
         
-            # we're getting new snow, so today is the end of summer: merge snow to firn
-            merge_count = max(0,len(self.layers.snow_idx) - 1)
-            for _ in range(merge_count):
-                self.layers.merge_layers(0)
-                self.layers.ltype[0] = 'firn'
+            # check which layers are old enough to merge
+            merge_layers = np.where(lage_snow >= FIRN_AGE)[0]
+            for _ in range(merge_layers[0], merge_layers[-1]):
+                layers.merge_layers(merge_layers[0])
+                layers.ltype[merge_layers[0]] = 'firn'
             if self.args.debug:
-                print('Converted firn on',self.time)
+                print('Converted firn on',firn_merged)
             self.firn_converted = True
 
             # reset cumulative refreeze
-            self.layers.lrefreeze *= 0
+            layers.lrefreeze *= 0
             return
 
     def current_state_prints(self):
@@ -1476,7 +1485,7 @@ class Output():
                          'sensible','latent','meltenergy','albedo','vis_albedo',
                          'SWin_sky','SWin_terr','surftemp'],
                    'MB':['melt','refreeze','runoff','accum','snowdepth','cumrefreeze','dh'],
-                   'climate':['airtemp','wind'],
+                   'climate':['airtemp'],
                    'layers':['layertemp','layerdensity','layerwater','layerheight',
                              'layerBC','layerOC','layerdust','layergrainsize','layerrefreeze']}
 
@@ -1501,7 +1510,6 @@ class Output():
                 runoff = (['time'],zeros[:,0],{'units':'m w.e.'}),
                 accum = (['time'],zeros[:,0],{'units':'m w.e.'}),
                 airtemp = (['time'],zeros[:,0],{'units':'C'}),
-                wind = (['time'],zeros[:,0],{'units':'m s-1'}),
                 surftemp = (['time'],zeros[:,0],{'units':'C'}),
                 layertemp = (['time','layer'],zeros,{'units':'C'}),
                 layerwater = (['time','layer'],zeros,{'units':'kg m-2'}),
@@ -1547,7 +1555,6 @@ class Output():
         self.vis_albedo_output = [] # surface visible albedo [-]
         self.airtemp_output = []    # downscaled air temperature [C]
         self.surftemp_output = []   # surface temperature [C]
-        self.wind_output = []       # wind speed [m s-1]
 
         # MASS BALANCE OUTPUTS
         self.snowdepth_output = []  # depth of snow [m]
@@ -1604,7 +1611,6 @@ class Output():
         self.vis_albedo_output.append(float(surface.vis_a))
         self.surftemp_output.append(float(surface.stemp))
         self.airtemp_output.append(float(enbal.tempC))
-        self.wind_output.append(float(enbal.wind))
 
         self.melt_output.append(float(massbal.melt))
         self.refreeze_output.append(float(massbal.refreeze))
@@ -1658,7 +1664,6 @@ class Output():
                 ds['cumrefreeze'].values = self.cumrefreeze_output
             if 'climate' in prms.store_vars:
                 ds['airtemp'].values = self.airtemp_output
-                ds['wind'].values = self.wind_output
             if 'layers' in prms.store_vars:
                 layertemp_output = pd.DataFrame.from_dict(self.layertemp_output,orient='index')
                 layerdensity_output = pd.DataFrame.from_dict(self.layerdensity_output,orient='index')

@@ -1163,7 +1163,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
         elif var in ['layergrainsize']:
             bounds = [50,1500]
         elif var in ['layerrefreeze']:
-            bounds = [0,0.05]
+            bounds = [0,0.4]
         dens_lim = 890 if plot_firn else 600
         dens_lim = 1000 if plot_ice else dens_lim
         assert 'layer' in var, 'choose layer variable'
@@ -1192,7 +1192,7 @@ def visualize_layers(ds,dates,vars,force_layers=False,
             if var in ['layerwater']:
                 vardata = vardata / height / 1000 * 100
             if var in ['layerrefreeze']:
-                vardata = vardata
+                vardata = vardata / (np.flip(dens[layers_to_plot]) * height)
             # if plot_ice:
             #     height = np.log(height)
 

@@ -11,6 +11,7 @@ import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-n','--n_processes',default=10,type=int)
+parser.add_argument('-redo',default=True,type=bool)
 args = parser.parse_args()
 
 n_processes = args.n_processes
@@ -21,18 +22,19 @@ def process_run(runs):
         gsproc.process_run(run_type, fn)
 
 for run_type in ['long','2024']:
-    for site in gsproc.sitedict[run_type]:
+    for site in 'D': # gsproc.sitedict[run_type]:
         start_site = time.time()
         date = gsproc.run_info[run_type]['date']
         idx = gsproc.run_info[run_type]['idx']
         fp = gsproc.base_fp+f'{date}_{site}_{idx}/'
 
-        if os.path.exists(fp + f'grid_{date}_set0_run0_0.pkl'):
+        if os.path.exists(fp + f'grid_{date}_set0_run0_0.pkl') and not args.redo:
             continue
-
+        
         check_date = gsproc.run_info['long']['date']
         check_idx = gsproc.run_info['long']['idx']
-        n_runs = len(os.listdir(fp)) - 1
+        all_nc = [f for f in os.listdir(fp) if 'nc' in f]
+        n_runs = len(all_nc)
 
         # Parse list for inputs to Pool function
         packed_vars = [[] for _ in range(n_processes)]

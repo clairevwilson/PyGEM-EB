@@ -37,10 +37,10 @@ sitedict = {'2024':['AB','ABB','B','BD','D','T'],'long':['A','AU','B','D']}     
 all_sites = sitedict['long']+sitedict['2024']+['mean','median']                  # List all sites
 
 # USER OPTIONS
-run_info = {'long':{'date':'07_25', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
-            '2024':{'date':'07_26', 'idx':'0'}}                     # (12_06) (03_06)
-params = {'c5':[0.01, 0.012, 0.014,0.016, 0.018,0.02,0.022,0.024], # 
-          'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3]} # 
+run_info = {'long':{'date':'08_01', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
+            '2024':{'date':'08_02', 'idx':'0'}}                     # (12_06) (03_06)
+params = {'c5':[0.01, 0.012, 0.014,0.016,0.018,0.02,0.022,0.024],  # 
+          'kp':[0.25,0.5,0.75,1,1.25,1.5,1.75,2,2.25,2.5,2.75,3]}  # 
 for key in params:                                                  # Convert params to strings for processing
     for v,value in enumerate(params[key]):
         params[key][v] = str(value)
@@ -50,7 +50,7 @@ error_lims = {'2024':0.5,'snowdensity':100,
               'winter':0.4,'summer':0.9,
               'snowdepth':1,'annual':1}
 
-def get_any(result_dict,c5='0.018',kp='2',site='B',run_type='long'):
+def get_any(result_dict,c5='0.018',kp='2',site='B',run_type='long',out='ds'):
     """
     Grabs the dataset for a given parameter combination and site
     """
@@ -62,9 +62,13 @@ def get_any(result_dict,c5='0.018',kp='2',site='B',run_type='long'):
     else:
         date = run_info['long']['date']
         idx = run_info['long']['idx']
-    print(date, idx)
-    ds,_,_ = getds(f'/trace/group/rounce/cvwilson/Output/{date}_{site}_{idx}/grid_{date}_set{setno}_run{runno}_0.nc')
-    return ds
+    if out == 'ds':
+        ds,_,_ = getds(f'/trace/group/rounce/cvwilson/Output/{date}_{site}_{idx}/grid_{date}_set{setno}_run{runno}_0.nc')
+        return ds
+    elif out == 'fn':
+        return f'/trace/group/rounce/cvwilson/Output/{date}_{site}_{idx}/grid_{date}_set{setno}_run{runno}_0.nc'
+    else:
+        assert 1==0, 'choose from out = ds or fn'
 
 def get_percentile(result_dict, error, percentile=50, method='MAE',plot=False):
     all_error = []
@@ -199,6 +203,8 @@ def create_dict(run_type):
 
     # Loop through all the sites
     for site in sitedict[run_type]:
+        if run_type == 'long':
+            date = '07_30' if site != 'D' else run_info[run_type]['date']
         for f in os.listdir(base_fp+f'{date}_{site}_{idx}/'):
             if 'pkl' in f:
                 # Open individual output pickle 
@@ -246,7 +252,7 @@ def add_site_means(result_dict):
                             try:
                                 sites_error_dict[error_type].append(result_dict[c5][kp][site][error_type])
                             except:
-                                print(site, kp, c5, error_type)
+                                print(site, kp, c5, error_type,' failed')
                     if len(sites_error_dict[error_type]) > 0:
                         result_dict[c5][kp]['mean'][error_type] = np.mean(sites_error_dict[error_type])
                         result_dict[c5][kp]['median'][error_type] = np.median(sites_error_dict[error_type])
@@ -275,7 +281,7 @@ def get_result_dict(force_redo=False):
     for run_type in parse_runs:  
         date = run_info[run_type]['date']
         idx = run_info[run_type]['idx']
-        if not os.path.exists(base_fp + f'{date}_{idx}_out.pkl') or force_redo:
+        if not os.path.exists(base_fp + f'{date}_{idx}_out.pkl') or force_redo in [True, run_type]:
             # No compiled pickle exists: create dictionary
             grid_dict = create_dict(run_type)
         else:

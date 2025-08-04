@@ -946,6 +946,7 @@ def plot_tradeoffs(result_dict, error_names, site='mean',
     n_rows = n_plots // 2
     n_rows = n_rows + 1 if n_plots % 2 != 0 else n_rows
     fig,axes = plt.subplots(n_rows, 2, figsize=(6,n_rows*2), sharex=True, layout='constrained')
+    print(params)
 
     # Make colorbar
     param_list = params['c5']

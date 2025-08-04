@@ -197,9 +197,10 @@ ratio_DU_bin3 = 0.481675    # " SNICAR Bin 3 (1.25-2.5um)
 ratio_DU_bin4 = 0.203775    # " SNICAR Bin 4 (2.5-5um)
 ratio_DU_bin5 = 0.034       # " SNICAR Bin 5 (5-50um)
 # <<<<<< End-of-summer >>>>>
-end_summer_doy = 228        # Day of year to starting checking for end of summer (snow -> firn)
-new_snow_threshold = 0.05   # Threshold for new snow to consider the start of winter (m w.e.)
-new_snow_days = 10          # Number of days to sum snow over and compare against threshold
+start_end_summer = 228      # Julian day of year to start checking for end of summer (snow -> firn)
+new_snow_threshold = 0.02   # Threshold for new snow to consider the start of winter [m w.e.]
+new_snow_days = 10          # Number of days to sum snow over and compare against threshold [d]
+firn_age = 60               # Number of days old a snow layer has to be to turn it into firn [d]
 
 # ========== OTHER PYGEM INPUTS ========== 
 # rgi_regionsO1 = [1]

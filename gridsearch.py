@@ -26,7 +26,7 @@ import pebsi.massbalance as mb
 from objectives import *
 
 # OPTIONS
-repeat_run = False   # True if restarting an already begun run
+repeat_run = True   # True if restarting an already begun run
 # Define sets of parameters
 # params = {'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
 #           'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5]} # 
@@ -58,7 +58,7 @@ if 'trace' in eb_prms.machine:
     eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
 
 if repeat_run:
-    date = '07_25' if args.run_type == 'long' else '07_26'
+    date = '08_01' if args.run_type == 'long' else '08_02'
     print('Forcing run date to be', date)
     n_today = '0'
     out_fp = f'{date}_{args.site}_{n_today}/'
@@ -192,4 +192,4 @@ n_missing = len(missing)
 
 # Store missing as .txt
 np.savetxt(missing_fn,np.array(missing),fmt='%s',delimiter=',')
-print(f'Finished param_set_parallel with {n_missing} failed: saved to {missing_fn}')
+print(f'Finished grid search at site {args.site} with {n_missing} failed: saved to {missing_fn}')
