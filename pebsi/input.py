@@ -78,6 +78,9 @@ method_cooling = 'iterative'            # 'minimize','iterative' (fast)
 method_ground = 'MolgHardy'             # 'MolgHardy'
 method_conductivity = 'Douville'        # 'Sauter', 'Douville','Jansson','OstinAndersson','VanDusen'
 
+# OPTIONAL MODULES
+option_SWpen = True                     # Calculate penetration of shortwave radiation?
+
 # CONSTANT SWITCHES
 constant_snowfall_density = False       # False or density [kg m-3]
 constant_freshgrainsize = 54.5          # False or grain size [um] (Kuipers Munneke (2011): 54.5)
@@ -141,6 +144,10 @@ viscosity_snow = 3.7e7      # Viscosity of snow [Pa-s]
 firn_grainsize = 2000       # Grain size of firn [um]
 rfz_grainsize = 1500        # Grain size of refrozen snow [um]
 ice_grainsize = 5000        # Grain size of ice [um] (placeholder; unused)
+frac_absrad_snow = 0.9      # Fraction of shortwave absorbed radiation for snow [-] 
+frac_absrad_ice = 0.8       # Fraction of shortwave absorbed radiation for ice/firn [-] 
+extinct_coef_snow = 17.1    # Extinction coefficient for snow [-]
+extinct_coef_ice = 2.5      # Extinction coefficient for ice/firn [-]
 # <<<<<< Universal constants >>>>>
 gravity = 9.81              # Gravity [m s-2]
 karman = 0.4                # von Karman's constant [-]
@@ -190,9 +197,10 @@ ratio_DU_bin3 = 0.481675    # " SNICAR Bin 3 (1.25-2.5um)
 ratio_DU_bin4 = 0.203775    # " SNICAR Bin 4 (2.5-5um)
 ratio_DU_bin5 = 0.034       # " SNICAR Bin 5 (5-50um)
 # <<<<<< End-of-summer >>>>>
-end_summer_doy = 228        # Day of year to starting checking for end of summer (snow -> firn)
-new_snow_threshold = 0.05   # Threshold for new snow to consider the start of winter (m w.e.)
-new_snow_days = 10          # Number of days to sum snow over and compare against threshold
+start_end_summer = 228      # Julian day of year to start checking for end of summer (snow -> firn)
+new_snow_threshold = 0.02   # Threshold for new snow to consider the start of winter [m w.e.]
+new_snow_days = 10          # Number of days to sum snow over and compare against threshold [d]
+firn_age = 60               # Number of days old a snow layer has to be to turn it into firn [d]
 
 # ========== OTHER PYGEM INPUTS ========== 
 # rgi_regionsO1 = [1]

@@ -26,12 +26,12 @@ import pebsi.massbalance as mb
 from objectives import *
 
 # OPTIONS
-repeat_run = False   # True if restarting an already begun run
+repeat_run = True   # True if restarting an already begun run
 # Define sets of parameters
 # params = {'Boone_c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
 #           'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5]} # 
-params = {'Boone_c5':[0.018,0.02,0.022,0.023,0.024,0.025,0.026,0.027,0.028,0.03], # 
-          'kp':[1,1.25,1.5,1.75,2,2.25,2.375,2.5,2.625,2.75,2.875,3]} # 
+params = {'Boone_c5':[0.01, 0.012, 0.014,0.016,0.018,0.02,0.022,0.024], # 
+          'kp':[0.25,0.5,0.75,1,1.25,1.5,1.75,2,2.25,2.5,2.75,3]} # 
 
 # Read command line args
 parser = sim.get_args(parse=False)
@@ -58,15 +58,14 @@ if 'trace' in eb_prms.machine:
     eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/'
 
 if repeat_run:
-    date = '03_05' if args.run_type == 'long' else '03_06'
-    n_today = '1'
+    date = '08_01' if args.run_type == 'long' else '08_02'
+    print('Forcing run date to be', date)
+    n_today = '0'
     out_fp = f'{date}_{args.site}_{n_today}/'
     if not os.path.exists(eb_prms.output_filepath + out_fp):
         os.mkdir(eb_prms.output_filepath + out_fp)
 else:
-    # date = str(pd.Timestamp.today()).replace('-','_')[5:10]
-    date = '07_24' if args.run_type == 'long' else '07_23'
-    print('Forcing run date to be', date)
+    date = str(pd.Timestamp.today()).replace('-','_')[5:10]
     n_today = 0
     out_fp = f'{date}_{args.site}_{n_today}/'
     while os.path.exists(eb_prms.output_filepath + out_fp):
@@ -75,7 +74,7 @@ else:
     os.mkdir(eb_prms.output_filepath + out_fp)
 
 # Force some args
-args.store_data = True              # Ensures output is stored
+args.store_data = True      # Ensures output is stored
 if args.run_type == '2024': # Short AWS run
     args.use_AWS = True
     eb_prms.AWS_fn = '../climate_data/AWS/Preprocessed/gulkana2024.csv'
@@ -153,7 +152,7 @@ def run_model_parallel(list_inputs):
         args,climate,store_attrs = inputs
 
         # Check if model run should be performed
-        if not os.path.exists(eb_prms.output_filepath + args.out + '0.pkl'):
+        if not os.path.exists(eb_prms.output_filepath + args.out + '0.nc'):
             try:
                 # Start timer
                 start_time = time.time()
@@ -178,48 +177,6 @@ def run_model_parallel(list_inputs):
                 print('An error occurred at site',args.site,'with c5 =',args.Boone_c5,'kp =',args.kp,' ... removing',args.out)
                 traceback.print_exc()
                 os.remove(eb_prms.output_filepath + args.out + '0.nc')
-
-        # If succeeded, process and save only the stats
-        # out_fn = eb_prms.output_filepath + args.out
-        # if os.path.exists(out_fn + '0.nc') and not os.path.exists(out_fn + '0.pkl'):
-        #     with xr.open_dataset(out_fn + '0.nc') as dataset:
-        #         ds = dataset.load()
-        #         if args.run_type == 'long':
-        #             # seasonal mass balance
-        #             error_dict = seasonal_mass_balance(ds,method=['MAE','ME'])
-        #             winter_MAE, winter_ME = error_dict['winter']
-        #             summer_MAE, summer_ME = error_dict['summer']
-        #             annual_MAE, annual_ME = error_dict['annual']
-        #             seasonal_MAE = np.mean([winter_MAE, summer_MAE])
-        #             seasonal_ME = np.mean([winter_ME, summer_ME])
-        #             results = {'winter_MAE':winter_MAE,'summer_MAE':summer_MAE,
-        #                     'winter_ME':winter_ME,'summer_ME':summer_ME,
-        #                     'seasonal_MAE':seasonal_MAE,'seasonal_ME':seasonal_ME,
-        #                     'annual_MAE':annual_MAE,'annual_ME':annual_ME}
-
-        #             # snowpits
-        #             for method in ['MAE','ME']:
-        #                 snowpit_dict = snowpits(ds,method=method)
-        #                 for var in snowpit_dict:
-        #                     results[var] = snowpit_dict[var]
-
-        #         elif args.run_type == '2024':
-        #             MAE = cumulative_mass_balance(ds,method='MAE')
-        #             ME = cumulative_mass_balance(ds,method='ME')
-        #             results = {'MAE':MAE,'ME':ME}
-
-        #         # Store the attributes in the results dict
-        #         for attr in ds.attrs:
-        #             results[attr] = ds.attrs[attr]
-
-        #     # Pickle the dict
-        #     stats_fn = out_fn + '0.pkl'
-        #     with open(stats_fn, 'wb') as file:
-        #         pickle.dump(results,file)
-
-            # Remove the .nc
-            # os.remove(eb_prms.output_filepath + args.out + '0.nc')
-
     return
 
 # Run model in parallel
@@ -235,4 +192,4 @@ n_missing = len(missing)
 
 # Store missing as .txt
 np.savetxt(missing_fn,np.array(missing),fmt='%s',delimiter=',')
-print(f'Finished param_set_parallel with {n_missing} failed: saved to {missing_fn}')
+print(f'Finished grid search at site {args.site} with {n_missing} failed: saved to {missing_fn}')

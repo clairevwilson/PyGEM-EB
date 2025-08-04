@@ -37,12 +37,10 @@ sitedict = {'2024':['AB','ABB','B','BD','D','T'],'long':['A','AU','B','D']}     
 all_sites = sitedict['long']+sitedict['2024']+['mean','median']                  # List all sites
 
 # USER OPTIONS
-run_info = {'long':{'date':'07_15', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
-            '2024':{'date':'07_23', 'idx':'0'}}                     # (12_06) (03_06)
-# params = {'c5':[0.018,0.02,0.022,0.024,0.026,0.028,0.03], # 
-#           'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5]} # 
-params = {'c5':[0.018,0.02,0.022,0.023,0.024,0.025,0.026,0.027,0.028,0.03], # 
-          'kp':[1,1.25,1.5,1.75,2,2.25,2.375,2.5,2.625,2.75,2.875,3]} #
+run_info = {'long':{'date':'08_01', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
+            '2024':{'date':'08_02', 'idx':'0'}}                     # (12_06) (03_06)
+params = {'c5':[0.01, 0.012, 0.014,0.016,0.018,0.02,0.022,0.024],  # 
+          'kp':[0.25,0.5,0.75,1,1.25,1.5,1.75,2,2.25,2.5,2.75,3]}  # 
 for key in params:                                                  # Convert params to strings for processing
     for v,value in enumerate(params[key]):
         params[key][v] = str(value)
@@ -52,7 +50,7 @@ error_lims = {'2024':0.5,'snowdensity':100,
               'winter':0.4,'summer':0.9,
               'snowdepth':1,'annual':1}
 
-def get_any(result_dict,c5='0.018',kp='2',site='B',run_type='long'):
+def get_any(result_dict,c5='0.018',kp='2',site='B',run_type='long',out='ds'):
     """
     Grabs the dataset for a given parameter combination and site
     """
@@ -64,15 +62,24 @@ def get_any(result_dict,c5='0.018',kp='2',site='B',run_type='long'):
     else:
         date = run_info['long']['date']
         idx = run_info['long']['idx']
-    print(date, idx)
-    ds,_,_ = getds(f'/trace/group/rounce/cvwilson/Output/{date}_{site}_{idx}/grid_{date}_set{setno}_run{runno}_0.nc')
-    return ds
+    if out == 'ds':
+        ds,_,_ = getds(f'/trace/group/rounce/cvwilson/Output/{date}_{site}_{idx}/grid_{date}_set{setno}_run{runno}_0.nc')
+        return ds
+    elif out == 'fn':
+        return f'/trace/group/rounce/cvwilson/Output/{date}_{site}_{idx}/grid_{date}_set{setno}_run{runno}_0.nc'
+    else:
+        assert 1==0, 'choose from out = ds or fn'
 
 def get_percentile(result_dict, error, percentile=50, method='MAE',plot=False):
     all_error = []
     for c5 in params['c5']:
         for kp in params['kp']:
-            all_error.append(result_dict[c5][kp]['mean'][error+'_'+method])
+            if '2024' in error:
+                sites = sitedict['2024'] + ['mean']
+            else:
+                sites = sitedict['long'] + ['mean']
+            for site in sites:
+                all_error.append(result_dict[c5][kp][site][error+'_'+method])
     if plot:
         fig, ax = plt.subplots(figsize=(2,2))
         sorted_list = np.sort(all_error)
@@ -83,9 +90,11 @@ def get_percentile(result_dict, error, percentile=50, method='MAE',plot=False):
         ax.axhline(percentile/100,color='r')
         ax.tick_params(length=5)
         plt.show()
-    return np.percentile(np.array(all_error), percentile)
+    upper = np.percentile(np.array(all_error), percentile)
+    lower = np.min(all_error)
+    return lower, upper
 
-def process_runs(run_type, fn):
+def process_run(run_type, fn):
     """
     Regenerates each individual run .pkl file which contains the
     timeseries and run information
@@ -93,6 +102,7 @@ def process_runs(run_type, fn):
     results = {}
     ds = xr.open_dataset(fn)
     site = ds.attrs['site']
+    print('Processing', fn)
 
     if run_type == 'long':
         # Seasonal mass balance
@@ -162,6 +172,8 @@ def process_runs(run_type, fn):
     # Store the attributes in the results dict
     for attr in ds.attrs:
         results[attr] = ds.attrs[attr]
+        if attr in ['c5','kp']:
+            results[attr] = str(ds.attrs[attr])
 
     # Write to new pickle file
     fn_pickle = fn.replace('.nc','.pkl')
@@ -169,7 +181,8 @@ def process_runs(run_type, fn):
         os.remove(fn_pickle)
     with open(fn_pickle, 'wb') as file:
         pickle.dump(results, file)
-    return
+
+    return results
 
 def create_dict(run_type):
     """
@@ -190,6 +203,8 @@ def create_dict(run_type):
 
     # Loop through all the sites
     for site in sitedict[run_type]:
+        if run_type == 'long':
+            date = '07_30' if site != 'D' else run_info[run_type]['date']
         for f in os.listdir(base_fp+f'{date}_{site}_{idx}/'):
             if 'pkl' in f:
                 # Open individual output pickle 
@@ -197,8 +212,8 @@ def create_dict(run_type):
                     run_dict = pickle.load(file)
                 set_no = f.split('_')[3].split('set')[1]
                 run_no = f.split('_')[4].split('run')[1]
-                c5 = run_dict['c5']
-                kp = run_dict['kp']
+                c5 = str(run_dict['c5'])
+                kp = str(run_dict['kp'])
                 for var in run_dict:
                     grid_dict[c5][kp][site][var] = run_dict[var]
                 grid_dict[c5][kp][site]['set_no'] = set_no
@@ -217,7 +232,7 @@ def add_site_means(result_dict):
     """
     # ===== Find site means of each error type =====
     # List out all error types
-    all_error = list(result_dict['0.026']['2.5']['B'].keys())
+    all_error = list(result_dict['0.018']['2.5']['B'].keys())
         
     # Create dictionary to store site means
     sites_error_dict = {}
@@ -237,7 +252,7 @@ def add_site_means(result_dict):
                             try:
                                 sites_error_dict[error_type].append(result_dict[c5][kp][site][error_type])
                             except:
-                                print(site, kp, c5, error_type)
+                                print(site, kp, c5, error_type,' failed')
                     if len(sites_error_dict[error_type]) > 0:
                         result_dict[c5][kp]['mean'][error_type] = np.mean(sites_error_dict[error_type])
                         result_dict[c5][kp]['median'][error_type] = np.median(sites_error_dict[error_type])
@@ -266,7 +281,7 @@ def get_result_dict(force_redo=False):
     for run_type in parse_runs:  
         date = run_info[run_type]['date']
         idx = run_info[run_type]['idx']
-        if not os.path.exists(base_fp + f'{date}_{idx}_out.pkl') or force_redo:
+        if not os.path.exists(base_fp + f'{date}_{idx}_out.pkl') or force_redo in [True, run_type]:
             # No compiled pickle exists: create dictionary
             grid_dict = create_dict(run_type)
         else:
@@ -289,7 +304,7 @@ def get_result_dict(force_redo=False):
                         result_dict[c5][kp][site] = {}
                     # Add the 2024 error stats
                     for var in both_dict['2024'][c5][kp][site]:
-                            result_dict[c5][kp][site][var] = both_dict['2024'][c5][kp][site][var]
+                        result_dict[c5][kp][site][var] = both_dict['2024'][c5][kp][site][var]
     
     result_dict = add_site_means(result_dict)
     return result_dict
@@ -575,43 +590,9 @@ def add_normalized(result_dict, error_lims=error_lims, pareto=False):
     """
 
     # Grab list of all error metrics
-    all_error = list(result_dict['0.026']['2.5']['B'].keys())
+    all_error = list(result_dict['0.018']['2.5']['B'].keys())
     all_error.remove('run_no')
     all_error.remove('set_no')
-
-    # Create storage for minimum/maximum error of each error type
-    error_extremes_dict = {}
-    for site in all_sites:
-        error_extremes_dict[site] = {}
-        for error_type in all_error:
-            error_extremes_dict[site][error_type] = {'min':np.inf,'max':0}
-
-    # Go through every error and store the extremes
-    if pareto:
-        all_combos = pareto
-    else:
-        all_combos = itertools.product(params['c5'],params['kp'])
-    
-    for c5,kp in all_combos:
-        for site in all_sites:
-            if site in result_dict[c5][kp]:
-                for error_type in result_dict[c5][kp][site]:
-                    if 'AE' in error_type:
-                        current_value = result_dict[c5][kp][site][error_type]
-
-                        # Check if it's a bad run and skip if so
-                        error_name = error_type.split('_')[0]
-                        if error_name in error_lims:
-                            if current_value > error_lims[error_name]:
-                                continue
-                        else:
-                            continue
-
-                        # Acceptable run: compare error metrics to the running extremes
-                        if current_value < error_extremes_dict[site][error_type]['min']:
-                            error_extremes_dict[site][error_type]['min'] = current_value
-                        if current_value > error_extremes_dict[site][error_type]['max']:
-                            error_extremes_dict[site][error_type]['max'] = current_value
 
     # Divide each value by the minimum to get error_norm
     for c5 in params['c5']:
@@ -624,11 +605,12 @@ def add_normalized(result_dict, error_lims=error_lims, pareto=False):
                 if site in result_dict[c5][kp]:
                     list_errors = copy.deepcopy(result_dict[c5][kp][site])
                     for error_type in list_errors:
-                        if '_no' not in error_type:
+                        if error_type.split('_M')[0] in error_lims:
                             current_value = result_dict[c5][kp][site][error_type]
-                            min_value = error_extremes_dict[site][error_type]['min']
-                            max_value = error_extremes_dict[site][error_type]['max']
-                            if (max_value - min_value) > 0 and include:
+                            min_value = error_lims[error_type.split('_M')[0]][0]
+                            max_value = error_lims[error_type.split('_M')[0]][1]
+                            
+                            if include and np.abs(max_value - min_value) > 0:
                                 scaled_value = (current_value - min_value) / (max_value - min_value)
                                 result_dict[c5][kp][site][error_type+'_norm'] = scaled_value
                             else:

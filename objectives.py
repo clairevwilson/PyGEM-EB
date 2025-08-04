@@ -68,8 +68,7 @@ def seasonal_mass_balance(ds,method='MAE',out=None):
     years_model = np.unique(pd.to_datetime(ds.time.values).year)
     if pd.to_datetime(f'{years_model[-1]}-08-01') not in ds.time.values:
         years_model = years_model[:-1]
-    # if site == 'AU':
-    #     years_model = years_model[1:]
+
     years_measure = np.unique(df_mb.index)
     years = np.sort(list(set(years_model) & set(years_measure)))
 
@@ -176,6 +175,7 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
 
     # Retrieve the model data
     mb_dict = {'bw':[],'bs':[],'ba':[]}
+    previous_internal = 0
     for year in years[1:]:
         spring_date = df_mb.loc[year,'spring_date']
         fall_date = df_mb.loc[year,'fall_date']
@@ -205,6 +205,8 @@ def plot_seasonal_mass_balance(ds,plot_ax=False,label=None,plot_var='mb',color='
         ads = ds.sel(time=annual_dates).sum()
         winter_mb = wds.accum + wds.refreeze - wds.melt
         internal_acc = ds.sel(time=summer_dates[-2]).cumrefreeze.values
+        internal_acc = ds.sel(time=summer_dates[-2]).cumrefreeze.values - previous_internal
+        previous_internal = internal_acc
         summer_mb = sds.accum + sds.refreeze - sds.melt - internal_acc
         annual_mb = ads.accum + ads.refreeze - ads.melt - internal_acc
         mb_dict['bw'].append(winter_mb.values)
@@ -316,8 +318,13 @@ def snowpits(ds,method='MAE',out=None):
 
             # Only consider modeled density up to the minimum snow depth
             min_depth = min(snowdepth_mod, snowdepth_pit)
-            dens_meas = dens_meas[sbd <= min_depth]
-            sbd = sbd[sbd <= min_depth]
+            if np.any(sbd <= min_depth):
+                dens_meas = dens_meas[sbd <= min_depth]
+                sbd = sbd[sbd <= min_depth]
+            else:
+                # if the modeled snow depth is too small, take average measured density
+                sbd = [min_depth]
+                dens_meas = [np.mean(dens_meas)]
 
             # Interpolate modeled density to the snowpit depths
             dens_interp = np.interp(sbd,depth_mod,dens_mod)
@@ -734,7 +741,7 @@ def snow_temperature(ds,method='RMSE',plot=False,plot_heights=[0.5]):
 
 # ========== 4. ALBEDO ==========
 def daily_albedo(bds,method='MAE',out=None):
-    df = pd.read_csv('/trace/home/cvwilson/research/climate_data/AWS/Preprocessed/gulkana2024_bothalbedo.csv',index_col=0)
+    df = pd.read_csv('/trace/home/cvwilson/research/climate_data/AWS/Processed/gulkana2024_bothalbedo.csv',index_col=0)
     df.index = pd.to_datetime(df.index) # - pd.Timedelta(hours=8)
     
     # Sample dataset to daily
