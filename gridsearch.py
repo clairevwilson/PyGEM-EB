@@ -35,7 +35,7 @@ params = {'Boone_c5':[0.01, 0.012, 0.014,0.016,0.018,0.02,0.022,0.024], #
 
 # Read command line args
 parser = sim.get_args(parse=False)
-parser.add_argument('-run_type', default='long')
+parser.add_argument('-run_type', default='long', type=str)
 args = parser.parse_args()
 n_processes = args.n_simultaneous_processes
 

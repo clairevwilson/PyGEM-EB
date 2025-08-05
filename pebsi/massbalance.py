@@ -18,6 +18,7 @@ import pebsi.input as prms
 from pebsi.energybalance import energyBalance
 from pebsi.layers import Layers
 from pebsi.surface import Surface
+np.set_printoptions(suppress=True)
 
 class massBalance():
     """
@@ -126,20 +127,14 @@ class massBalance():
             # fully melted layers were removed from layermelt so add that mass
             if self.melted_layers != 0:
                 melt += np.sum(self.melted_layers.mass)
-            if self.time == pd.to_datetime('2016-10-30 21:00:00'):
-                print('melt', layers.ltemp)
 
             # >>> PERCOLATION <<<
             # route meltwater and LAPs through snow/firn
             runoff = self.percolation(layermelt,rainfall)
-            if self.time == pd.to_datetime('2016-10-30 21:00:00'):
-                print('runoff', layers.ltemp)
             
             # >>> TEMPERATURE PROFILE <<<
             # recalculate the temperature profile considering conduction
             self.thermal_conduction()
-            if self.time == pd.to_datetime('2016-10-30 21:00:00'):
-                print('ther', layers.ltemp)
 
             # >>> PHASE CHANGES <<<
             # calculate mass gain or loss from phase changes
@@ -1162,9 +1157,6 @@ class massBalance():
         K_WATER = prms.k_water
         K_AIR = prms.k_air
 
-        # heat equation time loop
-        dt_heat = prms.dt_heateq
-
         # do not need this function if glacier is completely ripe
         if np.sum(layers.ltemp) == 0.:
             return
@@ -1183,7 +1175,7 @@ class massBalance():
         nl = len(diffusing_idx)
         lh = layers.lheight[diffusing_idx]
         lp = layers.ldensity[diffusing_idx]
-        lT_old = layers.ltemp[diffusing_idx]
+        lT_prev = layers.ltemp[diffusing_idx]
         lm = layers.lice[diffusing_idx]
         lw = layers.lwater[diffusing_idx]
         lT = layers.ltemp[diffusing_idx]
@@ -1209,35 +1201,46 @@ class massBalance():
         if len(diffusing_ice_idx) > 0:
             lcond[diffusing_ice_idx] = K_ICE
 
-        # calculate fluxes for multiple layers
+        # get timestep for heat equation
+        dt_heat = self.dt / prms.n_heat_steps
+
+        # check number of layers
         if nl > 2:
-            # heights of imaginary average bins between layers
-            up_lh = np.array([np.mean(lh[i:i+2]) for i in range(nl-2)])  # upper layer 
-            dn_lh = np.array([np.mean(lh[i+1:i+3]) for i in range(nl-2)])  # lower layer
+            # loop through thermal conduction equation
+            for _ in range(prms.n_heat_steps):
+                # heights of imaginary average bins between layers
+                up_lh = np.array([np.mean(lh[i:i+2]) for i in range(nl-2)])  # upper layer 
+                dn_lh = np.array([np.mean(lh[i+1:i+3]) for i in range(nl-2)])  # lower layer
 
-            # conductivity
-            up_kcond = np.array([np.mean(lcond[i:i+2]*lh[i:i+2]) for i in range(nl-2)]) / up_lh
-            dn_kcond = np.array([np.mean(lcond[i+1:i+3]*lh[i+1:i+3]) for i in range(nl-2)]) / dn_lh
+                # conductivity
+                up_kcond = np.array([np.mean(lcond[i:i+2]*lh[i:i+2]) for i in range(nl-2)]) / up_lh
+                dn_kcond = np.array([np.mean(lcond[i+1:i+3]*lh[i+1:i+3]) for i in range(nl-2)]) / dn_lh
 
-            # density
-            up_dens = np.array([np.mean(lp[i:i+2]) for i in range(nl-2)]) / up_lh
-            dn_dens = np.array([np.mean(lp[i+1:i+3]) for i in range(nl-2)]) / dn_lh
+                # density
+                up_dens = np.array([np.mean(lp[i:i+2]) for i in range(nl-2)]) / up_lh
+                dn_dens = np.array([np.mean(lp[i+1:i+3]) for i in range(nl-2)]) / dn_lh
 
-            # top layer uses surftemp boundary condition
-            surf_heat_0 = up_kcond[0]*2/(up_dens[0]*lh[0])*(surftemp-lT_old[0])
-            subsurf_heat_0 = dn_kcond[0]/(up_dens[0]*up_lh[0])*(lT_old[0]-lT_old[1])
-            lT[0] = lT_old[0] + (surf_heat_0 - subsurf_heat_0)*dt_heat/(CP_ICE*lh[0])
+                # top layer uses surftemp boundary condition
+                surf_heat_0 = up_kcond[0]*2/(up_dens[0]*lh[0])*(surftemp-lT_prev[0])
+                subsurf_heat_0 = dn_kcond[0]/(up_dens[0]*up_lh[0])*(lT_prev[0]-lT_prev[1])
+                lT[0] = lT_prev[0] + (surf_heat_0 - subsurf_heat_0)*dt_heat/(CP_ICE*lh[0])
 
-            # if top layer of snow is very thin on top of ice, it can break this calculation
-            if lT[0] > 0 or lT[0] < -50: 
-                lT[0] = np.mean([surftemp,lT_old[1]])
+                # if top layer of snow is very thin on top of ice, it can break this calculation
+                if lT[0] > 0 or lT[0] < -50: 
+                    lT[0] = np.mean([surftemp,lT_prev[1]])
 
-            # middle layers solve heat equation
-            surf_heat = up_kcond/(up_dens*up_lh)*(lT_old[:-2]-lT_old[1:-1])
-            subsurf_heat = dn_kcond/(dn_dens*dn_lh)*(lT_old[1:-1]-lT_old[2:])
-            lT[1:-1] = lT_old[1:-1] + (surf_heat - subsurf_heat)*dt_heat/(CP_ICE*lh[1:-1])
+                # middle layers solve heat equation
+                surf_heat = up_kcond/(up_dens*up_lh)*(lT_prev[:-2]-lT_prev[1:-1])
+                subsurf_heat = dn_kcond/(dn_dens*dn_lh)*(lT_prev[1:-1]-lT_prev[2:])
+                # if np.any(np.abs((surf_heat - subsurf_heat)*dt_heat/(CP_ICE*lh[1:-1])) > 10) and self.time > pd.to_datetime('2016-10-30 13:00:00'):
+                #     where = np.where(np.abs((surf_heat - subsurf_heat)*dt_heat/(CP_ICE*lh[1:-1])) > 10)[0]
+                #     print('in thermal:', where, surf_heat[where], subsurf_heat[where], lh[where], 'dt', dt_heat, 'change',np.abs((surf_heat - subsurf_heat)*dt_heat/(CP_ICE*lh[1:-1]))[where])
+                lT[1:-1] = lT_prev[1:-1] + (surf_heat - subsurf_heat)*dt_heat/(CP_ICE*lh[1:-1])
 
-        # cases for less than 3 layers
+                # update 'previous' temperature in loop
+                lT_prev = lT.copy()
+
+        # cases for less than 3 layers do not need to be iterated
         elif nl > 1:
             lT = np.array([surftemp/2,0])
         else:
@@ -1269,7 +1272,7 @@ class massBalance():
         T_HIGH = prms.snow_threshold_high
         FIRN_AGE = prms.firn_age
 
-        # only merge firn if there is old enough snow
+        # only merge firn if there is old snow
         lage_snow = layers.lage[layers.snow_idx]
         if np.any(lage_snow >= FIRN_AGE):
             # define rain vs snow scaling 
@@ -1292,15 +1295,16 @@ class massBalance():
                 return
             else:
                 # getting new snow: set the timestamp
-                firn_merged = self.time
+                firn_merged_time = self.time
         
             # check which layers are old enough to merge
+            print(lage_snow, layers.ldensity[layers.snow_idx])
             merge_layers = np.where(lage_snow >= FIRN_AGE)[0]
             for _ in range(merge_layers[0], merge_layers[-1]):
                 layers.merge_layers(merge_layers[0])
                 layers.ltype[merge_layers[0]] = 'firn'
             if self.args.debug:
-                print('Converted firn on',firn_merged)
+                print('Converted firn on',firn_merged_time)
             self.firn_converted = True
 
             # reset cumulative refreeze

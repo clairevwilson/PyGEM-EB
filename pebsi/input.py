@@ -95,7 +95,7 @@ switch_LAPs = 1             # 0 to turn off LAPs; 1 to turn on
 # TIMESTEP
 dt = 3600                   # Model timestep [s]
 daily_dt = 3600*24          # Seconds in a day [s]
-dt_heateq = 3600/5          # Time resolution of heat eq [s] (integer multiple of 3600s)
+n_heat_steps = 5            # Number of times to run heat equation per dt [-]
 
 # ALBEDO BANDS
 wvs = np.round(np.arange(0.2,5,0.01),2) # 480 bands used by SNICAR
