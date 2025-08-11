@@ -79,7 +79,7 @@ class massBalance():
 
             # initiate the energy balance to unpack climate data for this timestep
             enbal = energyBalance(self,time)
-            self.enbal = enbal 
+            self.enbal = enbal
 
             # get rain and snowfall amounts [kg m-2]
             rainfall,snowfall = self.get_precip()
@@ -97,15 +97,9 @@ class massBalance():
                 surface.daily_updates(layers,time)
                 self.days_since_snowfall = surface.days_since_snowfall
 
-                # age layers by one hour
-                layers.lage += 1
-
                 # grain size
                 if self.args.switch_melt == 2 and layers.nlayers > 2:
                     self.get_grain_size()
-                
-                # reset layer new snow to 0
-                layers.lnewsnow = np.zeros(layers.nlayers)
 
             if time.hour in prms.albedo_TOD:
                 # update albedo
@@ -150,12 +144,13 @@ class massBalance():
             
             # >>> CHECK LAYERS <<<
             # check and update layer sizes
-            layers.check_layers(self.output.out_fn)
+            layers.check_layer_sizes()
 
             # if towards the end of summer, check if old snow should become firn
-            if time.day_of_year >= prms.start_end_summer and time.hour == 0:
-                if not self.firn_converted:
-                    self.end_of_summer()
+            doy = time.day_of_year
+            date_in_range = doy >= prms.start_end_summer and doy <= prms.start_end_summer + 60
+            if date_in_range and time.hour == 0 and not self.firn_converted:
+                self.end_of_summer()
 
             # if start of calendar year, reset firn tracker
             if time.day_of_year == 1 and time.hour == 0:
@@ -256,7 +251,7 @@ class massBalance():
 
         # add delayed snow to snowfall
         snowfall += layers.delayed_snow
-        if snowfall == 0.:
+        if snowfall == 0:
             # skip this function if no snow
             return 0
         
@@ -272,7 +267,7 @@ class massBalance():
             new_BC = layers.lBC[0]/layers.lheight[0]*new_height
             new_OC = layers.lOC[0]/layers.lheight[0]*new_height
             new_dust = layers.ldust[0]/layers.lheight[0]*new_height
-            new_snow = 0
+            new_age = layers.lage[0]
         elif self.args.switch_snow == 1:
             # check if using constant density for new snow
             if prms.constant_snowfall_density:
@@ -291,9 +286,11 @@ class massBalance():
                                     [airtemp<=-30,-30<airtemp<0,airtemp>=0],
                                     [54.5,54.5+5*(airtemp+30),204.5])
 
-            # height and mass of new layer
+            # height and age of new layer
             new_height = snowfall/new_density
-            new_snow = snowfall
+            new_age = self.time
+            if type(layers.lage[0]) == int:
+                print('new age', layers.lage[0])
 
             # wet deposition occurs in snowfall
             new_BC = enbal.bcwet * enbal.dt
@@ -310,33 +307,47 @@ class massBalance():
             new_dust = 0
             
         # conditions: if any are TRUE, create a new layer
-        new_layer_conds = np.array([layers.ltype[0] in 'ice',
+        new_layer_cond = np.array([layers.ltype[0] in 'ice',
                             layers.ltype[0] in 'firn',
                             layers.ldensity[0] > new_density*3])
-        if np.any(new_layer_conds):
-            # check if there is enough snow to create a new layer
-            if snowfall/new_density < 1e-4:
+        # unless there is a small surface layer, then combine new snow
+        small_surf_layer = layers.lheight[0] < 1e-3
+
+        # check conditions
+        if np.any(new_layer_cond) and not small_surf_layer:
+            # check if there is enough snow to create a new layer (1 mm cutoff)
+            if new_height < 1e-3:
                 # delay small amounts of snowfall: avoids computational issues
                 layers.delayed_snow = snowfall
                 return 0 # no snow was added so return 0
             else:
                 # create a dataframe of all the new properties
                 new_layer = pd.DataFrame([enbal.tempC,0,snowfall/new_density,'snow',snowfall,
-                                      new_grainsize,new_BC,new_OC,new_dust,new_snow],
-                                     index=['T','w','h','t','m','g','BC','OC','dust','new'])
+                                      new_grainsize,new_BC,new_OC,new_dust,new_age],
+                                     index=['T','w','h','t','m','g','BC','OC','dust','time'])
                 # add the layer and reset delayed_snow to 0
                 layers.add_layers(new_layer)
                 layers.delayed_snow = 0
+                if type(layers.lage[0]) == int:
+                    print('htfffere', layers.lage[0], new_age)
         else:
-            # adding snow to the top layer
+            # get new layers mass
             new_layermass = layers.lice[0] + snowfall
-            layers.lice[0] = new_layermass
-            layers.lheight[0] += snowfall/new_density
 
             # take mass-weighted average surface layer and new snow
             layers.ldensity[0] = (layers.ldensity[0]*layers.lice[0] + new_density*snowfall)/(new_layermass)
             layers.ltemp[0] = (layers.ltemp[0]*layers.lice[0] + enbal.tempC*snowfall)/(new_layermass)
             layers.lgrainsize[0] = (layers.lgrainsize[0]*layers.lice[0] + new_grainsize*snowfall)/(new_layermass)
+
+            # mass-weighted age
+            decimal_time = layers.to_decimal_year([self.time, layers.lage[0]])
+            layer_mass = np.array([snowfall, layers.lice[0]])
+            mean_time = np.sum(decimal_time*layer_mass)/np.sum(layer_mass)
+            layers.lage[0] = layers.from_decimal_year(mean_time)
+
+            # add mass to layers
+            layers.lice[0] = new_layermass
+            layers.lheight[0] += snowfall/new_density
             
             # sum LAPs
             layers.lBC[0] = layers.lBC[0] + new_BC
@@ -346,9 +357,6 @@ class massBalance():
             # check if layer got too big and needs to be split
             if layers.lheight[0] > (prms.dz_toplayer * 2):
                 layers.split_layer(0)
-
-            # new snow is snowfall amount unless switch_snow is off
-            layers.lnewsnow[0] = snowfall if prms.switch_snow == 1 else 0
             
             # reset delayed snow
             layers.delayed_snow = 0
@@ -360,7 +368,8 @@ class massBalance():
         change = np.sum(layers.lice + layers.lwater) - initial_mass
         assert np.abs(change - snowfall) < prms.mb_threshold
 
-        return snowfall # actual snowfall that was added, including any delayed_snow
+        # return actual snowfall that was added, including any delayed_snow
+        return snowfall
     
     def get_grain_size(self):
         """
@@ -397,10 +406,10 @@ class massBalance():
             n = len(idx)
             
             # get fractions of refreeze and old snow
-            refreeze = layers.drefreeze[idx]
-            old_snow = layers.lice[idx] - refreeze
-            f_old = old_snow / layers.lice[idx]
-            f_rfz = refreeze / layers.lice[idx]
+            m_refreeze = layers.drefreeze[idx]
+            m_snow = layers.lice[idx] - m_refreeze
+            f_snow = m_snow / layers.lice[idx]
+            f_rfz = m_refreeze / layers.lice[idx]
             f_liq = layers.lwater[idx] / (layers.lwater[idx] + layers.lice[idx])
 
             # define values for lookup table
@@ -473,11 +482,11 @@ class massBalance():
             # get change in grain size due to aging
             aged_grainsize = grainsize + drdry + drwet
                       
-            # sum contributions of old snow, new snow and refreeze
-            grainsize = aged_grainsize*f_old + RFZ_GRAINSIZE*f_rfz
+            # sum contributions of snow and refreeze
+            grainsize = aged_grainsize*f_snow + RFZ_GRAINSIZE*f_rfz
 
             # enforce maximum grainsize
-            grainsize[np.where(grainsize > FIRN_GRAINSIZE)[0]] = FIRN_GRAINSIZE
+            grainsize[grainsize > FIRN_GRAINSIZE] = FIRN_GRAINSIZE
 
             # update grainsize in layers
             layers.lgrainsize[idx] = grainsize
@@ -692,17 +701,12 @@ class massBalance():
         snow_firn_idx = np.concatenate([layers.snow_idx,layers.firn_idx])
         # check if there is an ice layer within the snow/firn
         if len(snow_firn_idx) > 0 and layers.ice_idx[0] < snow_firn_idx[-1]:
-            last_snow_layer = 0 if len(layers.snow_idx) == 0 else layers.snow_idx[-1]
             if layers.ice_idx[0] == 0 and len(layers.snow_idx) == 0: 
                 # surface ice layer with firn underneath: all water runs off
                 snow_firn_idx = []
-            elif layers.ice_idx[0] > last_snow_layer: 
-                # impermeable layer within the firn
-                snow_firn_idx = snow_firn_idx[:layers.ice_idx[0]]
             else:
-                print('! impermeable ice layer in the snow')
-                print(self.time, layers.ldensity, layers.ltype, layers.lheight,self.args.kp, self.args.Boone_c5)
-                assert 1==0 # still making sure this never pops up --- it shouldn't be able to
+                # impermeable layer caused by densification/refreeze
+                snow_firn_idx = snow_firn_idx[:layers.ice_idx[0]]
 
         # initialize variables
         initial_mass = np.sum(layers.lice + layers.lwater)
@@ -796,6 +800,9 @@ class massBalance():
             layers.lice -= layermelt
             layers.lheight -= layermelt / layers.ldensity
             runoff += water_in + np.sum(layermelt)
+
+        # make sure layers didn't get too small from removing melt
+        layers.check_layer_sizes()
 
         # CHECK MASS CONSERVATION
         ins = water_in
@@ -1156,10 +1163,14 @@ class massBalance():
         K_ICE = prms.k_ice
         K_WATER = prms.k_water
         K_AIR = prms.k_air
+        MAX_DT = prms.max_temp_change
 
         # do not need this function if glacier is completely ripe
         if np.sum(layers.ltemp) == 0.:
             return
+        
+        # check layer sizes for numeric stability
+        layers.check_layer_sizes()
 
         # determine layers that are below temperate ice depth
         if layers.ice_idx[0] > 0:
@@ -1232,10 +1243,12 @@ class massBalance():
                 # middle layers solve heat equation
                 surf_heat = up_kcond/(up_dens*up_lh)*(lT_prev[:-2]-lT_prev[1:-1])
                 subsurf_heat = dn_kcond/(dn_dens*dn_lh)*(lT_prev[1:-1]-lT_prev[2:])
-                # if np.any(np.abs((surf_heat - subsurf_heat)*dt_heat/(CP_ICE*lh[1:-1])) > 10) and self.time > pd.to_datetime('2016-10-30 13:00:00'):
-                #     where = np.where(np.abs((surf_heat - subsurf_heat)*dt_heat/(CP_ICE*lh[1:-1])) > 10)[0]
-                #     print('in thermal:', where, surf_heat[where], subsurf_heat[where], lh[where], 'dt', dt_heat, 'change',np.abs((surf_heat - subsurf_heat)*dt_heat/(CP_ICE*lh[1:-1]))[where])
-                lT[1:-1] = lT_prev[1:-1] + (surf_heat - subsurf_heat)*dt_heat/(CP_ICE*lh[1:-1])
+                dT = (surf_heat - subsurf_heat)*dt_heat/(CP_ICE*lh[1:-1])
+
+                # limit the temperature change 
+                exceeded_max = np.where(np.abs(dT) > MAX_DT / prms.n_heat_steps)[0]
+                dT[exceeded_max] = MAX_DT / prms.n_heat_steps
+                lT[1:-1] = lT_prev[1:-1] + dT
 
                 # update 'previous' temperature in loop
                 lT_prev = lT.copy()
@@ -1273,8 +1286,11 @@ class massBalance():
         FIRN_AGE = prms.firn_age
 
         # only merge firn if there is old snow
-        lage_snow = layers.lage[layers.snow_idx]
-        if np.any(lage_snow >= FIRN_AGE):
+        dates_snow = pd.to_datetime(layers.lage[layers.snow_idx])
+        snow_age_series = pd.Series(self.time - dates_snow)
+        snow_age = np.array(snow_age_series.dt.days)
+        
+        if np.any(snow_age >= FIRN_AGE):
             # define rain vs snow scaling 
             rain_scale = np.linspace(1,0,20)
             temp_scale = np.linspace(T_LOW,T_HIGH,20)
@@ -1296,15 +1312,19 @@ class massBalance():
             else:
                 # getting new snow: set the timestamp
                 firn_merged_time = self.time
-        
+
             # check which layers are old enough to merge
-            print(lage_snow, layers.ldensity[layers.snow_idx])
-            merge_layers = np.where(lage_snow >= FIRN_AGE)[0]
+            merge_layers = np.where(snow_age >= FIRN_AGE)[0]
+
+            # set age of layers to be the oldest layer
+            layers.lage[merge_layers] = layers.lage[merge_layers[-1]]
+            
             for _ in range(merge_layers[0], merge_layers[-1]):
                 layers.merge_layers(merge_layers[0])
-                layers.ltype[merge_layers[0]] = 'firn'
+            layers.ltype[merge_layers[0]] = 'firn'
             if self.args.debug:
                 print('Converted firn on',firn_merged_time)
+            layers.update_layer_props([])   # only update firn_idx
             self.firn_converted = True
 
             # reset cumulative refreeze
@@ -1490,7 +1510,7 @@ class Output():
                          'SWin_sky','SWin_terr','surftemp'],
                    'MB':['melt','refreeze','runoff','accum','snowdepth','cumrefreeze','dh'],
                    'climate':['airtemp'],
-                   'layers':['layertemp','layerdensity','layerwater','layerheight',
+                   'layers':['layertemp','layerdensity','layerwater','layerheight','layerage',
                              'layerBC','layerOC','layerdust','layergrainsize','layerrefreeze']}
 
         # create file to store outputs
@@ -1524,6 +1544,7 @@ class Output():
                 layerOC = (['time','layer'],zeros,{'units':'ppb'}),
                 layerdust = (['time','layer'],zeros,{'units':'ppm'}),
                 layergrainsize = (['time','layer'],zeros,{'units':'um'}),
+                layerage = (['time','layer'],zeros),
                 snowdepth = (['time'],zeros[:,0],{'units':'m'}),
                 dh = (['time'],zeros[:,0],{'units':'m'})
                 ),
@@ -1579,6 +1600,7 @@ class Output():
         self.layerdust_output = dict()      # layer dust content [ppm]
         self.layergrainsize_output = dict() # layer grain size [um]
         self.layerrefreeze_output = dict()  # layer refreeze [kg m-2]
+        self.layerage_output = dict()       # layer age [datetime]
         self.last_height = prms.initial_ice_depth+prms.initial_firn_depth+prms.initial_snow_depth
         return
     
@@ -1634,6 +1656,7 @@ class Output():
         self.layerdust_output[step] = layers.ldust / layers.lheight * 1e3
         self.layergrainsize_output[step] = layers.lgrainsize.copy()
         self.layerrefreeze_output[step] = layers.lrefreeze.copy()
+        self.layerage_output[step] = layers.lage.copy()
 
     def store_data(self):
         """
@@ -1678,6 +1701,7 @@ class Output():
                 layerdust_output = pd.DataFrame.from_dict(self.layerdust_output,orient='index')
                 layergrainsize_output = pd.DataFrame.from_dict(self.layergrainsize_output,orient='index')
                 layerrefreeze_output = pd.DataFrame.from_dict(self.layerrefreeze_output,orient='index')
+                layerage_output = pd.DataFrame.from_dict(self.layerage_output,orient='index')
                 
                 if len(layertemp_output.columns) < prms.max_nlayers:
                     n_columns = len(layertemp_output.columns)
@@ -1692,6 +1716,7 @@ class Output():
                         layerdust_output[str(i)] = nans
                         layergrainsize_output[str(i)] = nans
                         layerrefreeze_output[str(i)] = nans
+                        layerage_output[str(i)] = nans
                 else:
                     n = len(layertemp_output.columns)
                     print(f'Need to increase max_nlayers: currently have {n} layers')
@@ -1706,6 +1731,7 @@ class Output():
                 ds['layerdust'].values = layerdust_output
                 ds['layergrainsize'].values = layergrainsize_output
                 ds['layerrefreeze'].values = layerrefreeze_output
+                ds['layerage'].values = layerage_output
 
         # save NetCDF
         ds.to_netcdf(self.out_fn)

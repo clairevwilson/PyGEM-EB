@@ -120,9 +120,11 @@ wind_ref_height = 10 if reanalysis in ['ERA5-hourly'] else 2  # Reference height
 dz_toplayer = 0.03          # Thickness of the uppermost layer [m]
 layer_growth = 0.5          # Rate of exponential growth of layer size (smaller layer growth = more layers) recommend 0.3-.6
 max_nlayers = 80            # Maximum number of vertical layers allowed (more layers --> larger file size)
-max_dz = 2                  # Max layer height
+max_dz = 2                  # Max layer thickness
+min_dz_ice = 0.5            # Thickness of uppermost layer when surface is ice [m]
 mb_threshold = 0.1          # Threshold to consider not conserving mass (kg m-2 = mm w.e.)
 min_glacier_depth = 2       # Minimum ice depth to end the model run [m]
+max_temp_change = 5         # Maximum possible temperature change in a timestep for a single layer [K hr-1]
 # <<<<<< Boundary conditions >>>>>
 temp_temp = 0               # Temperature of temperate ice [C]
 temp_depth = 10             # Depth of temperate ice [m]
@@ -159,7 +161,7 @@ pressure_std = 101325       # Standard pressure [Pa]
 temp_std = 293.15           # Standard temperature [K]
 density_std = 1.225         # Air density at sea level [kg m-3]
 # <<<<<< Model parameterizations >>>>>
-Boone_c5 = 0.022            # Densification parameter [m3 kg-1]
+Boone_c5 = 0.018            # Densification parameter [m3 kg-1]
 roughness_fresh_snow = 0.24 # Surface roughness length for fresh snow [mm] (Moelg et al. 2012, TC)
 roughness_aged_snow = 10    # Surface roughness length for aged snow [mm]
 roughness_firn = 4          # Surface roughness length for firn [mm] (Moelg et al. 2012, TC)

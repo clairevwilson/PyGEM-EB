@@ -37,8 +37,8 @@ errorlabels = {'seasonal':'Seasonal mass balance (m w.e.)',                     
                'snowdensity':'End-of-winter snow\ndensity (kg m-3)',
                '2024':'2024 surface height change (m)',
                'weighted':'Weighted error (-)'} 
-shorterrorlabels = {'2024':'2024 surface height','snowdensity':'Snow density','snowdepth':'Snow depth','snowmass':'Snow mass',
-                    'seasonal':'Seasonal MB','winter':'Winter MB','summer':'Summer MB','annual':'Annual MB'}
+shorterrorlabels = {'2024':'2024 surface height','snowdensity':'Snow density (kg m$^{-3}$)','snowdepth':'Snow depth (m)','snowmass':'Snow mass',
+                    'seasonal':'Seasonal MB (m w.e.)','winter':'Winter MB (m w.e.)','summer':'Summer MB (m w.e.)','annual':'Annual MB'}
 units = {'2024':'m','snowdensity':'kg m$^{-3}$','snowdepth':'m','winter':'m w.e.','summer':'m w.e.','annual':'m w.e.'}
 param_labels = {'kp':'Precipitation factor','c5':'Densification parameter'}
 medians = {'kp':'2.6','c5':'0.024'}                                              # Median value of each of the parameters
@@ -109,7 +109,7 @@ def pareto_sweep(points):
     return np.array(pareto_indices)
 
 def plot_pareto_fronts(error_list, result_dict, split=0.7,
-                       colored_param='kp', site='mean', savefig=False):
+                       site='mean', savefig=False):
     """
     Takes all combinations of error metrics and finds the optimal solutions
     for each pair of metrics
@@ -117,120 +117,64 @@ def plot_pareto_fronts(error_list, result_dict, split=0.7,
     n_comb = len(list(itertools.combinations(error_list,2)))
 
     # Create the plot axes
-    fig = plt.figure(figsize=(7,6))
+    # fig = plt.figure(figsize=(7,6))
     n_rows = n_comb // 2
     n_rows = n_rows + 1 if n_comb % 2 != 0 else n_rows
-    gs = mpl.gridspec.GridSpec(n_rows, 3, width_ratios=[1, 1, 0.05], wspace=0.5, hspace=0.5)
-    axes = [fig.add_subplot(gs[i // 2, i % 2]) for i in range(n_comb)]
+    # gs = mpl.gridspec.GridSpec(2, 3, wspace=0.5, hspace=0.5)
+    # axes = [fig.add_subplot(gs[i // 2, i % 2]) for i in range(n_comb)]
+    fig, axes = plt.subplots(2,3, figsize=(6.3,3.8)) #, gridspec_kw={'wspace':0.6, 'hspace':0.6})
+    axes = axes.flatten()
 
     # Style
-    if colored_param == 'kp':
-        vmin,vmax = (1,3.5)
-        ip = 1
-    elif colored_param == 'c5':
-        vmin,vmax = (0.018,0.028)
-        ip = 0
+    # if colored_param == 'kp':
+    #     vmin,vmax = (1,3.5)
+    #     ip = 1
+    # elif colored_param == 'c5':
+    #     vmin,vmax = (0.018,0.028)
+    #     ip = 0
 
-        param_list = gsproc.params['c5']
-        cbar_ax = fig.add_axes([0.85, 0.10, 0.02, 0.79])
-        cmap = mpl.colormaps.get_cmap('viridis_r')
-        norm =  mpl.colors.Normalize(vmin=0.018,vmax=0.03)
-        param_arr = np.array(param_list).astype(float)
-        boundaries = np.append(np.array([param_arr[0] - 0.002]), param_arr)
-        labeled_ticks = [0.018,0.02,0.022,0.024,0.026,0.028,0.03]
-        tick_locations = [0.017,0.019,0.021,0.0235,0.0255,0.0275,0.029]
-        cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
-                    cax=cbar_ax,
-                    orientation='vertical',
-                    boundaries=boundaries,ticks=tick_locations,
-                    spacing='proportional')
-        cb.ax.set_yticks(tick_locations)
-        cb.ax.tick_params(labelsize=10,direction='inout',length=8)
-        cb.ax.minorticks_on()
-        cb.ax.yaxis.set_minor_locator(mpl.ticker.FixedLocator([0.0225,0.0245,0.0265]))
-        cb.ax.tick_params(which='minor', length=2)
-        cb.ax.set_yticklabels(labeled_ticks)
-        cb.ax.set_title('$c_5$')
-    norm = mpl.colors.Normalize(vmin=vmin,vmax=vmax)
-    cmap = mpl.colormaps.get_cmap('viridis_r')
+    #     param_list = gsproc.params['c5']
+    #     cbar_ax = fig.add_axes([0.85, 0.10, 0.02, 0.79])
+    #     cmap = mpl.colormaps.get_cmap('viridis_r')
+    #     norm =  mpl.colors.Normalize(vmin=0.01,vmax=0.024)
+    #     param_arr = np.array(param_list).astype(float)
+    #     boundaries = np.append(np.array([param_arr[0] - 0.002]), param_arr)
+    #     labeled_ticks = [0.01,0.012,0.014,0.016,0.018,0.02,0.022,0.024]
+    #     tick_locations = [f-0.05 for f in labeled_ticks]
+    #     cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+    #                 cax=cbar_ax,
+    #                 orientation='vertical',
+    #                 boundaries=boundaries,ticks=tick_locations,
+    #                 spacing='proportional')
+    #     cb.ax.set_yticks(tick_locations)
+    #     cb.ax.tick_params(labelsize=10,direction='inout',length=8)
+    #     cb.ax.tick_params(which='minor', length=2)
+    #     cb.ax.set_yticklabels(labeled_ticks)
+    #     cb.ax.set_title('$c_5$')
+    # norm = mpl.colors.Normalize(vmin=vmin,vmax=vmax)
+    # cmap = mpl.colormaps.get_cmap('viridis_r')
 
     all_pareto_fronts, iteration_dict = gsproc.get_pareto_fronts_bootstrap(1, result_dict, error_list, site, split=split)
     iteration_dict = iteration_dict['calib']
-    # Colormap for pareto points
-    cmap_p = mpl.colormaps.get_cmap('copper')
-    norm_p = mpl.colors.Normalize(vmin=0, vmax=len(all_pareto_fronts[0]))
 
     # Split error into lists
     all_error = np.array(list(iteration_dict.values()))
-    all_params = [float(item.split('_')[ip]) for item in iteration_dict]
+    # all_params = [float(item.split('_')[ip]) for item in iteration_dict]
     
     # Loop through combos of error metrics
     combos = itertools.combinations(np.arange(len(error_list)), 2)
     for i, (ix, iy) in enumerate(combos):
         ax = axes[i]
-        ax.scatter(all_error[:, ix],all_error[:, iy],color=cmap(norm(all_params))) 
+        ax.scatter(all_error[:, ix],all_error[:, iy],color='k') # cmap(norm(all_params))) 
         ax.set_xlabel(shorterrorlabels[error_list[ix]],fontsize=10,labelpad=0)
         ax.set_ylabel(shorterrorlabels[error_list[iy]],fontsize=10)  
         ax.tick_params(length=5)
+        ax.set_xlim(0, ax.get_xlim()[1]*1.2)
+        ax.set_ylim(0, ax.get_ylim()[1]*1.2)
     
         for j, (c5,kp) in enumerate(all_pareto_fronts[0]):
-            color = cmap_p(norm_p(j))
             ax.scatter(iteration_dict[c5+'_'+kp][ix], iteration_dict[c5+'_'+kp][iy],marker='*',color='red',s=12)
-
-    # Find the pareto fronts
-    # all_pareto_fronts = []
-    # for i, (error_x, error_y) in enumerate(itertools.combinations(plot_errors,2)):
-    #     list_x = []
-    #     list_y = []
-    #     list_params = {'c5':[],'kp':[]}
-    #     if subset:
-    #         error_x_use = error_x + '_MAE_' + subset
-    #         error_y_use = error_y + '_MAE_' + subset
-    #     else:
-    #         error_x_use = error_x + '_MAE'
-    #         error_y_use = error_y + '_MAE'
-    #     for c5 in params['c5']:
-    #         for kp in params['kp']:
-    #             error_x_point = result_dict[c5][kp][site][error_x_use]
-    #             error_y_point = result_dict[c5][kp][site][error_y_use]  
-
-    #             # Add to lists
-    #             list_params['c5'].append(float(c5))
-    #             list_params['kp'].append(float(kp))
-    #             list_x.append(error_x_point)
-    #             list_y.append(error_y_point)
-
-    #     # Plot
-    #     if plot:
-    #         ax = axes[i]
-    #         ax.scatter(list_x,list_y,color=cmap(norm(list_params[colored_param]))) 
-    #         ax.set_xlabel(shorterrorlabels[error_x],fontsize=10,labelpad=0)
-    #         ax.set_ylabel(shorterrorlabels[error_y],fontsize=10)  
-    #         ax.tick_params(length=5)    
-        
-    #     # Non=dominated
-    #     idx_non_dom = pareto_sweep(np.array([list_x,list_y]).T)
-    #     fronts = []
-    #     for i in idx_non_dom:
-    #         c5 = str(list_params['c5'][i])
-    #         kp = str(list_params['kp'][i]).replace('.0','')
-    #         fronts.append((str(c5),str(kp)))
-    #         if plot:
-    #             ax.scatter(list_x[i],list_y[i],marker='*',color='red',s=12)
-
-    #     all_pareto_fronts.append(fronts)
-
-    # if plot:
-        # else:
-    #     return all_pareto_fronts
-
-    # Add colorbar
-    # sm = mpl.cm.ScalarMappable(cmap=cmap,norm=norm)
-    # sm.set_array([])
-    # cbar_ax = fig.add_subplot(gs[:, 2])
-    # cbar = fig.colorbar(sm, orientation='vertical',cax=cbar_ax)
-    # cbar.set_label(param_labels[colored_param],rotation=270,labelpad=15,fontsize=12)
-    # fig.suptitle(methodlabels['MAE'],y=0.94)
+    plt.tight_layout()
     if savefig:
         plt.savefig(base_fp+f'pareto_front_scatter_MAE_site{site}.png',dpi=180,bbox_inches='tight')
     plt.show()
@@ -271,7 +215,7 @@ def plot_pareto_PMF(error_list, pareto_fronts, result_dict,
             ax.hist(errors, bins=10,density=True)
         if metric == 'ME':
             ax.axvline(0,linewidth=0.5,color='black')
-        ax.set_title(shorterrorlabels[list(error_dict.keys())[i]]+' '+plot_type)
+        ax.set_title(shorterrorlabels[list(error_dict.keys())[i]])
         ax.tick_params(length=5)
     name = 'bias' if metric == 'ME' else metric
     # fig.suptitle(f'{plot_type} of simulation {name} of Pareto front parameter sets',y=1.03)
@@ -349,10 +293,10 @@ def plot_pareto_heatmap(pareto_fronts, result_dict, error_names, bootstrap=True,
     for ax in axes:
         ax.set_xticks([1.125,2.125,3.125])
         ax.set_xticklabels(['1','2','3'])
-        ax.set_yticks([0.019,0.023,0.027,0.031])
-        ax.set_yticklabels(['0.018','0.022','0.026','0.03'])
+        ax.set_yticks([0.017,0.021,0.025])
+        ax.set_yticklabels(['0.016','0.020','0.024'])
         ax.set_xticks([1.375,1.625,1.875,2.375,2.625,2.875,3.375,3.625], minor=True)
-        ax.set_yticks([0.021,0.025,0.029],minor=True)
+        ax.set_yticks([0.015,0.019,0.023],minor=True)
         ax.tick_params(which='major',length=5)
         ax.tick_params(which='minor',length=2)
 
@@ -362,7 +306,7 @@ def plot_pareto_heatmap(pareto_fronts, result_dict, error_names, bootstrap=True,
         cmaps = diverging_cmaps
     if len(error_names) < 2:
         cmaps = cmaps[3:]
-    cmap_max = {'summer': 0.8, 'winter': 0.4, 'snowdensity':100, 'snowdepth':1,'snowmass':0.6, 'annual':0.9}
+    cmap_max = {'summer': 0.7, 'winter': 0.4, 'snowdensity':100, 'snowdepth':1,'snowmass':0.6, 'annual':0.9}
     all_c5 = [float(c) for c in params['c5']]
     all_kp = [float(k) for k in params['kp']]
     for e,error in enumerate(error_names):
@@ -384,8 +328,9 @@ def plot_pareto_heatmap(pareto_fronts, result_dict, error_names, bootstrap=True,
             max_value = cmap_max_me[error.split('_')[0]]
             greater = max(np.abs(max_value), np.abs(min_value))
             max_value, min_value = (greater, -greater)
-        kp_grid = all_kp + [3.75]
-        c5_grid = all_c5 + [0.032]
+       
+        kp_grid = all_kp + [all_kp[-1] + (all_kp[1] - all_kp[0])]
+        c5_grid = all_c5 + [all_c5[-1] + (all_c5[1] - all_c5[0])]
         c = ax.pcolormesh(kp_grid, c5_grid, errors, cmap=cmaps[e], 
                           vmin=min_value, vmax=max_value)
         cbar = fig.colorbar(c, ax=ax)
@@ -510,50 +455,33 @@ def plot_difference_by_param(best, result_dict, site='B', plot_vars=['2024','ann
     # Top row is for colorbar; left column is empty
     axes[n_rows-1,0].axis('off')
     for j,param in enumerate(['c5','kp']):
-        if param == 'c5':
-            param_list = params[param]
-        else:
-            param_list = ['1','1.5','2','2.25','2.5','2.75','3']
+        param_list = params[param]
         min,max = (np.min(np.array(param_list,dtype=float)),np.max(np.array(param_list,dtype=float)))
         cmap = cmaps[j]
         norm =  mpl.colors.Normalize(vmin=min,vmax=max)
         title = '$'+param[0]+'_'+param[1]+'$'
         value = '0.032' if param == 'c5' else '4'
-        diff = 0.002 if param == 'c5' else 0.5
+        diff = 0.002 if param == 'c5' else 0.25
         param_arr = np.array(param_list).astype(float)
         boundaries = np.append(np.array([param_arr[0] - diff]), param_arr)
-
-        #     cmap = mpl.colormaps.get_cmap('viridis_r')
-        # norm =  mpl.colors.Normalize(vmin=0.01,vmax=0.024)
-        # param_arr = np.array(param_list).astype(float)
-        # boundaries = np.append(np.array([param_arr[0] - 0.002]), param_arr)
-        # 
-        # cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
-        #             cax=cbar_ax,
-        #             orientation='vertical',
-        #             boundaries=boundaries,ticks=tick_locations,
-        #             spacing='proportional')
-        # cb.ax.set_yticks(tick_locations)
-        # cb.ax.tick_params(labelsize=10,direction='inout',length=8)
-        # cb.ax.minorticks_on()
-        # cb.ax.yaxis.set_minor_locator(mpl.ticker.FixedLocator([0.0145,0.0165]))
-        # cb.ax.tick_params(which='minor', length=2)
-        # cb.ax.set_yticklabels(labeled_ticks)
-        # cb.ax.set_title('$c_5$')
         if param == 'c5':
-            labeled_ticks = [0.010,0.014,0.018,0.022]
-            tick_locations = [0.009,0.013,0.0175,0.021]
+            labeled_ticks = param_list[::2]
+            tick_locations = param_arr[::2] - 0.001
         else:
-            labeled_ticks = [1.0,1.5,2.0,2.5,3.0]
-            tick_locations = [0.75,1.25,1.75,2.375,2.875]
+            labeled_ticks = param_list[::2]
+            tick_locations = param_arr[::2] - 0.125
         tick_labels = [str(t) for t in labeled_ticks]
         cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
                     cax=axes[n_rows-1,j+1],
                     orientation='horizontal',
                     boundaries=boundaries,ticks=boundaries,
                     spacing='proportional')
-        
+        cb.ax.minorticks_on()
+        cb.ax.tick_params(which='minor', length=2)
         cb.ax.set_xticks(tick_locations)
+        if param == 'kp':
+            tick_locations = tick_locations[:-1]
+        cb.ax.set_xticks(tick_locations + diff, minor=True)
         cb.ax.set_xticklabels(tick_labels)
         cb.ax.set_ylabel(title)
 
@@ -946,17 +874,16 @@ def plot_tradeoffs(result_dict, error_names, site='mean',
     n_rows = n_plots // 2
     n_rows = n_rows + 1 if n_plots % 2 != 0 else n_rows
     fig,axes = plt.subplots(n_rows, 2, figsize=(6,n_rows*2), sharex=True, layout='constrained')
-    print(params)
 
     # Make colorbar
     param_list = params['c5']
+    param_arr = np.array(param_list).astype(float)
     cbar_ax = fig.add_axes([1.05, 0.12, 0.02, 0.8])
     cmap = mpl.colormaps.get_cmap('viridis_r')
-    norm =  mpl.colors.Normalize(vmin=0.01,vmax=0.024)
-    param_arr = np.array(param_list).astype(float)
+    norm =  mpl.colors.Normalize(vmin=min(param_arr),vmax=max(param_arr))
     boundaries = np.append(np.array([param_arr[0] - 0.002]), param_arr)
-    labeled_ticks = [0.010,0.012,0.014,0.016,0.018,0.02,0.022,0.024]
-    tick_locations = [0.009,0.011,0.013,0.0155,0.0175,0.019,0.021,0.023]
+    labeled_ticks = param_list
+    tick_locations = param_arr - 0.001
     cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
                 cax=cbar_ax,
                 orientation='vertical',
@@ -964,8 +891,8 @@ def plot_tradeoffs(result_dict, error_names, site='mean',
                 spacing='proportional')
     cb.ax.set_yticks(tick_locations)
     cb.ax.tick_params(labelsize=10,direction='inout',length=8)
-    cb.ax.minorticks_on()
-    cb.ax.yaxis.set_minor_locator(mpl.ticker.FixedLocator([0.0145,0.0165]))
+    # cb.ax.minorticks_on()
+    # cb.ax.yaxis.set_minor_locator(mpl.ticker.FixedLocator([0.0145,0.0165]))
     cb.ax.tick_params(which='minor', length=2)
     cb.ax.set_yticklabels(labeled_ticks)
     cb.ax.set_title('$c_5$')
@@ -1014,13 +941,13 @@ def plot_pareto_2024(all_pareto, result_dict, frequency_dict, best, savefig=Fals
     fig, axes = plt.subplots(2, 2, figsize=(7,4), width_ratios=[1,1], gridspec_kw={'wspace':0.25}, sharex='col')
 
     param_list = gsproc.params['c5']
+    param_arr = np.array(param_list).astype(float)
     cbar_ax = fig.add_axes([0.93, 0.10, 0.02, 0.79])
     cmap = mpl.colormaps.get_cmap('viridis_r')
-    norm =  mpl.colors.Normalize(vmin=0.01,vmax=0.024)
-    param_arr = np.array(param_list).astype(float)
+    norm =  mpl.colors.Normalize(vmin=min(param_arr),vmax=max(param_arr))
     boundaries = np.append(np.array([param_arr[0] - 0.002]), param_arr)
-    labeled_ticks = [0.010,0.012,0.014,0.016,0.018,0.02,0.022,0.024]
-    tick_locations = [0.009,0.011,0.013,0.0155,0.0175,0.019,0.021,0.023]
+    labeled_ticks = param_list
+    tick_locations = param_arr - 0.001
     cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
                 cax=cbar_ax,
                 orientation='vertical',
@@ -1028,12 +955,12 @@ def plot_pareto_2024(all_pareto, result_dict, frequency_dict, best, savefig=Fals
                 spacing='proportional')
     cb.ax.set_yticks(tick_locations)
     cb.ax.tick_params(labelsize=10,direction='inout',length=8)
-    cb.ax.minorticks_on()
-    cb.ax.yaxis.set_minor_locator(mpl.ticker.FixedLocator([0.0145,0.0165]))
+    # cb.ax.minorticks_on()
+    # cb.ax.yaxis.set_minor_locator(mpl.ticker.FixedLocator([0.0145,0.0165]))
     cb.ax.tick_params(which='minor', length=2)
     cb.ax.set_yticklabels(labeled_ticks)
     cb.ax.set_title('$c_5$')
-
+    
     ax = axes[0,0]
     all_timeseries = {'dh':[], 'albedo':[]}
     for (c5,kp) in all_pareto:
@@ -1319,6 +1246,7 @@ def plot_pareto_2024_dh(result_dict, all_pareto, best, savefig=False):
 
         ax = axes_2[s]
         ax.boxplot(all_timeseries['r2'],medianprops={'color':all_colors[4]})
+        ax.set_ylim(0,1)
         # if site not in ['ABB','BD']:
         #     mb_meas = result_dict[c5][kp][site]['mb2024_meas']
         #     print(site,mb_meas,all_pareto[np.argmin(all_timeseries['mb'])])
@@ -1737,17 +1665,19 @@ def plot_heatmap_by_site_weighted(error_names, result_dict, metric='MAE', savefi
                         each += '_MAE'
                         errors_to_weight.append(result_dict[c5][kp][site2][each+'_norm'])
                     error_value = np.sum(errors_to_weight * np.array(weights))
-                    # if site1 == 'mean':
-                    #     print(site2, error_value)
+                    if site1 == 'mean':
+                        print(site2, error_value)
                 errors[s2,s1] = error_value
 
             max_value = np.max(errors)
             min_value = np.min(errors)
-            if 'weighted' in error:
-                max_value /= 2
+            # if 'weighted' in error:
+                # max_value /= 2
             if metric == 'ME' and 'weighted' not in error:
                 greater = max(np.abs(max_value), np.abs(min_value))
                 max_value, min_value = (greater, -greater)
+        if e == 4:
+            print(np.mean(errors[:4, 2]), np.mean(errors[:4, 1]))
         grid = np.arange(6)
         c = ax.pcolormesh(grid, grid, errors, cmap=cmaps[e], 
                         vmin=min_value, vmax=max_value)
@@ -1781,7 +1711,7 @@ def compare_calib_valid(error_list, all_calib, all_valid, savefig=False):
     n_plots = len(error_list)
     n_rows = n_plots // 2
     n_rows = n_rows + 1 if n_plots % 2 != 0 else n_rows
-    fig,axes = plt.subplots(n_rows, 2, figsize=(6,n_rows*2),gridspec_kw={'hspace':0.5, 'wspace':0.3})
+    fig,axes = plt.subplots(n_rows, 2, figsize=(6,n_rows*2),gridspec_kw={'hspace':0.6, 'wspace':0.3})
     axes = axes.flatten()
     for e, error in enumerate(error_list):
         ax = axes[e]
@@ -1792,7 +1722,7 @@ def compare_calib_valid(error_list, all_calib, all_valid, savefig=False):
         ax.hist(valid_data, bins=bins, histtype='step', color='#0d7885', label='validation', linewidth=2)
         ax.set_title(errorlabels[error.split('_')[0]])
         ax.tick_params(length=5)
-    axes[0].legend()
+    axes[1].legend()
     title = 'Comparison of calibration and validation\nerror distribution for Pareto fronts'
     # fig.suptitle(title, y=1.03)
     fig.supylabel('Count')
@@ -1802,7 +1732,7 @@ def compare_calib_valid(error_list, all_calib, all_valid, savefig=False):
 
 def plot_sensitivity(sens_dict,savefig=False):
     label_dict = {'kp':{'label':'Precipitation\nfactor (-)','high':3,'low':1},
-                    'Boone_c5':{'label':'Densification\nparameter (-)','high':0.03,'low':0.018},
+                    'Boone_c5':{'label':'Densification\nparameter (-)','high':0.024,'low':0.014},
                     'lapserate':{'label':'Temperature lapse\nrate ( K km$^{-1}$)','high':'$-$7','low':'$-$5.5'},
                     # 'rfz_grainsize':{'label':'Refrozen\ngrain size ($\mu m$)','high':val,'low':val},
                     # 'roughness_rate':{'label':'Roughness\ndecay rate (mm/day)','high':val,'low':val},
@@ -1846,7 +1776,7 @@ def plot_sensitivity(sens_dict,savefig=False):
                 # ax.text(v-1, -0.27, str(low),ha='center',va='center')
 
     axes[0].set_ylim(-0.8,0.8)
-    axes[1].set_ylim(-100,100)
+    axes[1].set_ylim(-70,70)
     for ax in axes:
         ax.set_xticks(np.arange(len(sens_dict)-1)+0.3)
         ax.tick_params(axis='y',length=5)
@@ -1875,7 +1805,7 @@ def plot_bias_correction(mb_dict, savefig=False):
         bw = mb_df.loc[mb_df['site_name'] == site].loc[2024]['bw']
         sacc = mb_df.loc[mb_df['site_name'] == site].loc[2024]['summer_accumulation']
         bs = ba - bw + sacc
-        print(site, bs)
+        print(site, bs, 'og',mb_dict[site]['og'] - bs, 'bc',mb_dict[site]['bc'] - bs, 'aws', mb_dict[site]['aws'] - bs)
 
         ax.bar(s, mb_dict[site]['og'] - bs, 0.3, color=colors[s])
         ax.bar(s+0.3, mb_dict[site]['bc'] - bs, 0.3, color=colors[s], hatch='///')
@@ -1889,6 +1819,7 @@ def plot_bias_correction(mb_dict, savefig=False):
     ax.axhline(0, linewidth=0.5, color='k')
     ax.set_ylabel('Modeled $-$ Measured\nmass balance (m w.e.)',fontsize=12)
     ax.set_xlabel('Site name',fontsize=12)
+    print('og',np.mean(np.abs(all[0])),'bc', np.mean(np.abs(all[1])),'aws', np.mean(np.abs(all[2])))
 
     ax.bar(np.nan, np.nan, np.nan, color='lightgray', label='Original MERRA-2')
     ax.bar(np.nan, np.nan, np.nan, color='lightgray', label='Bias-corrected MERRA-2',hatch='///')

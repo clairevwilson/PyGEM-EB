@@ -30,7 +30,7 @@ eb_prms.store_vars = ['MB','EB']
 args.startdate = pd.to_datetime('2024-04-18 00:00:00')
 args.enddate = pd.to_datetime('2024-08-20 00:00:00')
 args.kp = 2.25
-args.Boone_c5 = 0.024
+args.Boone_c5 = 0.016
 
 # Create output directory
 eb_prms.output_filepath = '/trace/group/rounce/cvwilson/Output/bias_correct/'

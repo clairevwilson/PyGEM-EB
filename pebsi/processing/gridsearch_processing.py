@@ -39,8 +39,8 @@ all_sites = sitedict['long']+sitedict['2024']+['mean','median']                 
 # USER OPTIONS
 run_info = {'long':{'date':'08_01', 'idx':'0'},                     # Date and index of the grid search (12_04) (01_16) (02_11) (03_05)
             '2024':{'date':'08_02', 'idx':'0'}}                     # (12_06) (03_06)
-params = {'c5':[0.01, 0.012, 0.014,0.016,0.018,0.02,0.022,0.024],  # 
-          'kp':[0.25,0.5,0.75,1,1.25,1.5,1.75,2,2.25,2.5,2.75,3]}  # 
+params = {'c5':[ 0.014,0.016,0.018,0.02,0.022,0.024],  # 0.01, 0.012,
+          'kp':[1,1.25,1.5,1.75,2,2.25,2.5,2.75,3]}  # 0.25,0.5,0.75,
 for key in params:                                                  # Convert params to strings for processing
     for v,value in enumerate(params[key]):
         params[key][v] = str(value)
@@ -215,9 +215,10 @@ def create_dict(run_type):
                 c5 = str(run_dict['c5'])
                 kp = str(run_dict['kp'])
                 for var in run_dict:
-                    grid_dict[c5][kp][site][var] = run_dict[var]
-                grid_dict[c5][kp][site]['set_no'] = set_no
-                grid_dict[c5][kp][site]['run_no'] = run_no
+                    if c5 in grid_dict and kp in grid_dict[c5]:
+                        grid_dict[c5][kp][site][var] = run_dict[var]
+                        grid_dict[c5][kp][site]['set_no'] = set_no
+                        grid_dict[c5][kp][site]['run_no'] = run_no
 
     # Store compiled pickle
     with open(base_fp + f'{date}_{idx}_out.pkl', 'wb') as file:

@@ -68,12 +68,13 @@ class Layers():
         self.lOC = lOC                      # LAYER ORGANIC CARBON MASS [kg m-2]
         self.ldust = ldust                  # LAYER DUST MASS [kg m-2]
        
-        # additional layer properties
-        self.update_layer_props()
+        # refreeze content
         self.drefreeze = np.zeros_like(self.ltemp)   # LAYER MASS OF REFREEZE ADDED THIS TIMESTEP [kg m-2]
         self.lrefreeze = np.zeros_like(self.ltemp)   # LAYER MASS OF REFREEZE [kg m-2]
-        self.lnewsnow = np.zeros_like(self.ltemp)    # LAYER MASS OF NEW SNOW [kg m-2]
-        self.lage = np.zeros_like(self.ltemp)        # LAYER AGE [days]
+
+        # layer age
+        time_0 = pd.to_datetime(self.args.startdate)
+        self.lage = np.array([time_0 for _ in range(self.nlayers)])        # LAYER AGE [date of creation]
 
         # initialize bucket for 'delayed snow' and running max snow mass
         self.delayed_snow = 0
@@ -308,7 +309,7 @@ class Layers():
         layers_to_add : pd.Dataframe
             Contains temperature 'T', water mass 'w', 
             solid mass 'm', height 'h', type 't', 
-            mass of new snow 'new', grain size 'g', 
+            grain size 'g', timestep 'time',
             and impurities 'BC','OC' and 'dust'
         """
         self.nlayers += len(layers_to_add.loc['T'].values)
@@ -317,7 +318,8 @@ class Layers():
         self.lheight = np.append(layers_to_add.loc['h'].values,self.lheight).astype(float)
         self.ltype = np.append(layers_to_add.loc['t'].values,self.ltype)
         self.lice = np.append(layers_to_add.loc['m'].values,self.lice).astype(float)
-        self.lnewsnow = np.append(layers_to_add.loc['new'].values,self.lnewsnow).astype(float)
+        new_layer_age = layers_to_add.loc['time'].values
+        self.lage = np.array(pd.to_datetime(np.append(new_layer_age,self.lage)))
         self.lgrainsize = np.append(layers_to_add.loc['g'].values,self.lgrainsize).astype(float)
         new_layer_BC = layers_to_add.loc['BC'].values.astype(float)*self.lheight[0]
         self.lBC = np.append(new_layer_BC,self.lBC)
@@ -325,8 +327,7 @@ class Layers():
         self.lOC = np.append(new_layer_OC,self.lOC)
         new_layer_dust = layers_to_add.loc['dust'].values.astype(float)*self.lheight[0]
         self.ldust = np.append(new_layer_dust,self.ldust)
-        # new layers start with 0 refreeze and 0 days old
-        self.lage = np.append(0,self.lage)
+        # new layers start with 0 refreeze
         self.drefreeze = np.append(0,self.drefreeze) 
         self.lrefreeze = np.append(0,self.lrefreeze)
         self.update_layer_props()
@@ -350,7 +351,6 @@ class Layers():
         self.lage = np.delete(self.lage,layer_to_remove)
         self.drefreeze = np.delete(self.drefreeze,layer_to_remove)
         self.lrefreeze = np.delete(self.lrefreeze,layer_to_remove)
-        self.lnewsnow = np.delete(self.lnewsnow,layer_to_remove)
         self.lgrainsize = np.delete(self.lgrainsize,layer_to_remove)
         self.lBC = np.delete(self.lBC,layer_to_remove)
         self.lOC = np.delete(self.lOC,layer_to_remove)
@@ -388,8 +388,6 @@ class Layers():
         self.drefreeze = np.insert(self.drefreeze,l,self.drefreeze[l])
         self.lrefreeze[l] = self.lrefreeze[l]/2
         self.lrefreeze = np.insert(self.lrefreeze,l,self.lrefreeze[l])
-        self.lnewsnow[l] = self.lnewsnow[l]/2
-        self.lnewsnow = np.insert(self.lnewsnow,l,self.lnewsnow[l])
         self.lBC[l] = self.lBC[l]/2
         self.lBC = np.insert(self.lBC,l,self.lBC[l])
         self.lOC[l] = self.lOC[l]/2
@@ -415,18 +413,22 @@ class Layers():
         self.ltemp[l+1] = np.mean(self.ltemp[l:l+2])
         self.lheight[l+1] = np.sum(self.lheight[l:l+2])
         self.lice[l+1] = np.sum(self.lice[l:l+2])
-        self.lage[l+1] = np.sum(self.lage[l:l+2]*self.lice[l:l+2])/np.sum(self.lice[l:l+2])
         self.drefreeze[l+1] = np.sum(self.drefreeze[l:l+2])
         self.lrefreeze[l+1] = np.sum(self.lrefreeze[l:l+2])
-        self.lnewsnow[l+1] = np.sum(self.lnewsnow[l:l+2])
         self.lgrainsize[l+1] = np.sum(self.lgrainsize[l:l+2]*self.lice[l:l+2])/np.sum(self.lice[l:l+2])
         self.lBC[l+1] = np.sum(self.lBC[l:l+2])
         self.lOC[l+1] = np.sum(self.lOC[l:l+2])
         self.ldust[l+1] = np.sum(self.ldust[l:l+2])
+
+        # get new layer weighted mean age
+        if self.lage[l] != self.lage[l+1]:
+            decimal_time = self.to_decimal_year(self.lage[l:l+2])
+            mean_time = np.sum(decimal_time*self.lice[l:l+2])/np.sum(self.lice[l:l+2])
+            self.lage[l+1] = self.from_decimal_year(mean_time)
         self.remove_layer(l)
         return
     
-    def check_layers(self,out):
+    def check_layer_sizes(self):
         """
         Checks the layer heights against the initial sizes.
         
@@ -435,11 +437,6 @@ class Layers():
         
         If layers have become too large (more than double their
         original size), they are split into two layers.
-
-        Parameters
-        ==========
-        out : str
-            Output filename to raise in case of an error.
         """
         # define initial mass for conservation check
         initial_mass = np.sum(self.lice + self.lwater)
@@ -448,7 +445,7 @@ class Layers():
         if self.ltype[0] in ['snow','firn']:
             DZ0 = prms.dz_toplayer
         else: # if there is only ice, make the minimum layer size larger
-            DZ0 = 0.3
+            DZ0 = prms.min_dz_ice
         min_heights = lambda i: DZ0 * np.exp((i-1)*prms.layer_growth)/2
         max_heights = lambda i: DZ0 * np.exp((i-1)*prms.layer_growth)*2
 
@@ -461,23 +458,27 @@ class Layers():
             # get height of current layer
             dz = self.lheight[layer]
 
+            # remove any 0 mass layers
+            if self.lice[layer] < prms.mb_threshold / 1000:
+                self.remove_layer(layer)
+
             # check snow layers
             if self.ltype[layer] in ['snow']:
                 if dz < min_heights(layer) and self.ltype[layer]==self.ltype[layer+1]:
-                    # layer too small. Merge if it is the same type as the layer underneath
+                    # layer too small: merge if it is the same type as the layer underneath
                     self.merge_layers(layer)
                 elif dz > max_heights(layer):
-                    # layer too big. Split into two equal size layers
+                    # layer too big: split into two equal size layers
                     self.split_layer(layer)
                     layer_split = True
-            # firn layers are not checked, they can be any size
+            # firn layers can be any size
             # check ice layers
             if self.ltype[layer] in ['ice']:
                 if dz < min_heights(layer) and layer < self.nlayers - 1:
-                    # layer too small. Merge if it is not the bottom layer
+                    # layer too small: merge if it is not the bottom layer
                     self.merge_layers(layer)
                 elif dz > max_heights(layer):
-                    # layer too big. Split into two equal size layers
+                    # layer too big: split into two equal size layers
                     self.split_layer(layer)
                     layer_split = True
             
@@ -487,7 +488,7 @@ class Layers():
 
         # CHECK MASS CONSERVATION
         change = np.sum(self.lice + self.lwater) - initial_mass
-        assert np.abs(change) < prms.mb_threshold, f'check_layers failed mass conservation in {out}'
+        assert np.abs(change) < prms.mb_threshold, f'check_layers failed mass conservation in {self.args.out}'
         return
     
     def update_layer_props(self,do=['depth','density']):
@@ -501,9 +502,9 @@ class Layers():
             List of any combination of depth to be updated
         """
         self.nlayers = len(self.lheight)
-        self.snow_idx =  np.where(self.ltype=='snow')[0]
-        self.firn_idx =  np.where(self.ltype=='firn')[0]
-        self.ice_idx =  np.where(self.ltype=='ice')[0]
+        self.snow_idx = np.where(self.ltype=='snow')[0]
+        self.firn_idx = np.where(self.ltype=='firn')[0]
+        self.ice_idx = np.where(self.ltype=='ice')[0]
         
         lh = self.lheight.copy()
         if 'depth' in do:
@@ -519,15 +520,24 @@ class Layers():
         """
         # CONSTANTS
         DENSITY_ICE = prms.density_ice
+        DZ_CHECK = prms.min_dz_ice
 
         layer = 0
         while layer < self.nlayers:
-            # new ice
-            if self.ldensity[layer] >= DENSITY_ICE and self.ltype[layer] == 'firn':
+            density_check = self.ldensity[layer] >= DENSITY_ICE
+            # firn -> ice
+            if density_check and self.ltype[layer] == 'firn':
                 self.ltype[layer] = 'ice'
                 self.ldensity[layer] = DENSITY_ICE
-                # merge into ice below
-                if self.ltype[layer+1] in ['ice']:
+                # merge into ice below if layer is smaller than 1 meter
+                if self.lheight[layer] < DZ_CHECK and self.ltype[layer+1] in ['ice']:
+                    self.merge_layers(layer)
+            # snow -> ice (occurs with rapid densification, no firn because it is already ice)
+            if density_check and self.ltype[layer] == 'snow' and len(self.firn_idx) == 0:
+                self.ltype[layer] = 'ice'
+                self.ldensity[layer] = DENSITY_ICE
+                # merge into ice below if layer is smaller than 1 meter
+                if self.lheight[layer] < DZ_CHECK and self.ltype[layer+1] in ['ice']:
                     self.merge_layers(layer)
             # advance layer if it fails the new ice check
             else:
@@ -536,6 +546,24 @@ class Layers():
         # bound density of superimposed ice
         self.ldensity[self.snow_idx][self.ldensity[self.snow_idx] > DENSITY_ICE] = DENSITY_ICE
         return
+    
+    def to_decimal_year(self, dates):
+        dates = pd.to_datetime(dates)
+        year = dates.year
+        start_of_year = pd.to_datetime(year.astype(str) + '-01-01')
+        end_of_year = pd.to_datetime((year + 1).astype(str) + '-01-01')
+        year_elapsed = (dates - start_of_year).total_seconds()
+        year_duration = (end_of_year - start_of_year).total_seconds()
+        return year + year_elapsed / year_duration
+    
+    def from_decimal_year(self, decimal_years):
+        years = decimal_years.astype(int)
+        start_of_year = pd.to_datetime(years.astype(str) + '-01-01')
+        end_of_year = pd.to_datetime((years + 1).astype(str) + '-01-01')
+        year_fraction = decimal_years - years
+        year_duration = (end_of_year - start_of_year).total_seconds()
+        fractional_seconds = year_fraction * year_duration
+        return start_of_year + pd.to_timedelta(fractional_seconds, unit='s')
     
     def exit(self):
         if self.args.debug:

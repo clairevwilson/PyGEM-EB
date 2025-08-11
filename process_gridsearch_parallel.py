@@ -22,7 +22,7 @@ def process_run(runs):
         gsproc.process_run(run_type, fn)
 
 for run_type in ['long','2024']:
-    for site in 'D': # gsproc.sitedict[run_type]:
+    for site in gsproc.sitedict[run_type]:
         start_site = time.time()
         date = gsproc.run_info[run_type]['date']
         idx = gsproc.run_info[run_type]['idx']

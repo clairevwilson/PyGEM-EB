@@ -74,7 +74,7 @@ else:
     os.mkdir(eb_prms.output_filepath + out_fp)
 
 # Force some args
-args.store_data = True      # Ensures output is stored
+args.store_data = True     # Ensures output is stored
 if args.run_type == '2024': # Short AWS run
     args.use_AWS = True
     eb_prms.AWS_fn = '../climate_data/AWS/Preprocessed/gulkana2024.csv'
@@ -161,7 +161,8 @@ def run_model_parallel(list_inputs):
                 massbal = mb.massBalance(args,climate)
 
                 # Add attributes to output file in case it crashes
-                massbal.output.add_attrs(store_attrs)
+                if args.store_data:
+                    massbal.output.add_attrs(store_attrs)
 
                 # Run the model
                 massbal.main()
