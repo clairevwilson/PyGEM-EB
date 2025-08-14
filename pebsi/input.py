@@ -154,6 +154,7 @@ extinct_coef_ice = 2.5      # Extinction coefficient for ice/firn [-]
 gravity = 9.81              # Gravity [m s-2]
 karman = 0.4                # von Karman's constant [-]
 sigma_SB = 5.67037e-8       # Stefan-Boltzmann constant [W m-2 K-4]
+solar_constant = 1367       # Solar constant [W m-2]
 # <<<<<< Ideal gas law >>>>>
 R_gas = 8.3144598           # Universal gas constant [J mol-1 K-1]
 molarmass_air = 0.0289644   # Molar mass of Earth's air [kg mol-1]

@@ -251,7 +251,7 @@ def check_inputs(glac_no, args):
     if args.glac_name == 'test':
         args.AWS_fn = all_df.loc[glac_no,'AWS_fn']
     else:
-        args.AWS_fn = prms.AWS_fp + all_df.loc[glac_no,'AWS_fn']
+        args.AWS_fn = prms.AWS_fp + args.glac_name + '/' + all_df.loc[glac_no,'AWS_fn']
 
     # specify filepaths to args
     args.shading_fp = prms.shading_fp.replace('GLACIER',args.glac_name).replace('SITE',args.site)

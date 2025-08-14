@@ -559,7 +559,7 @@ class energyBalance():
             Solar zenith angle [rad]
         """
         # CONSTANTS
-        SOLAR_CONSTANT = 1367
+        SOLAR_CONSTANT = prms.solar_constant
         P1 = 0.1001
         P2 = 4.7930
         P3 = 9.4758
