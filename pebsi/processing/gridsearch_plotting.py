@@ -358,6 +358,8 @@ def plot_pareto_heatmap(pareto_fronts, result_dict, error_names, bootstrap=True,
             grays = modify_colormap('Grays',min=0.3,max=1)
             max_freq = max(max(kp_dict.values()) for kp_dict in pareto_fronts.values())
             min_freq = min(min(kp_dict.values()) for kp_dict in pareto_fronts.values())
+            max_freq = 1000
+            print('hard coded max frequency')
             grays_norm = mpl.colors.Normalize(vmin=0,vmax=max_freq)
             
             # Extract (c5, kp) pairs and their frequencies
@@ -424,8 +426,8 @@ def plot_pareto_heatmap(pareto_fronts, result_dict, error_names, bootstrap=True,
         cax.set_xlim(np.min(boundaries) - border, np.max(boundaries) + 1 + border)
         cax.set_ylim(-0.3,1.3)
         cax.axis('off')
-        cax.text(1.1, -2.7, 'Less frequent')
-        cax.text(5.1, -2.7, 'More frequent')
+        cax.text(0.5, -2.7, f'Less frequent ({min_freq})')
+        cax.text(4.5, -2.7, f'More frequent ({max_freq})')
         cax.set_title('Pareto fronts')
 
     if savefig:
@@ -1105,7 +1107,7 @@ def plot_best_seasonal(best, result_dict, savefig=False, include_B=False):
     axes[1].set_xlim(2001,2024)
 
     labels = ['Site '+sss for sss in sites]+['Modeled','Measured']
-    fig.legend(list_plots,labels,bbox_to_anchor=(1.12,0.8),fontsize=10)
+    fig.legend(list_plots,labels,bbox_to_anchor=(1.07,0.7),fontsize=10)
     fig.suptitle('Seasonal mass balance (m w.e.)',fontsize=12,y=0.96)
     if savefig:
         plt.savefig(base_fp + f'best_seasonal_mb.png',bbox_inches='tight',dpi=300)
@@ -1117,29 +1119,33 @@ def plot_best_2024(best, result_dict, savefig=False):
     fig,axes = plt.subplots(1,6,figsize=(8,4),sharey=True,sharex=True,gridspec_kw={'wspace':0.2})
     c5 = best[0]
     kp = best[1]
-    s = pd.to_datetime('2024-04-20')
-    e = pd.to_datetime('2024-08-20')
+    
     for i,site in enumerate(sitedict['2024']):
-        dates = result_dict[c5][kp][site]['dates']
+        dates = pd.to_datetime(result_dict[c5][kp][site]['dates'])
         axes[i].plot(dates, result_dict[c5][kp][site]['dh_meas'],label='Stake',linestyle='--',color='k')
         axes[i].plot(dates, result_dict[c5][kp][site]['dh_mod'],label='Model',color=all_colors[0])
-        axes[i].set_title(f'Site {site}',fontsize=12,y=1.05)
-        axes[i].text(pd.to_datetime('2024-04-20'),1.15,str(elev[site])+' m a.s.l.',fontsize=10,transform=axes[i].transAxes)
+        axes[i].set_title(f'Site {site}\n{str(elev[site])} m a.s.l.',fontsize=12,y=1.02)
+        # axes[i].text(pd.to_datetime('2024-04-20'),,,fontsize=10,transform=axes[i].transAxes)
+
         # direction = '' if error < 0 else '+'
         # text = f'{direction}{error:.3f} m'
         # axes[i].text(enddate-pd.Timedelta(days=80),0.9,text,fontsize=10)
+        # print(dates, result_dict[c5][kp][site]['dh_mod'])
         axes[i].set_xlim(dates[0],dates[-1])
-        axes[i].set_xticks(pd.date_range(s, e,freq='2MS'))
+        s = pd.to_datetime('2024-04-20')
+        e = pd.to_datetime('2024-08-20')
+        ticks = pd.date_range(s, e,freq='2MS')
+        axes[i].set_xticks(ticks)
         axes[i].tick_params(labelsize=10,direction='inout',length=8)
         axes[i].minorticks_on()
         axes[i].tick_params(which='minor', direction='in', length=4)
-        axes[i].set_xticklabels(['May 1','Jul 1'])
-        axes[i].xaxis.set_major_formatter(mpl.dates.DateFormatter('%b %d'))
+        axes[i].set_xticklabels([f"{tick.strftime('%b')} {tick.day}" for tick in ticks])
         axes[i].xaxis.set_minor_locator(mpl.dates.MonthLocator(interval=1))
+
         twinax = axes[i].twinx()
         if site not in ['ABB','BD']:
-            mod = twinax.scatter(dates[-1],result_dict[c5][kp][site]['mb2024_mod'],color='red',marker='x',s=100)
-            meas = twinax.scatter(dates[-1],result_dict[c5][kp][site]['mb2024_meas'],color='red',marker='o',facecolors='none',s=100)
+            mod = twinax.scatter(e,result_dict[c5][kp][site]['mb2024_mod'],color='red',marker='x',s=100)
+            meas = twinax.scatter(e,result_dict[c5][kp][site]['mb2024_meas'],color='red',marker='o',facecolors='none',s=100)
             meas.set_clip_on(False)
             mod.set_clip_on(False)
         twinax.set_ylim(ylim)
@@ -1156,10 +1162,10 @@ def plot_best_2024(best, result_dict, savefig=False):
         ax.set_xlim(pd.to_datetime('2024-04-20'),pd.to_datetime('2024-08-20'))
         ax.set_ylim((ylim))
     axes[0].set_ylabel('Surface height change (m)',fontsize=12)
-    l1, = axes[-1].plot(np.nan,np.nan,color=plt.cm.Dark2(0))
+    l1, = axes[-1].plot(np.nan,np.nan,color=all_colors[0])
     l2, = axes[-1].plot(np.nan,np.nan,color='black',linestyle='--')
-    l3, = axes[-1].plot(np.nan,np.nan,color='gray',linestyle=':')
-    leg = fig.legend([l1,l2,l3,mod,meas],['Model','GNSS-IR','Banded Stake','Model','Stake survey'],ncols=2,fontsize=10,bbox_to_anchor=(0.7,0.05))
+    # l3, = axes[-1].plot(np.nan,np.nan,color='gray',linestyle=':')
+    leg = fig.legend([l1,l2,mod,meas],['Model','GNSS-IR','Model','Stake survey'],ncols=2,fontsize=10,bbox_to_anchor=(0.7,0.05))
     leg.get_frame().set_facecolor('white')
     leg.get_frame().set_alpha(1)
     if savefig:
@@ -1196,8 +1202,8 @@ def plot_best_2024_dh(best, result_dict, savefig=False):
     axes[0].set_ylabel('Surface height change (m)',fontsize=12)
     l1, = axes[-1].plot(np.nan,np.nan,color=all_colors[0])
     l2, = axes[-1].plot(np.nan,np.nan,color='black',linestyle='--')
-    l3, = axes[-1].plot(np.nan,np.nan,color='gray',linestyle=':')
-    leg = fig.legend([l1,l2,l3],['Model','GNSS-IR','Banded Stake'],ncols=3,fontsize=10,bbox_to_anchor=(0.7,0.05))
+    # l3, = axes[-1].plot(np.nan,np.nan,color='gray',linestyle=':')
+    leg = fig.legend([l1,l2],['Model','GNSS-IR'],ncols=3,fontsize=10,bbox_to_anchor=(0.7,0.05))
     leg.get_frame().set_facecolor('white')
     leg.get_frame().set_alpha(1)
     if savefig:
@@ -1283,7 +1289,6 @@ def plot_pareto_2024_dh(result_dict, all_pareto, best, savefig=False):
 
 def plot_pareto_2024_mb(result_dict, all_pareto, best, savefig=False):
     elev = {'AB':1542,'B':1682,'D':1843,'T':1877}
-    ylim = (-5,1)
     fig,ax = plt.subplots(figsize=(6,4),sharey=True)
     aaa = 0
     for s,site in enumerate(elev):
