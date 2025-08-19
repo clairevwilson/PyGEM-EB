@@ -250,6 +250,9 @@ def check_inputs(glac_no, args):
     # load AWS filepath for test glacier or general case
     if args.glac_name == 'test':
         args.AWS_fn = all_df.loc[glac_no,'AWS_fn']
+        args.use_AWS = True
+        if args.debug:
+            print('Test glacier: using sample AWS data')
     else:
         args.AWS_fn = prms.AWS_fp + args.glac_name + '/' + all_df.loc[glac_no,'AWS_fn']
 

@@ -7,19 +7,19 @@ import pandas as pd
 import xarray as xr
 
 # ========== USER OPTIONS ========== 
-glac_no = '01.00570'    # RGI glacier ID
-use_AWS = False         # Use AWS data?
-debug = False           # Print monthly model status?
-store_data = False      # Save data?
+glac_no = '00.00000'    # RGI glacier ID
+use_AWS = False         # Default to using AWS data?
+debug = False           # Default to printing monthly model status?
+store_data = False      # Default to saving data?
 
 # ========== DIRECTORIES AND FILEPATHS ========== 
 machine = socket.gethostname()
 # GLACIER
-metadata_fp = 'data/glacier_metadata.csv'                   # Glacier metadata filepath
+metadata_fp = 'data/glacier_metadata.csv'                   # Glacier metadata filename
 site_fp = 'data/by_glacier/GLACIER/site_constants.csv'      # Generalized glacier site info filepath
 RGI_fp = '../RGI/rgi60/00_rgi60_attribs/'                   # Randolph Glacier Inventory filepath
 AWS_fp = '../climate_data/AWS/Processed/'                   # Weather station data filepath
-AWS_metadata_fn = AWS_fp + 'aws_metadata.txt'               # Weather station metadata filename
+AWS_metadata_fn = 'data/aws_metadata.txt'                   # Weather station metadata filename
 # SNICAR
 grainsize_fp = 'data/grainsize/drygrainsize(SSAin=##).nc'   # Grain size evolution lookup table filepath
 snicar_input_fp = 'biosnicar-py/biosnicar/inputs.yaml'      # SNICAR input filepath
@@ -42,7 +42,7 @@ albedo_out_fp = '../Output/EB/albedo.csv'                   # Output spectral al
 # ========== CLIMATE AND TIME INPUTS ========== 
 # TIME
 startdate = pd.to_datetime('2024-04-20 00:00:00') 
-enddate = pd.to_datetime('2024-08-20 00:00:00')
+enddate = pd.to_datetime('2025-04-20 00:00:00')
 
 # WEATHER STATION
 use_AWS_site = False                        # True to override site (lat, lon, etc.) to the AWS site
@@ -65,7 +65,7 @@ initial_ice_depth = 200             # default amount of initial ice [m]
 # Initial depths of snow and firn may be specified in site_constants or the command line using --s0, --f0
 
 # OUTPUT
-store_vars = ['MB','EB','climate','layers']  # Variables to store of the possible set: ['MB','EB','climate','layers']
+store_vars = ['MB','EB','temp','layers']  # Variables to store of the possible set: ['MB','EB','temp','layers','SW]
 store_bands = False         # Store spectral albedo .csv
 store_climate = False       # Store climate dataset .nc
 
@@ -109,7 +109,7 @@ grainsize_ds = xr.open_dataset(grainsize_fp.replace('##',str(initSSA)))
 # <<<<<< Climate downscaling >>>>>
 sky_view = 0.95             # Sky-view factor [-]
 wind_factor = 1             # Wind factor [-]
-kp = 2                      # Precipitation factor [-]
+kp = 2.25                   # Precipitation factor [-]
 precgrad = 0.000130         # Precipitation gradient with elevation [% m-1]
 lapserate = -0.0065         # Temperature lapse rate for both gcm to glacier and on glacier between elevation bins [C m-1]
 albedo_ice = 0.47           # Ice albedo [-] 
@@ -162,7 +162,7 @@ pressure_std = 101325       # Standard pressure [Pa]
 temp_std = 293.15           # Standard temperature [K]
 density_std = 1.225         # Air density at sea level [kg m-3]
 # <<<<<< Model parameterizations >>>>>
-Boone_c5 = 0.018            # Densification parameter [m3 kg-1]
+Boone_c5 = 0.016            # Densification parameter [m3 kg-1]
 roughness_fresh_snow = 0.24 # Surface roughness length for fresh snow [mm] (Moelg et al. 2012, TC)
 roughness_aged_snow = 10    # Surface roughness length for aged snow [mm]
 roughness_firn = 4          # Surface roughness length for firn [mm] (Moelg et al. 2012, TC)

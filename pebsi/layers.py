@@ -474,10 +474,11 @@ class Layers():
             # firn layers can be any size
             # check ice layers
             if self.ltype[layer] in ['ice']:
-                if dz < min_heights(layer) and layer < self.nlayers - 1:
+                layer_check = layer - len(self.firn_idx)
+                if dz < min_heights(layer_check) and layer < self.nlayers - 1:
                     # layer too small: merge if it is not the bottom layer
                     self.merge_layers(layer)
-                elif dz > max_heights(layer):
+                elif dz > max_heights(layer_check):
                     # layer too big: split into two equal size layers
                     self.split_layer(layer)
                     layer_split = True

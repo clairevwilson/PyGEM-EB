@@ -77,7 +77,7 @@ class massBalance():
             # >>> INITIALIZE TIMESTEP <<<
             self.time = time
 
-            # initiate the energy balance to unpack climate data for this timestep
+            # initialize the energy balance to unpack climate data for this timestep
             enbal = energyBalance(self,time)
             self.enbal = enbal
 
@@ -157,7 +157,9 @@ class massBalance():
                 self.firn_converted = False
 
             # check mass conserves
-            self.check_mass_conservation(snowfall+rainfall, runoff)
+            mass_in = snowfall + rainfall + self.condensation + self.deposition
+            mass_out = runoff + self.evaporation + self.sublimation
+            self.check_mass_conservation(mass_in, mass_out)
           
             # >>> STORE OUTPUT <<<
             # convert units of mass balance terms
@@ -1069,7 +1071,6 @@ class massBalance():
         enbal = self.enbal
 
         # CONSTANTS
-        DENSITY_WATER = prms.density_water
         LV_SUB = prms.Lv_sub
         LV_VAP = prms.Lv_evap
 
@@ -1079,7 +1080,7 @@ class massBalance():
         # get mass fluxes from latent heat
         if surface.stemp < 0.:
             # SUBLIMATION / DEPOSITION
-            dm = enbal.lat*self.dt/(DENSITY_WATER*LV_SUB)
+            dm = enbal.lat*self.dt/(LV_SUB) # kg m-2
             # yes solid-vapor fluxes
             sublimation = -1*min(dm,0)
             deposition = max(dm,0)
@@ -1100,7 +1101,7 @@ class massBalance():
                 layers.lice[0] += dm
         else:
             # EVAPORATION / CONDENSATION
-            dm = enbal.lat*self.dt/(DENSITY_WATER*LV_VAP)
+            dm = enbal.lat*self.dt/(LV_VAP) # kg m-2
             # no solid-vapor fluxes
             sublimation = 0
             deposition = 0
@@ -1129,6 +1130,14 @@ class massBalance():
             else:
                 # add water to layer if it doesn't cause negativity
                 layers.lwater[0] += dm
+
+        # set vapor fluxes to self
+        self.sublimation = sublimation
+        self.deposition = deposition
+        self.evaporation = evaporation
+        self.condensation = condensation
+        self.vapor_solid = sublimation if sublimation != 0 else deposition
+        self.vapor_liquid = evaporation if evaporation != 0 else condensation
         
         # CHECK MASS CONSERVATION
         ins = deposition + condensation
@@ -1506,13 +1515,15 @@ class Output():
 
         # create variable name dict
         vn_dict = {'EB':['SWin','SWout','LWin','LWout','rain','ground',
-                         'sensible','latent','meltenergy','albedo','vis_albedo',
-                         'SWin_sky','SWin_terr','surftemp'],
-                   'MB':['melt','refreeze','runoff','accum','snowdepth','cumrefreeze','dh'],
-                   'climate':['airtemp'],
-                   'layers':['layertemp','layerdensity','layerwater','layerheight','layerage',
-                             'layerBC','layerOC','layerdust','layergrainsize','layerrefreeze']}
-
+                         'sensible','latent','meltenergy','albedo'],
+                   'MB':['melt','refreeze','runoff','accum','cumrefreeze','dh',
+                         'vaporsolid','vaporliquid'],
+                   'temp':['airtemp','surftemp'],
+                   'layers':['layertemp','layerdensity','layerwater','layerheight',
+                             'layerage','layertype','layergrainsize','layerrefreeze',
+                             'layerBC','layerOC','layerdust'],
+                    'SW':['vis_albedo','SWin_sky','SWin_terr']}
+        
         # create file to store outputs
         all_variables = xr.Dataset(data_vars = dict(
                 SWin = (['time'],zeros[:,0],{'units':'W m-2'}),
@@ -1533,6 +1544,8 @@ class Output():
                 cumrefreeze = (['time'],zeros[:,0],{'units':'m w.e.'}),
                 runoff = (['time'],zeros[:,0],{'units':'m w.e.'}),
                 accum = (['time'],zeros[:,0],{'units':'m w.e.'}),
+                vaporliquid = (['time'],zeros[:,0],{'units':'m w.e.'}),
+                vaporsolid = (['time'],zeros[:,0],{'units':'m w.e.'}),
                 airtemp = (['time'],zeros[:,0],{'units':'C'}),
                 surftemp = (['time'],zeros[:,0],{'units':'C'}),
                 layertemp = (['time','layer'],zeros,{'units':'C'}),
@@ -1545,7 +1558,7 @@ class Output():
                 layerdust = (['time','layer'],zeros,{'units':'ppm'}),
                 layergrainsize = (['time','layer'],zeros,{'units':'um'}),
                 layerage = (['time','layer'],zeros),
-                snowdepth = (['time'],zeros[:,0],{'units':'m'}),
+                layertype = (['time','layer'],zeros),
                 dh = (['time'],zeros[:,0],{'units':'m'})
                 ),
                 coords=dict(
@@ -1555,7 +1568,7 @@ class Output():
         # select variables from the specified input
         vars_list = vn_dict[prms.store_vars[0]]
         for var in prms.store_vars[1:]:
-            assert var in vn_dict, 'Choose store_vars from [MB,EB,climate,layers]'
+            assert var in vn_dict, 'Choose store_vars from [MB,EB,temp,layers,SW]'
             vars_list.extend(vn_dict[var])
         self.vars_list = vars_list
         
@@ -1569,26 +1582,31 @@ class Output():
         self.SWout_output = []      # outgoing shortwave [W m-2]
         self.LWin_output = []       # incoming longwave [W m-2]
         self.LWout_output = []      # outgoing longwave [W m-2]
-        self.SWin_sky_output = []   # incoming sky shortwave [W m-2]
-        self.SWin_terr_output = []  # incoming terrain shortwave [W m-2]
         self.rain_output = []       # rain energy [W m-2]
         self.ground_output = []     # ground energy [W m-2]
         self.sensible_output = []   # sensible energy [W m-2]
         self.latent_output = []     # latent energy [W m-2]
         self.meltenergy_output = [] # melt energy [W m-2]
         self.albedo_output = []     # surface broadband albedo [-]
-        self.vis_albedo_output = [] # surface visible albedo [-]
+
+        # TEMPERATURE OUTPUTS
         self.airtemp_output = []    # downscaled air temperature [C]
         self.surftemp_output = []   # surface temperature [C]
 
         # MASS BALANCE OUTPUTS
-        self.snowdepth_output = []  # depth of snow [m]
-        self.melt_output = []       # melt by timestep [m w.e.]
-        self.refreeze_output = []   # refreeze by timestep [m w.e.]
-        self.cumrefreeze_output = []   # cumulative refreeze by timestep [m w.e.]
-        self.accum_output = []      # accumulation by timestep [m w.e.]
-        self.runoff_output = []     # runoff by timestep [m w.e.]
-        self.dh_output = []         # surface height change by timestep [m]
+        self.melt_output = []           # melt by timestep [m w.e.]
+        self.refreeze_output = []       # refreeze by timestep [m w.e.]
+        self.cumrefreeze_output = []    # cumulative refreeze by timestep [m w.e.]
+        self.accum_output = []          # accumulation by timestep [m w.e.]
+        self.runoff_output = []         # runoff by timestep [m w.e.]
+        self.dh_output = []             # surface height change by timestep [m]
+        self.vaporliquid_output = []    # liquid-vapor mass flux [m w.e.]  
+        self.vaporsolid_output = []     # solid-vapor mass flux [m w.e.]  
+
+        # DETAILED SHORTWAVE OUTPUTS
+        self.SWin_sky_output = []   # incoming sky shortwave [W m-2]
+        self.SWin_terr_output = []  # incoming terrain shortwave [W m-2]
+        self.vis_albedo_output = [] # surface visible albedo [-]
 
         # LAYER OUTPUTS
         self.layertemp_output = dict()      # layer temperature [C]
@@ -1601,6 +1619,7 @@ class Output():
         self.layergrainsize_output = dict() # layer grain size [um]
         self.layerrefreeze_output = dict()  # layer refreeze [kg m-2]
         self.layerage_output = dict()       # layer age [datetime]
+        self.layertype_output = dict()      # layer type [-]
         self.last_height = prms.initial_ice_depth+prms.initial_firn_depth+prms.initial_snow_depth
         return
     
@@ -1626,15 +1645,13 @@ class Output():
         self.SWout_output.append(float(enbal.SWout))
         self.LWin_output.append(float(enbal.LWin))
         self.LWout_output.append(float(enbal.LWout))
-        self.SWin_sky_output.append(float(enbal.SWin_sky))
-        self.SWin_terr_output.append(float(enbal.SWin_terr))
         self.rain_output.append(float(enbal.rain))
         self.ground_output.append(float(enbal.ground))
         self.sensible_output.append(float(enbal.sens))
         self.latent_output.append(float(enbal.lat))
         self.meltenergy_output.append(float(surface.Qm))
         self.albedo_output.append(float(surface.bba))
-        self.vis_albedo_output.append(float(surface.vis_a))
+        
         self.surftemp_output.append(float(surface.stemp))
         self.airtemp_output.append(float(enbal.tempC))
 
@@ -1643,9 +1660,10 @@ class Output():
         self.cumrefreeze_output.append(float(np.sum(layers.lrefreeze))/prms.density_water)
         self.runoff_output.append(float(massbal.runoff))
         self.accum_output.append(float(massbal.accum))
-        self.snowdepth_output.append(np.sum(layers.lheight[layers.snow_idx]))
         self.dh_output.append(np.sum(layers.lheight)-self.last_height)
         self.last_height = np.sum(layers.lheight)
+        self.vaporliquid_output.append(massbal.vapor_liquid/prms.density_water)
+        self.vaporsolid_output.append(massbal.vapor_solid/prms.density_water)
 
         self.layertemp_output[step] = layers.ltemp.copy()
         self.layerwater_output[step] = layers.lwater.copy()
@@ -1657,6 +1675,12 @@ class Output():
         self.layergrainsize_output[step] = layers.lgrainsize.copy()
         self.layerrefreeze_output[step] = layers.lrefreeze.copy()
         self.layerage_output[step] = layers.lage.copy()
+        mapping = {'snow': 0, 'firn': 1, 'ice': 2}
+        self.layertype_output[step] = [mapping[l] for l in layers.ltype]
+
+        self.vis_albedo_output.append(float(surface.vis_a))
+        self.SWin_sky_output.append(float(enbal.SWin_sky))
+        self.SWin_terr_output.append(float(enbal.SWin_terr))
 
     def store_data(self):
         """
@@ -1671,26 +1695,28 @@ class Output():
                 ds['SWout'].values = self.SWout_output
                 ds['LWin'].values = self.LWin_output
                 ds['LWout'].values = self.LWout_output
-                ds['SWin_sky'].values = self.SWin_sky_output
-                ds['SWin_terr'].values = self.SWin_terr_output
                 ds['rain'].values = self.rain_output
                 ds['ground'].values = self.ground_output
                 ds['sensible'].values = self.sensible_output
                 ds['latent'].values = self.latent_output
                 ds['meltenergy'].values = self.meltenergy_output
                 ds['albedo'].values = self.albedo_output
-                ds['vis_albedo'].values = self.vis_albedo_output
-                ds['surftemp'].values = self.surftemp_output
             if 'MB' in prms.store_vars:
                 ds['melt'].values = self.melt_output
                 ds['refreeze'].values = self.refreeze_output
                 ds['runoff'].values = self.runoff_output
                 ds['accum'].values = self.accum_output
-                ds['snowdepth'].values = self.snowdepth_output
                 ds['dh'].values = self.dh_output
                 ds['cumrefreeze'].values = self.cumrefreeze_output
-            if 'climate' in prms.store_vars:
+                ds['vaporliquid'].values = self.vaporliquid_output
+                ds['vaporsolid'].values = self.vaporsolid_output
+            if 'temp' in prms.store_vars:
                 ds['airtemp'].values = self.airtemp_output
+                ds['surftemp'].values = self.surftemp_output
+            if 'SW' in prms.store_vars:
+                ds['SWin_sky'].values = self.SWin_sky_output
+                ds['SWin_terr'].values = self.SWin_terr_output
+                ds['vis_albedo'].values = self.vis_albedo_output
             if 'layers' in prms.store_vars:
                 layertemp_output = pd.DataFrame.from_dict(self.layertemp_output,orient='index')
                 layerdensity_output = pd.DataFrame.from_dict(self.layerdensity_output,orient='index')
@@ -1702,6 +1728,7 @@ class Output():
                 layergrainsize_output = pd.DataFrame.from_dict(self.layergrainsize_output,orient='index')
                 layerrefreeze_output = pd.DataFrame.from_dict(self.layerrefreeze_output,orient='index')
                 layerage_output = pd.DataFrame.from_dict(self.layerage_output,orient='index')
+                layertype_output = pd.DataFrame.from_dict(self.layertype_output,orient='index')
                 
                 if len(layertemp_output.columns) < prms.max_nlayers:
                     n_columns = len(layertemp_output.columns)
@@ -1717,6 +1744,7 @@ class Output():
                         layergrainsize_output[str(i)] = nans
                         layerrefreeze_output[str(i)] = nans
                         layerage_output[str(i)] = nans
+                        layertype_output[str(i)] = nans
                 else:
                     n = len(layertemp_output.columns)
                     print(f'Need to increase max_nlayers: currently have {n} layers')
@@ -1732,6 +1760,7 @@ class Output():
                 ds['layergrainsize'].values = layergrainsize_output
                 ds['layerrefreeze'].values = layerrefreeze_output
                 ds['layerage'].values = layerage_output
+                ds['layertype'].values = layertype_output
 
         # save NetCDF
         ds.to_netcdf(self.out_fn)
